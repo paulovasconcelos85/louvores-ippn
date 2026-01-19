@@ -51,7 +51,7 @@ export function useAuth() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/admin`,
+        redirectTo: `${window.location.origin}/auth/callback`,  // ← Mudou aqui!
       },
     });
     return { data, error };
@@ -61,7 +61,7 @@ export function useAuth() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        redirectTo: `${window.location.origin}/admin`,
+        redirectTo: `${window.location.origin}/auth/callback`,  // ← Mudou aqui!
         scopes: 'email',
       },
     });
