@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { isAdmin } from '@/lib/admin-config';
 import Link from 'next/link';
 
 export default function AdminPage() {
@@ -34,6 +35,8 @@ export default function AdminPage() {
   if (!user) {
     return null;
   }
+
+  const userIsAdmin = isAdmin(user.email);
 
     return (
     <div className="min-h-screen bg-slate-50">
@@ -89,24 +92,26 @@ export default function AdminPage() {
 
         {/* Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Usuários */}
-            <button
-            onClick={() => router.push('/admin/usuarios')}
-            className="bg-white rounded-xl p-6 shadow-sm border-2 border-emerald-600 hover:shadow-lg transition-all text-left group"
-            >
-            <div className="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <span className="text-2xl">👥</span>
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Gerenciar Usuários
-            </h3>
-            <p className="text-slate-600 text-sm mb-4">
-                Controle quem pode acessar o sistema
-            </p>
-            <span className="text-xs text-emerald-700 font-semibold bg-emerald-100 px-3 py-1 rounded-full">
-                ✓ Disponível
-            </span>
-            </button>
+            {/* Usuários - APENAS PARA ADMINS */}
+            {userIsAdmin && (
+              <button
+                onClick={() => router.push('/admin/usuarios')}
+                className="bg-white rounded-xl p-6 shadow-sm border-2 border-emerald-600 hover:shadow-lg transition-all text-left group"
+              >
+                <div className="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl">👥</span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  Gerenciar Usuários
+                </h3>
+                <p className="text-slate-600 text-sm mb-4">
+                  Controle quem pode acessar o sistema
+                </p>
+                <span className="text-xs text-emerald-700 font-semibold bg-emerald-100 px-3 py-1 rounded-full">
+                  ✓ Disponível
+                </span>
+              </button>
+            )}
 
             {/* Músicas */}
             <Link href="/canticos" className="block">
