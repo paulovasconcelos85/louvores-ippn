@@ -5,19 +5,20 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
+interface LouvorItem {
+  id: string;
+  ordem: number;
+  tipo: string;
+  tom: string | null;
+  canticos: {
+    nome: string;
+  } | null;
+}
+
 interface Culto {
   'Culto nr.': number;
   Dia: string;
-  Prelúdio: string;
-  'Cântico 2'?: string;
-  'Cântico 3'?: string;
-  'Cântico 4'?: string;
-  'Cântico 5'?: string;
-  'Cântico 6'?: string;
-  'Cântico 7'?: string;
-  'Cântico 8'?: string;
-  'Cântico 9'?: string;
-  'Cântico 10'?: string;
+  louvor_itens: LouvorItem[];
 }
 
 export default function Home() {
@@ -32,16 +33,35 @@ export default function Home() {
     window.location.reload();
   };
 
-  // Verifica se é o primeiro domingo do mês
-  const isPrimeiroDomingo = (dateString: string) => {
+  const formatDate = (dateString: string) => {
     const [year, month, day] = dateString.split('T')[0].split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const getMusicas = (culto: Culto) => {
+    if (!culto.louvor_itens) return [];
+
+    const itensOrdenados = culto.louvor_itens.sort((a, b) => a.ordem - b.ordem);
     
-    // Verifica se é domingo (0 = domingo)
-    if (date.getDay() !== 0) return false;
-    
-    // Verifica se está entre dia 1 e 7
-    return date.getDate() <= 7;
+    return itensOrdenados.map(item => {
+      let tipoExibicao = item.tipo;
+      
+      // Se for "Cântico", mostrar com a posição real (ordem)
+      if (item.tipo === 'Cântico') {
+        tipoExibicao = `Cântico ${item.ordem}`;
+      }
+      
+      return {
+        tipo: tipoExibicao,
+        nome: item.canticos?.nome || '',
+        tom: item.tom,
+      };
+    });
   };
 
   // Formata data curta para WhatsApp (dd/mm/yyyy)
@@ -55,50 +75,65 @@ export default function Home() {
   const gerarMensagemWhatsApp = (culto: Culto) => {
     const musicas = getMusicas(culto);
     const data = formatDateShort(culto.Dia);
-    const temCeia = isPrimeiroDomingo(culto.Dia);
     
     let mensagem = `CÂNTICOS DO CULTO DE *${data}*\n🎼🎵🎶\n\n`;
     
+    let numeroSequencial = 1;
+    
     // Prelúdio
     const preludio = musicas.find(m => m.tipo === 'Prelúdio');
-    mensagem += `🎹 *PRELÚDIO*\n`;
-    mensagem += `1. ${preludio?.nome || ''}\n\n`;
+    if (preludio) {
+      mensagem += `🎹 *PRELÚDIO*\n`;
+      mensagem += `${numeroSequencial}. ${preludio.nome}${preludio.tom ? ` (${preludio.tom})` : ''}\n\n`;
+      numeroSequencial++;
+    }
     
-    // Leitura
-    mensagem += `📖 *Leitura inicial:*\n`;
-    mensagem += `Salmo \n\n`;
+    // Salmo (Leitura)
+    const salmo = musicas.find(m => m.tipo === 'Salmo');
+    if (salmo) {
+      mensagem += `📖 *LEITURA INICIAL*\n`;
+      mensagem += `${numeroSequencial}. ${salmo.nome}${salmo.tom ? ` (${salmo.tom})` : ''}\n\n`;
+      numeroSequencial++;
+    }
     
-    // Ministração (Cânticos 2, 3, 4)
-    mensagem += `🎤 *MINISTRAÇÃO LOUVOR*\n`;
-    const cantico2 = musicas.find(m => m.tipo === 'Cântico 2');
-    const cantico3 = musicas.find(m => m.tipo === 'Cântico 3');
-    const cantico4 = musicas.find(m => m.tipo === 'Cântico 4');
-    mensagem += `2. ${cantico2?.nome || ''}\n`;
-    mensagem += `3. ${cantico3?.nome || ''}\n`;
-    mensagem += `4. ${cantico4?.nome || ''}\n\n`;
+    // Cânticos de Ministração
+    const canticos = musicas.filter(m => m.tipo.startsWith('Cântico'));
+    if (canticos.length > 0) {
+      mensagem += `🎤 *MINISTRAÇÃO LOUVOR*\n`;
+      canticos.forEach(c => {
+        mensagem += `${numeroSequencial}. ${c.nome}${c.tom ? ` (${c.tom})` : ''}\n`;
+        numeroSequencial++;
+      });
+      mensagem += '\n';
+    }
     
     // Oferta
-    const cantico5 = musicas.find(m => m.tipo === 'Cântico 5');
-    mensagem += `💰 *OFERTA*\n`;
-    mensagem += `5. ${cantico5?.nome || ''}\n\n`;
+    const oferta = musicas.find(m => m.tipo === 'Oferta');
+    if (oferta) {
+      mensagem += `💰 *OFERTA*\n`;
+      mensagem += `${numeroSequencial}. ${oferta.nome}${oferta.tom ? ` (${oferta.tom})` : ''}\n\n`;
+      numeroSequencial++;
+    }
     
     // Pregação
-    mensagem += `*PREGAÇÃO*\n\n`;
+    const pregacao = musicas.find(m => m.tipo === 'Pregação');
+    if (pregacao) {
+      mensagem += `📖 *PREGAÇÃO*\n\n`;
+    }
     
-    if (temCeia) {
-      // Com CEIA
-      const cantico6 = musicas.find(m => m.tipo === 'Cântico 6');
+    // Ceia (se houver)
+    const ceia = musicas.find(m => m.tipo === 'Ceia');
+    if (ceia) {
       mensagem += `🥖 *CEIA*\n`;
-      mensagem += `6. ${cantico6?.nome || ''}\n\n`;
-      
-      const cantico7 = musicas.find(m => m.tipo === 'Cântico 7');
+      mensagem += `${numeroSequencial}. ${ceia.nome}${ceia.tom ? ` (${ceia.tom})` : ''}\n\n`;
+      numeroSequencial++;
+    }
+    
+    // Pósludio
+    const posludio = musicas.find(m => m.tipo === 'Pósludio');
+    if (posludio) {
       mensagem += `🎺 *PÓSLÚDIO*\n`;
-      mensagem += `7. ${cantico7?.nome || ''}\n\n`;
-    } else {
-      // Sem CEIA
-      const cantico6 = musicas.find(m => m.tipo === 'Cântico 6');
-      mensagem += `🎺 *PÓSLÚDIO*\n`;
-      mensagem += `6. ${cantico6?.nome || ''}\n\n`;
+      mensagem += `${numeroSequencial}. ${posludio.nome}${posludio.tom ? ` (${posludio.tom})` : ''}\n\n`;
     }
     
     mensagem += `🙏 *AMÉM TRÍPLICE*`;
@@ -108,11 +143,8 @@ export default function Home() {
 
   const compartilharWhatsApp = (culto: Culto) => {
     const mensagem = gerarMensagemWhatsApp(culto);
-    const mensagemEncoded = encodeURIComponent(
-      mensagem.normalize('NFC')
-    );
-    const url = `https://api.whatsapp.com/send?text=${mensagemEncoded}`;
-    window.open(url, '_blank');
+    const mensagemEncoded = encodeURIComponent(mensagem.normalize('NFC'));
+    window.open(`https://api.whatsapp.com/send?text=${mensagemEncoded}`, '_blank');
   };
 
   useEffect(() => {
@@ -124,14 +156,27 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from('Louvores IPPN')
-        .select('*')
+        .select(`
+          "Culto nr.",
+          Dia,
+          louvor_itens (
+            id,
+            ordem,
+            tipo,
+            tom,
+            canticos (
+              nome
+            )
+          )
+        `)
         .order('"Culto nr."', { ascending: false })
         .range(from, to);
 
       if (error) {
-        console.error('❌ Erro detalhado:', error);
+        console.error('Erro ao buscar cultos:', error);
       } else {
-        setCultos(data || []);
+        // Type assertion segura após validação
+        setCultos((data as any[]) || []);
       }
 
       setLoading(false);
@@ -139,32 +184,6 @@ export default function Home() {
 
     fetchCultos();
   }, [page]);
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Data não informada';
-    
-    // Fix: Forçar timezone local
-    const [year, month, day] = dateString.split('T')[0].split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    });
-  };
-
-  const getMusicas = (culto: Culto) => {
-    const musicas = [];
-    if (culto.Prelúdio) musicas.push({ tipo: 'Prelúdio', nome: culto.Prelúdio });
-    for (let i = 2; i <= 10; i++) {
-      const key = `Cântico ${i}` as keyof Culto;
-      if (culto[key]) {
-        musicas.push({ tipo: `Cântico ${i}`, nome: culto[key] as string });
-      }
-    }
-    return musicas;
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -297,10 +316,10 @@ export default function Home() {
                           {musica.tipo}
                         </p>
                         <p
-                          className="text-slate-900 font-medium truncate cursor-pointer text-emerald-800 hover:underline"
+                          className="text-slate-900 font-medium cursor-pointer text-emerald-800 hover:underline"
                           onClick={() => router.push(`/letra/${encodeURIComponent(musica.nome)}`)}
                         >
-                          {musica.nome}
+                          {musica.nome} {musica.tom && `(${musica.tom})`}
                         </p>
                       </div>
                     </div>
@@ -310,17 +329,18 @@ export default function Home() {
             </div>
           ))}
         </div>
+
         <div className="flex justify-center gap-4 mt-8">
           <button
             onClick={() => setPage(p => Math.max(p - 1, 0))}
-            className="px-4 py-2 bg-emerald-700 text-white rounded"
+            className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm disabled:opacity-50"
+            disabled={page === 0}
           >
             ← Anteriores
           </button>
-
           <button
             onClick={() => setPage(p => p + 1)}
-            className="px-4 py-2 bg-emerald-700 text-white rounded"
+            className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm"
           >
             Próximos →
           </button>
