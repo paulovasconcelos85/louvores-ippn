@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area
+  LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
 
 interface RankingItem {
@@ -22,6 +22,12 @@ interface EvolucaoMensal {
 interface CanticoRecente {
   cantico: string;
   ultimaData: string;
+  diasAtras: number;
+}
+
+interface TomItem {
+  tom: string;
+  total: number;
 }
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -34,9 +40,12 @@ export default function DashboardPage() {
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [evolucaoMensal, setEvolucaoMensal] = useState<EvolucaoMensal[]>([]);
   const [canticosRecentes, setCanticosRecentes] = useState<CanticoRecente[]>([]);
+  const [rankingTons, setRankingTons] = useState<TomItem[]>([]);
   const [totalExecucoes, setTotalExecucoes] = useState<number>(0);
   const [totalCanticos, setTotalCanticos] = useState<number>(0);
+  const [totalCultos, setTotalCultos] = useState<number>(0);
   const [mediaPorMes, setMediaPorMes] = useState<number>(0);
+  const [mediaPorCulto, setMediaPorCulto] = useState<number>(0);
   const [maisCantado, setMaisCantado] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const { user, loading: authLoading } = useAuth();
@@ -47,28 +56,29 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, router]);
 
+  // Buscar anos disponíveis
   useEffect(() => {
     async function fetchAnos() {
       const { data } = await supabase
-        .from('vw_execucoes')
+        .from('vw_execucoes_louvores')
         .select('ano')
         .order('ano', { ascending: false });
 
       const unicos = Array.from(new Set((data || []).map((d: { ano: number }) => d.ano)));
       setAnos(unicos);
-      // Não define ano inicial - deixa como "Todos os anos"
     }
     fetchAnos();
   }, []);
 
+  // Buscar dados principais
   useEffect(() => {
     async function fetchDados() {
       setLoading(true);
 
       // Construir query base
       let query = supabase
-        .from('vw_execucoes')
-        .select('cantico, ano, mes, data');
+        .from('vw_execucoes_louvores')
+        .select('cantico, ano, mes, data, culto_nr');
 
       // Aplicar filtros
       if (ano) {
@@ -91,13 +101,15 @@ export default function DashboardPage() {
         setEvolucaoMensal([]);
         setTotalExecucoes(0);
         setTotalCanticos(0);
+        setTotalCultos(0);
         setMaisCantado(null);
         setMediaPorMes(0);
+        setMediaPorCulto(0);
         setLoading(false);
         return;
       }
 
-      // Processar ranking - agrupar por cântico
+      // Processar ranking - contar execuções por cântico
       const contagemCanticos = execucoes.reduce((acc: any, curr: any) => {
         const cantico = curr.cantico;
         acc[cantico] = (acc[cantico] || 0) + 1;
@@ -116,33 +128,84 @@ export default function DashboardPage() {
       setTotalCanticos(rankingArray.length);
       setMaisCantado(rankingArray[0]?.cantico || null);
 
-      // Processar evolução mensal - agrupar por mês/ano
-      const porMes = execucoes.reduce((acc: any, curr: any) => {
+      // Contar cultos únicos
+      const cultosUnicos = new Set(execucoes.map((e: any) => e.culto_nr));
+      setTotalCultos(cultosUnicos.size);
+
+      // Processar evolução mensal com ordenação cronológica
+      const evolucaoComData = execucoes.reduce((acc: any, curr: any) => {
         const mesNome = new Date(curr.ano, curr.mes - 1).toLocaleDateString('pt-BR', { month: 'short' });
-        const anoStr = curr.ano.toString().slice(-2); // Últimos 2 dígitos do ano
+        const anoStr = curr.ano.toString().slice(-2);
         const key = ano ? mesNome : `${mesNome}/${anoStr}`;
-        acc[key] = (acc[key] || 0) + 1;
+        
+        if (!acc[key]) {
+          acc[key] = {
+            mes: key,
+            total: 0,
+            anoNum: curr.ano,
+            mesNum: curr.mes
+          };
+        }
+        acc[key].total++;
         return acc;
       }, {});
 
-      // Ordenar por data
-      const evolucaoArray = Object.entries(porMes)
-        .map(([mes, total]) => ({
-          mes,
-          total: total as number
-        }))
-        .sort((a, b) => {
-          // Se tiver ano no filtro, ordenar por mês
-          if (ano) {
-            const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-            return meses.indexOf(a.mes.toLowerCase()) - meses.indexOf(b.mes.toLowerCase());
+      const evolucaoArray = Object.values(evolucaoComData)
+        .sort((a: any, b: any) => {
+          // Ordenar por ano e depois por mês (crescente)
+          if (a.anoNum !== b.anoNum) {
+            return a.anoNum - b.anoNum;
           }
-          // Senão, ordenar por mês/ano
-          return a.mes.localeCompare(b.mes);
-        });
+          return a.mesNum - b.mesNum;
+        })
+        .map(({ mes, total }: any) => ({ mes, total }));
 
       setEvolucaoMensal(evolucaoArray);
       setMediaPorMes(evolucaoArray.length > 0 ? execucoes.length / evolucaoArray.length : 0);
+      setMediaPorCulto(cultosUnicos.size > 0 ? execucoes.length / cultosUnicos.size : 0);
+
+      // Buscar tons mais tocados
+      let queryTons = supabase
+        .from('louvor_itens')
+        .select('tom');
+
+      // Aplicar filtros de ano/mês através do JOIN com Louvores IPPN
+      if (ano || mes) {
+        const { data: cultosIds } = await supabase
+          .from('Louvores IPPN')
+          .select('"Culto nr."')
+          .gte('Dia', ano ? `${ano}-01-01` : '1900-01-01')
+          .lte('Dia', ano ? `${ano}-12-31` : '2100-12-31');
+
+        if (cultosIds && cultosIds.length > 0) {
+          const ids = cultosIds.map(c => c['Culto nr.']);
+          queryTons = queryTons.in('culto_id', ids);
+        }
+      }
+
+      const { data: tonsData } = await queryTons;
+
+      if (tonsData && tonsData.length > 0) {
+        // Filtrar apenas tons nulos e contar
+        const contagemTons = tonsData
+          .filter(t => t.tom !== null)
+          .reduce((acc: any, curr: any) => {
+            const tom = curr.tom;
+            acc[tom] = (acc[tom] || 0) + 1;
+            return acc;
+          }, {});
+
+        const rankingTonsArray = Object.entries(contagemTons)
+          .map(([tom, total]) => ({
+            tom,
+            total: total as number
+          }))
+          .sort((a, b) => b.total - a.total);
+
+        setRankingTons(rankingTonsArray);
+      } else {
+        setRankingTons([]);
+      }
 
       setLoading(false);
     }
@@ -150,14 +213,14 @@ export default function DashboardPage() {
     fetchDados();
   }, [ano, mes]);
 
-  // Buscar cânticos das últimas 4 semanas (independente dos filtros)
+  // Buscar cânticos das últimas 4 semanas
   useEffect(() => {
     async function fetchCanticosRecentes() {
       const quatroSemanasAtras = new Date();
       quatroSemanasAtras.setDate(quatroSemanasAtras.getDate() - 28);
       
       const { data: execucoes, error } = await supabase
-        .from('vw_execucoes')
+        .from('vw_execucoes_louvores')
         .select('cantico, data')
         .gte('data', quatroSemanasAtras.toISOString().split('T')[0])
         .order('data', { ascending: false });
@@ -173,26 +236,29 @@ export default function DashboardPage() {
       }
 
       // Agrupar por cântico único e pegar a última data
+      const hoje = new Date();
       const canticosUnicos = execucoes.reduce((acc: any, curr: any) => {
         if (!acc[curr.cantico]) {
+          const dataExecucao = new Date(curr.data);
+          const diasAtras = Math.floor((hoje.getTime() - dataExecucao.getTime()) / (1000 * 60 * 60 * 24));
+          
           acc[curr.cantico] = {
             cantico: curr.cantico,
-            ultimaData: curr.data
+            ultimaData: curr.data,
+            diasAtras: diasAtras
           };
         }
         return acc;
       }, {});
 
       const canticosArray = Object.values(canticosUnicos) as CanticoRecente[];
-      
-      // Ordenar alfabeticamente
       canticosArray.sort((a, b) => a.cantico.localeCompare(b.cantico));
 
       setCanticosRecentes(canticosArray);
     }
 
     fetchCanticosRecentes();
-  }, []); // Executa apenas uma vez ao carregar
+  }, []);
 
   if (authLoading) return null;
   if (!user) return null;
@@ -266,7 +332,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 rounded-xl shadow-lg">
           <p className="text-emerald-100 text-sm mb-1">Total de Execuções</p>
           <p className="text-3xl font-bold">{totalExecucoes}</p>
@@ -277,9 +343,14 @@ export default function DashboardPage() {
           <p className="text-3xl font-bold">{totalCanticos}</p>
         </div>
         
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white p-5 rounded-xl shadow-lg">
+          <p className="text-indigo-100 text-sm mb-1">Total de Cultos</p>
+          <p className="text-3xl font-bold">{totalCultos}</p>
+        </div>
+        
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-purple-100 text-sm mb-1">Média/Mês</p>
-          <p className="text-3xl font-bold">{mediaPorMes.toFixed(0)}</p>
+          <p className="text-purple-100 text-sm mb-1">Média/Culto</p>
+          <p className="text-3xl font-bold">{mediaPorCulto.toFixed(1)}</p>
         </div>
         
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-5 rounded-xl shadow-lg">
@@ -293,7 +364,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
             <span className="text-2xl">🎵</span>
-            Cânticos do Último Mês
+            Cânticos das Últimas 4 Semanas
           </h2>
           <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-semibold">
             {canticosRecentes.length} cânticos
@@ -301,7 +372,7 @@ export default function DashboardPage() {
         </div>
         
         {canticosRecentes.length === 0 ? (
-          <p className="text-slate-500 text-center py-8">Nenhum cântico encontrado no último mês</p>
+          <p className="text-slate-500 text-center py-8">Nenhum cântico encontrado nas últimas 4 semanas</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {canticosRecentes.map((item, idx) => (
@@ -312,7 +383,14 @@ export default function DashboardPage() {
                 <span className="flex-shrink-0 w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-semibold text-sm">
                   {idx + 1}
                 </span>
-                <span className="text-slate-700 font-medium">{item.cantico}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-700 font-medium truncate">{item.cantico}</p>
+                  <p className="text-xs text-slate-500">
+                    {item.diasAtras === 0 ? 'Hoje' : 
+                     item.diasAtras === 1 ? 'Ontem' : 
+                     `${item.diasAtras} dias atrás`}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -407,32 +485,29 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* Gráfico de Área - Tendência */}
+          {/* Gráfico de Barras - Tons Mais Tocados */}
           <div className="bg-white rounded-xl p-6 shadow-lg">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">📊 Tendência de Execuções</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={evolucaoMensal}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis 
-                  dataKey="mes" 
-                  tick={{ fontSize: 11 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="total" 
-                  stroke="#8b5cf6" 
-                  fill="#8b5cf6" 
-                  fillOpacity={0.3}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <h2 className="font-bold text-lg mb-4 text-slate-800">🎼 Tons Mais Tocados</h2>
+            {rankingTons.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-slate-400">
+                Nenhum tom registrado
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={rankingTons.slice(0, 10)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis 
+                    dataKey="tom" 
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                  />
+                  <Bar dataKey="total" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Tabela de Ranking Completo */}

@@ -18,6 +18,12 @@ interface LouvorItem {
   tom: string | null;
 }
 
+interface UltimaExecucao {
+  data: string;
+  diasAtras: number;
+  cultoNr: number;
+}
+
 interface Culto {
   'Culto nr.': number;
   Dia: string;
@@ -126,6 +132,7 @@ function ItemLiturgia({
   onMoveUp,
   onMoveDown,
   onCreate,
+  cultoAtualId,
 }: {
   item: LouvorItem;
   index: number;
@@ -136,8 +143,67 @@ function ItemLiturgia({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onCreate: (nome: string) => Promise<Cantico>;
+  cultoAtualId: number | null;
 }) {
   const canticoSelecionado = canticos.find(c => c.id === item.cantico_id) || null;
+  const [ultimaExecucao, setUltimaExecucao] = useState<UltimaExecucao | null>(null);
+  const [loadingExecucao, setLoadingExecucao] = useState(false);
+
+  // Buscar última execução quando o cântico muda
+  useEffect(() => {
+    async function buscarUltimaExecucao() {
+      if (!item.cantico_id) {
+        setUltimaExecucao(null);
+        return;
+      }
+
+      setLoadingExecucao(true);
+
+      try {
+        // Buscar última execução deste cântico (excluindo o culto atual se estiver editando)
+        let query = supabase
+          .from('vw_execucoes_louvores')
+          .select('data, culto_nr')
+          .eq('cantico', canticos.find(c => c.id === item.cantico_id)?.nome || '')
+          .order('data', { ascending: false });
+
+        // Se estiver editando um culto, excluir ele da busca
+        if (cultoAtualId) {
+          query = query.neq('culto_nr', cultoAtualId);
+        }
+
+        const { data, error } = await query.limit(1);
+
+        if (error) {
+          console.error('Erro ao buscar última execução:', error);
+          setUltimaExecucao(null);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const ultima = data[0];
+          const hoje = new Date();
+          const dataExecucao = new Date(ultima.data + 'T00:00:00');
+          const diasAtras = Math.floor((hoje.getTime() - dataExecucao.getTime()) / (1000 * 60 * 60 * 24));
+
+          setUltimaExecucao({
+            data: ultima.data,
+            diasAtras: diasAtras,
+            cultoNr: ultima.culto_nr,
+          });
+        } else {
+          setUltimaExecucao(null);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar última execução:', error);
+        setUltimaExecucao(null);
+      } finally {
+        setLoadingExecucao(false);
+      }
+    }
+
+    buscarUltimaExecucao();
+  }, [item.cantico_id, canticos, cultoAtualId]);
 
   // Cores alternadas suaves para diferenciar posições
   const cores = [
@@ -149,6 +215,78 @@ function ItemLiturgia({
     'bg-cyan-50 border-cyan-200',
   ];
   const corCard = cores[index % cores.length];
+
+  // Função para formatar a mensagem da última execução
+  const formatarUltimaExecucao = () => {
+    if (loadingExecucao) {
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 animate-pulse">
+          <p className="text-xs text-slate-500">🔍 Verificando...</p>
+        </div>
+      );
+    }
+
+    if (!ultimaExecucao) {
+      return (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+          <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+            <span>✨</span>
+            <span>Primeira vez que este cântico será usado</span>
+          </p>
+        </div>
+      );
+    }
+
+    // Determinar cor e ícone baseado em quantos dias atrás
+    let corFundo = 'bg-slate-50';
+    let corBorda = 'border-slate-200';
+    let corTexto = 'text-slate-600';
+    let icone = '📅';
+    let mensagem = '';
+
+    if (ultimaExecucao.diasAtras === 0) {
+      corFundo = 'bg-red-50';
+      corBorda = 'border-red-200';
+      corTexto = 'text-red-700';
+      icone = '⚠️';
+      mensagem = `Usado HOJE no culto atual`;
+    } else if (ultimaExecucao.diasAtras <= 7) {
+      corFundo = 'bg-amber-50';
+      corBorda = 'border-amber-200';
+      corTexto = 'text-amber-700';
+      icone = '⚠️';
+      mensagem = `Usado há ${ultimaExecucao.diasAtras} dia${ultimaExecucao.diasAtras > 1 ? 's' : ''} (semana passada)`;
+    } else if (ultimaExecucao.diasAtras <= 30) {
+      corFundo = 'bg-yellow-50';
+      corBorda = 'border-yellow-200';
+      corTexto = 'text-yellow-700';
+      icone = '📌';
+      mensagem = `Usado há ${ultimaExecucao.diasAtras} dias`;
+    } else if (ultimaExecucao.diasAtras <= 90) {
+      corFundo = 'bg-blue-50';
+      corBorda = 'border-blue-200';
+      corTexto = 'text-blue-600';
+      icone = '📅';
+      mensagem = `Usado há ${Math.floor(ultimaExecucao.diasAtras / 30)} ${Math.floor(ultimaExecucao.diasAtras / 30) === 1 ? 'mês' : 'meses'}`;
+    } else {
+      corFundo = 'bg-emerald-50';
+      corBorda = 'border-emerald-200';
+      corTexto = 'text-emerald-600';
+      icone = '✅';
+      mensagem = `Usado há ${Math.floor(ultimaExecucao.diasAtras / 30)} meses`;
+    }
+
+    const dataFormatada = new Date(ultimaExecucao.data + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+    return (
+      <div className={`${corFundo} border ${corBorda} rounded-lg p-2.5`}>
+        <p className={`text-xs ${corTexto} font-medium flex items-center gap-1.5`}>
+          <span>{icone}</span>
+          <span>{mensagem} • {dataFormatada} • Culto #{ultimaExecucao.cultoNr}</span>
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div className={`${corCard} border-2 rounded-2xl p-4 shadow-sm transition-all`}>
@@ -215,6 +353,13 @@ function ItemLiturgia({
               onCreate={onCreate}
             />
           </div>
+
+          {/* Informação da última execução - FORA DOS CAMPOS */}
+          {item.cantico_id && (
+            <div className="mb-4 -mt-2">
+              {formatarUltimaExecucao()}
+            </div>
+          )}
 
           {/* Tom */}
           <div>
@@ -517,6 +662,7 @@ export default function CultosPage() {
                 onMoveUp={() => moverItem(idx, 'cima')}
                 onMoveDown={() => moverItem(idx, 'baixo')}
                 onCreate={criarCantico}
+                cultoAtualId={cultoEditando?.['Culto nr.'] || null}
               />
             ))}
 
@@ -563,7 +709,7 @@ export default function CultosPage() {
           </button>
 
           <Link href="/" className="text-emerald-700 font-bold text-lg active:text-emerald-900 touch-manipulation">
-            🏠
+            �🏠
           </Link>
         </div>
       </header>
