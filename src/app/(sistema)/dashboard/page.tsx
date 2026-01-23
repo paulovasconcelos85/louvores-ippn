@@ -272,20 +272,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <header className="flex justify-between items-center mb-6">
-        <button 
-          onClick={() => router.back()} 
-          className="flex items-center gap-2 text-emerald-700 font-semibold hover:text-emerald-800 transition"
-        >
-          <span className="text-xl">←</span> Voltar
-        </button>
-        <button 
-          onClick={() => router.push('/')} 
-          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-        >
-          Home
-        </button>
-      </header>
 
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-slate-800 mb-2">📊 Dashboard de Louvores</h1>

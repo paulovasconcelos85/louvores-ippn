@@ -154,6 +154,36 @@ export default function Home() {
       const from = page * 10;
       const to = from + 9;
 
+      // 🔒 REGRA DE VISIBILIDADE TEMPORAL
+      // Determina quando mostrar cultos futuros
+      const agora = new Date();
+      const diaSemana = agora.getDay(); // 0 = Domingo, 6 = Sábado
+      const horaAtual = agora.getHours();
+
+      let dataDeCorteFuturos: Date;
+
+      // 🎯 SE USUÁRIO ESTÁ LOGADO: Sempre mostra próximo culto
+      if (user) {
+        // Usuários logados veem até 14 dias à frente
+        dataDeCorteFuturos = new Date();
+        dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
+      } 
+      // 🔒 SE NÃO ESTÁ LOGADO: Aplica regra temporal
+      else {
+        // Se for sábado (6) após 14h, ou domingo (0), mostra próximo culto
+        if ((diaSemana === 6 && horaAtual >= 14) || diaSemana === 0) {
+          // Permite mostrar cultos futuros (próximo domingo)
+          dataDeCorteFuturos = new Date();
+          dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 7);
+        } else {
+          // Segunda a sexta, ou sábado antes das 14h: só mostra cultos passados
+          dataDeCorteFuturos = new Date();
+          dataDeCorteFuturos.setHours(0, 0, 0, 0); // Começo do dia de hoje
+        }
+      }
+
+      const dataCorteISO = dataDeCorteFuturos.toISOString();
+
       const { data, error } = await supabase
         .from('Louvores IPPN')
         .select(`
@@ -169,6 +199,7 @@ export default function Home() {
             )
           )
         `)
+        .lte('Dia', dataCorteISO) // ✅ Agora respeita se está logado
         .order('"Culto nr."', { ascending: false })
         .range(from, to);
 
@@ -183,7 +214,7 @@ export default function Home() {
     }
 
     fetchCultos();
-  }, [page]);
+  }, [page, user]); // ← Adicionei 'user' como dependência
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -237,6 +268,23 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Aviso para usuários logados */}
+        {user && (
+          <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">👁️</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900">
+                  Você está logado e pode ver cultos futuros
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  A congregação só verá os próximos cultos a partir de sábado às 14h
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Título da seção */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-slate-900 mb-2">
@@ -284,6 +332,14 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
+                    {/* Badge de Culto Futuro (só para logados) */}
+                    {user && new Date(culto.Dia) > new Date() && (
+                      <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-300/30 px-3 py-1 rounded-lg">
+                        <span className="text-xs font-semibold text-amber-100">
+                          🔜 Próximo
+                        </span>
+                      </div>
+                    )}
                     {/* Botão WhatsApp */}
                     <button
                       onClick={() => compartilharWhatsApp(culto)}

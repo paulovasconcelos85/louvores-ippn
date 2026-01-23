@@ -37,22 +37,6 @@ export default function CifraPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-slate-200">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.back()}
-            className="text-emerald-700 font-semibold"
-          >
-            ← Voltar
-          </button>
-
-          <Link href="/" className="text-emerald-700 font-semibold">
-            🏠 Home
-          </Link>
-        </div>
-      </header>
-
       <main className="p-4 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">{nome}</h1>
 

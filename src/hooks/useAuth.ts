@@ -48,14 +48,20 @@ export function useAuth() {
   };
 
   const signInWithGoogle = async () => {
+    // Detecta automaticamente se está em dev ou prod
+    const redirectUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/auth/callback`
+      : 'http://localhost:3000/auth/callback';
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,  // ← Mudou aqui!
+        redirectTo: redirectUrl,
       },
     });
     return { data, error };
   };
+
 
   const signInWithAzure = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({

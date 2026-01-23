@@ -290,50 +290,6 @@ function ItemLiturgia({
 
   return (
     <div className={`${corCard} border-2 rounded-2xl p-4 shadow-sm transition-all`}>
-      {/* Header com tipo e controles */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={onMoveUp}
-            disabled={index === 0}
-            className="w-10 h-10 bg-white rounded-lg flex items-center justify-center disabled:opacity-30 active:bg-slate-100 touch-manipulation shadow-sm"
-            type="button"
-          >
-            <span className="text-xl">▲</span>
-          </button>
-          <button
-            onClick={onMoveDown}
-            disabled={index === total - 1}
-            className="w-10 h-10 bg-white rounded-lg flex items-center justify-center disabled:opacity-30 active:bg-slate-100 touch-manipulation shadow-sm"
-            type="button"
-          >
-            <span className="text-xl">▼</span>
-          </button>
-        </div>
-
-        <div className="flex-1">
-          <select
-            value={item.tipo}
-            onChange={e => onUpdate({ ...item, tipo: e.target.value })}
-            className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base font-bold text-emerald-800 focus:border-emerald-600 focus:outline-none touch-manipulation bg-white"
-          >
-            {TIPOS_LITURGIA.map(tipo => (
-              <option key={tipo} value={tipo}>
-                {tipo}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={onRemove}
-          className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-200 active:bg-red-300 touch-manipulation"
-          type="button"
-        >
-          <span className="text-2xl font-bold">✕</span>
-        </button>
-      </div>
-
       {/* Cântico */}
       {item.tipo !== 'Pregação' && (
         <>
@@ -607,22 +563,6 @@ export default function CultosPage() {
   if (modoEdicao) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        {/* Header Mobile-First */}
-        <header className="bg-white shadow-sm border-b-2 border-slate-200 sticky top-0 z-10">
-          <div className="px-4 py-4 flex items-center justify-between">
-            <button
-              onClick={cancelar}
-              className="text-emerald-700 font-bold text-lg active:text-emerald-900 touch-manipulation"
-            >
-              ← Voltar
-            </button>
-
-            <Link href="/" className="text-emerald-700 font-bold text-lg active:text-emerald-900 touch-manipulation">
-              🏠
-            </Link>
-          </div>
-        </header>
-
         <main className="p-4 pb-24">
           <h1 className="text-3xl font-bold mb-6 text-slate-900">
             {cultoEditando ? '✏️ Editar Culto' : '➕ Novo Culto'}
