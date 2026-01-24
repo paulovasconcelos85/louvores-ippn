@@ -24,6 +24,7 @@ interface UsePermissionsReturn {
     podeGerenciarConteudo: boolean;
     isSuperAdmin: boolean;
   };
+  isSuperAdmin: boolean; // ← SÓ ADICIONAR ESTA LINHA
   refetch: () => Promise<void>;
 }
 
@@ -134,6 +135,7 @@ export function usePermissions(): UsePermissionsReturn {
     loading: authLoading || loading,
     error,
     permissoes,
+    isSuperAdmin: isSuperAdmin(user?.email), // ← SÓ ADICIONAR ESTA LINHA
     refetch: fetchPermissions
   };
 }

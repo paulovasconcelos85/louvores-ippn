@@ -35,80 +35,57 @@ interface UsuarioComTags extends UsuarioPermitido {
 
 export default function GerenciarUsuarios() {
   const router = useRouter();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes, usuarioPermitido } = usePermissions();
+  
+  // Estados principais
   const [usuarios, setUsuarios] = useState<UsuarioComTags[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mensagem, setMensagem] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [enviandoConvite, setEnviandoConvite] = useState<string | null>(null);
+
+  // Estados para Novo Usuário
   const [novoEmail, setNovoEmail] = useState('');
   const [novoNome, setNovoNome] = useState('');
   const [novoTelefone, setNovoTelefone] = useState('');
   const [novoCargo, setNovoCargo] = useState<CargoTipo>('musico');
-  const [salvando, setSalvando] = useState(false);
-  const [mensagem, setMensagem] = useState('');
   
-  // Estados para edição
+  // Estados para Edição
   const [usuarioEditando, setUsuarioEditando] = useState<UsuarioPermitido | null>(null);
   const [editandoNome, setEditandoNome] = useState('');
   const [editandoTelefone, setEditandoTelefone] = useState('');
   const [editandoCargo, setEditandoCargo] = useState<CargoTipo>('musico');
   
   // Estados para tags
-  const [todasTags, setTodasTags] = useState<any[]>([]);
-  const [tagsUsuario, setTagsUsuario] = useState<string[]>([]); // IDs das tags que o usuário tem
+  const [todasTags, setTodasTags] = useState<Tag[]>([]);
+  const [tagsUsuario, setTagsUsuario] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
 
   const totalLoading = authLoading || permLoading;
 
+  // 1. Verificação de Segurança
   useEffect(() => {
     if (!totalLoading && !user) {
       router.push('/login');
       return;
     }
 
-    // Redireciona se não tem permissão para gerenciar usuários
     if (!totalLoading && user && !permissoes.podeGerenciarUsuarios) {
       router.push('/admin');
     }
   }, [user, totalLoading, permissoes.podeGerenciarUsuarios, router]);
 
+  // 2. Carregamento Inicial
   useEffect(() => {
     if (user && permissoes.podeGerenciarUsuarios) {
       carregarUsuarios();
       carregarTodasTags();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, permissoes.podeGerenciarUsuarios]);
 
-  const handleLogout = async () => {
-    await signOut();
-    router.push('/');
-  };
-
-  // Função para formatar telefone brasileiro
-  const formatarTelefone = (valor: string) => {
-    // Remove tudo que não é número
-    const numeros = valor.replace(/\D/g, '');
-    
-    // Limita a 11 dígitos (DDD + 9 dígitos)
-    const numeroLimitado = numeros.slice(0, 11);
-    
-    // Aplica a máscara
-    if (numeroLimitado.length <= 10) {
-      // Formato fixo: (XX) XXXX-XXXX
-      return numeroLimitado
-        .replace(/^(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d)/, '$1-$2');
-    } else {
-      // Formato celular: (XX) XXXXX-XXXX
-      return numeroLimitado
-        .replace(/^(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2');
-    }
-  };
-
-  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (value: string) => void) => {
-    const valorFormatado = formatarTelefone(e.target.value);
-    setter(valorFormatado);
-  };
+  // --- FUNÇÕES DE DADOS ---
 
   const carregarUsuarios = async () => {
     try {
@@ -119,7 +96,7 @@ export default function GerenciarUsuarios() {
 
       if (error) throw error;
 
-      // Buscar tags de cada usuário
+      // Carregar tags para cada usuário
       const usuariosComTags = await Promise.all(
         (data || []).map(async (usuario) => {
           const { data: tagsData } = await supabase
@@ -127,9 +104,12 @@ export default function GerenciarUsuarios() {
             .select('tag_id, tags_funcoes(id, nome, categoria, cor)')
             .eq('usuario_id', usuario.id);
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const tagsFormatadas = tagsData?.map((t: any) => t.tags_funcoes).filter(Boolean) || [];
+
           return {
             ...usuario,
-            tags: tagsData?.map(t => t.tags_funcoes).filter(Boolean) || []
+            tags: tagsFormatadas
           };
         })
       );
@@ -153,7 +133,7 @@ export default function GerenciarUsuarios() {
 
       if (error) throw error;
       setTodasTags(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Erro ao carregar tags:', error);
     }
   };
@@ -168,12 +148,14 @@ export default function GerenciarUsuarios() {
 
       if (error) throw error;
       setTagsUsuario(data?.map(t => t.tag_id) || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Erro ao carregar tags do usuário:', error);
     } finally {
       setLoadingTags(false);
     }
   };
+
+  // --- AÇÕES ---
 
   const toggleTag = async (tagId: string) => {
     if (!usuarioEditando) return;
@@ -182,7 +164,6 @@ export default function GerenciarUsuarios() {
 
     try {
       if (jaTemTag) {
-        // Remover tag
         const { error } = await supabase
           .from('usuarios_tags')
           .delete()
@@ -192,13 +173,12 @@ export default function GerenciarUsuarios() {
         if (error) throw error;
         setTagsUsuario(prev => prev.filter(t => t !== tagId));
       } else {
-        // Adicionar tag
         const { error } = await supabase
           .from('usuarios_tags')
           .insert({
             usuario_id: usuarioEditando.id,
             tag_id: tagId,
-            nivel_habilidade: 1 // padrão: básico
+            nivel_habilidade: 1
           });
 
         if (error) throw error;
@@ -282,7 +262,42 @@ export default function GerenciarUsuarios() {
     }
   };
 
-  const abrirModalEdicao = (usuario: UsuarioPermitido) => {
+  const enviarConvite = async (usuario: UsuarioPermitido) => {
+    if (!confirm(`Enviar convite de acesso para ${usuario.nome} (${usuario.email})?`)) {
+      return;
+    }
+
+    setEnviandoConvite(usuario.id);
+    setMensagem('');
+
+    try {
+      const response = await fetch('/api/enviar-convite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: usuario.email,
+          nome: usuario.nome
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao enviar convite');
+      }
+
+      setMensagem(`✅ Convite enviado para ${usuario.email}! O usuário receberá um email para definir a senha.`);
+    } catch (error: any) {
+      console.error('Erro ao enviar convite:', error);
+      setMensagem(`❌ Erro ao enviar convite: ${error.message}`);
+    } finally {
+      setEnviandoConvite(null);
+    }
+  };
+
+  // --- MODAL DE EDIÇÃO ---
+
+  const abrirModalEdicao = (usuario: UsuarioComTags) => {
     setUsuarioEditando(usuario);
     setEditandoNome(usuario.nome);
     setEditandoTelefone(usuario.telefone ? formatPhoneNumber(usuario.telefone) : '');
@@ -328,6 +343,8 @@ export default function GerenciarUsuarios() {
     }
   };
 
+  // --- RENDERIZAÇÃO ---
+
   if (totalLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -345,7 +362,6 @@ export default function GerenciarUsuarios() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
           {/* Info do usuário logado */}
@@ -361,7 +377,7 @@ export default function GerenciarUsuarios() {
               )}
               {permissoes.isSuperAdmin && (
                 <span className="px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-900 border border-yellow-300">
-                  ⭐ Super Admin (Lista Hardcoded)
+                  ⭐ Super Admin
                 </span>
               )}
             </div>
@@ -424,11 +440,8 @@ export default function GerenciarUsuarios() {
                     value={novoTelefone}
                     onChange={(e) => setNovoTelefone(formatPhoneNumber(e.target.value))}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="(92) 98139-4605 ou +1 (555) 123-4567"
+                    placeholder="(92) 98139-4605"
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    💡 Detecta automaticamente BR ou EUA/Canadá
-                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -446,14 +459,6 @@ export default function GerenciarUsuarios() {
                     <option value="pastor">📖 Pastor</option>
                     <option value="admin">🔐 Administrador</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {novoCargo === 'admin' && '⚠️ Admin pode gerenciar usuários e escalas'}
-                    {novoCargo === 'pastor' && '📖 Pastor pode criar escalas e gerenciar conteúdo'}
-                    {novoCargo === 'presbitero' && '👔 Presbítero pode criar escalas e gerenciar conteúdo'}
-                    {novoCargo === 'staff' && '🛠️ Staff pode criar escalas'}
-                    {novoCargo === 'musico' && '🎵 Músico pode acessar o sistema'}
-                    {novoCargo === 'seminarista' && '📚 Seminarista pode acessar o sistema'}
-                  </p>
                 </div>
               </div>
 
@@ -512,7 +517,7 @@ export default function GerenciarUsuarios() {
                           )}
                           {usuario.tags && usuario.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2">
-                              {usuario.tags.slice(0, 4).map((tag: any) => (
+                              {usuario.tags.slice(0, 4).map((tag) => (
                                 <span
                                   key={tag.id}
                                   className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
@@ -537,8 +542,27 @@ export default function GerenciarUsuarios() {
                             })}
                           </p>
                         </div>
-
+                        
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Botão Enviar Convite */}
+                          <button
+                            onClick={() => enviarConvite(usuario)}
+                            disabled={enviandoConvite === usuario.id || !usuario.ativo}
+                            className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {enviandoConvite === usuario.id ? (
+                              <>
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Enviando...</span>
+                              </>
+                            ) : (
+                              <>📧 Convite</>
+                            )}
+                          </button>
+
                           <button
                             onClick={() => abrirModalEdicao(usuario)}
                             className="px-3 py-1.5 rounded text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-all"
@@ -587,8 +611,8 @@ export default function GerenciarUsuarios() {
               <div>
                 <p className="font-medium mb-2">👥 Gerenciar Usuários:</p>
                 <ul className="space-y-1 pl-4">
-                  <li>✓ Administrador (cargo no banco)</li>
-                  <li>✓ Super-Admins (lista hardcoded)</li>
+                  <li>✓ Administrador</li>
+                  <li>✓ Super-Admins (hardcoded)</li>
                 </ul>
               </div>
               <div>
@@ -604,18 +628,6 @@ export default function GerenciarUsuarios() {
                   <li>✓ Todos com acesso ao admin</li>
                 </ul>
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-blue-200">
-              <p className="text-xs text-blue-700">
-                💡 <strong>Dica:</strong> Usuários desativados mantêm seus dados mas não conseguem fazer login.
-                Remover um usuário é permanente e apaga todas as suas informações.
-              </p>
-              {permissoes.isSuperAdmin && (
-                <p className="text-xs text-yellow-800 mt-2 bg-yellow-50 p-2 rounded border border-yellow-200">
-                  ⭐ <strong>Super-Admin:</strong> Você está na lista hardcoded de <code className="bg-yellow-100 px-1 rounded">ADMIN_EMAILS</code> no arquivo <code className="bg-yellow-100 px-1 rounded">admin-config.ts</code>. 
-                  Isso significa que você sempre terá acesso total, mesmo sem estar cadastrado no banco de dados.
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -651,9 +663,6 @@ export default function GerenciarUsuarios() {
                     disabled
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 cursor-not-allowed"
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    💡 O email não pode ser alterado após o cadastro
-                  </p>
                 </div>
 
                 <div>
@@ -666,7 +675,6 @@ export default function GerenciarUsuarios() {
                     onChange={(e) => setEditandoNome(e.target.value)}
                     required
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="João da Silva"
                     disabled={salvando}
                   />
                 </div>
@@ -680,12 +688,8 @@ export default function GerenciarUsuarios() {
                     value={editandoTelefone}
                     onChange={(e) => setEditandoTelefone(formatPhoneNumber(e.target.value))}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="(92) 98139-4605 ou +1 (555) 123-4567"
                     disabled={salvando}
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    💡 Detecta automaticamente BR ou EUA/Canadá
-                  </p>
                 </div>
 
                 <div>
@@ -705,14 +709,6 @@ export default function GerenciarUsuarios() {
                     <option value="pastor">📖 Pastor</option>
                     <option value="admin">🔐 Administrador</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {editandoCargo === 'admin' && '⚠️ Admin pode gerenciar usuários e escalas'}
-                    {editandoCargo === 'pastor' && '📖 Pastor pode criar escalas e gerenciar conteúdo'}
-                    {editandoCargo === 'presbitero' && '👔 Presbítero pode criar escalas e gerenciar conteúdo'}
-                    {editandoCargo === 'staff' && '🛠️ Staff pode criar escalas'}
-                    {editandoCargo === 'musico' && '🎵 Músico pode acessar o sistema'}
-                    {editandoCargo === 'seminarista' && '📚 Seminarista pode acessar o sistema'}
-                  </p>
                 </div>
 
                 {/* Seção de Tags/Habilidades */}
@@ -725,11 +721,7 @@ export default function GerenciarUsuarios() {
                       <span className="text-xs text-slate-500">Carregando...</span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mb-3">
-                    Marque as habilidades e funções que esta pessoa pode exercer
-                  </p>
 
-                  {/* Agrupar tags por categoria */}
                   <div className="space-y-4">
                     {['lideranca', 'instrumento', 'vocal', 'tecnica', 'apoio'].map(categoria => {
                       const tagsDaCategoria = todasTags.filter(tag => tag.categoria === categoria);
@@ -779,12 +771,6 @@ export default function GerenciarUsuarios() {
                       );
                     })}
                   </div>
-
-                  {todasTags.length === 0 && (
-                    <div className="text-center py-8 text-slate-500 text-sm">
-                      Nenhuma habilidade cadastrada ainda
-                    </div>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
