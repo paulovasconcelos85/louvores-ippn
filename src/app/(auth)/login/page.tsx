@@ -6,37 +6,24 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle, signInWithAzure } = useAuth();
+  const { signIn, signInWithGoogle, signInWithAzure } = useAuth();
   
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setSuccess('');
 
     try {
-      if (isLogin) {
-        // Login
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        router.push('/admin');
-      } else {
-        // Cadastro
-        const { error } = await signUp(email, password);
-        if (error) throw error;
-        setSuccess('Cadastro realizado! Verifique seu e-mail para confirmar.');
-        setEmail('');
-        setPassword('');
-      }
+      const { error } = await signIn(email, password);
+      if (error) throw error;
+      router.push('/admin');
     } catch (err: any) {
-      setError(err.message || 'Erro ao processar solicitação');
+      setError(err.message || 'Erro ao fazer login');
     } finally {
       setLoading(false);
     }
@@ -48,7 +35,6 @@ export default function LoginPage() {
     try {
       const { error } = await signInWithGoogle();
       if (error) throw error;
-      // O redirecionamento é automático pelo Supabase
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login com Google');
       setLoading(false);
@@ -61,7 +47,6 @@ export default function LoginPage() {
     try {
       const { error } = await signInWithAzure();
       if (error) throw error;
-      // O redirecionamento é automático pelo Supabase
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login com Microsoft');
       setLoading(false);
@@ -91,59 +76,20 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
-          {/* Tabs */}
-          <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => {
-                setIsLogin(true);
-                setError('');
-                setSuccess('');
-              }}
-              className={`flex-1 py-2.5 rounded-md font-medium transition-all ${
-                isLogin
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-emerald-700'
-              }`}
-            >
-              Entrar
-            </button>
-            <button
-              onClick={() => {
-                setIsLogin(false);
-                setError('');
-                setSuccess('');
-              }}
-              className={`flex-1 py-2.5 rounded-md font-medium transition-all ${
-                !isLogin
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-emerald-700'
-              }`}
-            >
-              Cadastrar
-            </button>
-          </div>
-
           {/* Título */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">
-              {isLogin ? 'Bem-vindo de volta!' : 'Criar conta'}
+              Bem-vindo de volta!
             </h2>
             <p className="text-slate-600 text-sm">
-              {isLogin
-                ? 'Entre com suas credenciais'
-                : 'Preencha os dados para criar sua conta'}
+              Entre com suas credenciais
             </p>
           </div>
 
-          {/* Mensagens de erro/sucesso */}
+          {/* Mensagens de erro */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
               {error}
-            </div>
-          )}
-          {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
-              {success}
             </div>
           )}
 
@@ -178,24 +124,7 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all"
                 placeholder="••••••••"
               />
-              {!isLogin && (
-                <p className="mt-1 text-xs text-slate-500">
-                  Mínimo de 6 caracteres
-                </p>
-              )}
             </div>
-
-            {/* Esqueci a senha (apenas no login) */}
-            {isLogin && (
-              <div className="text-right">
-                <button
-                  type="button"
-                  className="text-sm text-emerald-700 hover:text-emerald-800 font-medium"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
-            )}
 
             {/* Botão Submit */}
             <button
@@ -223,10 +152,8 @@ export default function LoginPage() {
                   </svg>
                   Processando...
                 </span>
-              ) : isLogin ? (
-                'Entrar'
               ) : (
-                'Criar conta'
+                'Entrar'
               )}
             </button>
           </form>
@@ -305,6 +232,13 @@ export default function LoginPage() {
           >
             Voltar para a página inicial
           </button>
+
+          {/* Info sobre convite */}
+          <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-900">
+              <span className="font-semibold">ℹ️ Primeiro acesso?</span> Peça ao administrador do sistema para enviar um convite para seu email.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}

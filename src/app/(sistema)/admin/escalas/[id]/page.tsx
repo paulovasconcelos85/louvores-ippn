@@ -36,7 +36,9 @@ interface EscalaFuncao {
   tag_id: string;
   usuario_id: string;
   confirmado: boolean;
+  status: 'pendente' | 'confirmado' | 'recusado';
   ordem: number;
+  _isNew?: boolean;
 }
 
 export default function GerenciarEscalaPage() {
@@ -51,9 +53,12 @@ export default function GerenciarEscalaPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [usuariosPorTag, setUsuariosPorTag] = useState<Record<string, Usuario[]>>({});
   const [funcoesEscala, setFuncoesEscala] = useState<EscalaFuncao[]>([]);
+  const [funcoesOriginais, setFuncoesOriginais] = useState<EscalaFuncao[]>([]);
+  const [funcoesRemovidas, setFuncoesRemovidas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
+  const [temMudancas, setTemMudancas] = useState(false);
 
   const totalLoading = authLoading || permLoading;
 
@@ -83,7 +88,6 @@ export default function GerenciarEscalaPage() {
     try {
       setLoading(true);
 
-      // 1. Carregar dados da escala
       const { data: escalaData, error: escalaError } = await supabase
         .from('escalas')
         .select('*')
@@ -93,7 +97,6 @@ export default function GerenciarEscalaPage() {
       if (escalaError) throw escalaError;
       setEscala(escalaData);
 
-      // 2. Carregar todas as tags ativas
       const { data: tagsData, error: tagsError } = await supabase
         .from('tags_funcoes')
         .select('*')
@@ -103,7 +106,6 @@ export default function GerenciarEscalaPage() {
       if (tagsError) throw tagsError;
       setTags(tagsData || []);
 
-      // 3. Buscar TODOS os usuários com tags de uma vez (otimizado!)
       const { data: usuariosTagsData } = await supabase
         .from('usuarios_tags')
         .select(`
@@ -116,7 +118,6 @@ export default function GerenciarEscalaPage() {
           )
         `);
 
-      // Agrupar por tag_id
       const usuariosPorTagTemp: Record<string, Usuario[]> = {};
       
       for (const tag of tagsData || []) {
@@ -128,14 +129,17 @@ export default function GerenciarEscalaPage() {
 
       setUsuariosPorTag(usuariosPorTagTemp);
 
-      // 4. Carregar funções já atribuídas nesta escala
       const { data: funcoesData, error: funcoesError } = await supabase
         .from('escalas_funcoes')
         .select('*')
         .eq('escala_id', escalaId);
 
       if (funcoesError) throw funcoesError;
+      
       setFuncoesEscala(funcoesData || []);
+      setFuncoesOriginais(funcoesData || []);
+      setFuncoesRemovidas([]);
+      setTemMudancas(false);
 
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
@@ -145,73 +149,115 @@ export default function GerenciarEscalaPage() {
     }
   };
 
-  const adicionarFuncao = async (tagId: string, usuarioId: string) => {
+  const adicionarFuncao = (tagId: string, usuarioId: string) => {
     if (!usuarioId) return;
 
+    const funcoesDestaTag = funcoesEscala.filter(f => f.tag_id === tagId);
+    const ordem = funcoesDestaTag.length;
+
+    const novaFuncao: EscalaFuncao = {
+      id: `temp_${Date.now()}_${Math.random()}`,
+      tag_id: tagId,
+      usuario_id: usuarioId,
+      ordem,
+      confirmado: false,
+      status: 'pendente',
+      _isNew: true
+    };
+
+    setFuncoesEscala(prev => [...prev, novaFuncao]);
+    setTemMudancas(true);
+    setMensagem('');
+  };
+
+  const removerFuncao = (funcaoId: string) => {
+    const funcao = funcoesEscala.find(f => f.id === funcaoId);
+    
+    if (funcao?._isNew) {
+      setFuncoesEscala(prev => prev.filter(f => f.id !== funcaoId));
+    } else {
+      setFuncoesEscala(prev => prev.filter(f => f.id !== funcaoId));
+      setFuncoesRemovidas(prev => [...prev, funcaoId]);
+    }
+    
+    setTemMudancas(true);
+    setMensagem('');
+  };
+
+  const alterarStatus = (funcaoId: string, novoStatus: 'pendente' | 'confirmado' | 'recusado') => {
+    setFuncoesEscala(prev => 
+      prev.map(f => f.id === funcaoId ? { 
+        ...f, 
+        status: novoStatus,
+        confirmado: novoStatus === 'confirmado'
+      } : f)
+    );
+    setTemMudancas(true);
+  };
+
+  const cancelarMudancas = () => {
+    setFuncoesEscala(funcoesOriginais);
+    setFuncoesRemovidas([]);
+    setTemMudancas(false);
+    setMensagem('↩️ Mudanças descartadas');
+  };
+
+  const salvarTodasMudancas = async () => {
     try {
       setSalvando(true);
+      setMensagem('💾 Salvando alterações...');
+
+      if (funcoesRemovidas.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('escalas_funcoes')
+          .delete()
+          .in('id', funcoesRemovidas);
+
+        if (deleteError) throw deleteError;
+      }
+
+      const novasFuncoes = funcoesEscala.filter(f => f._isNew);
+      if (novasFuncoes.length > 0) {
+        const { error: insertError } = await supabase
+          .from('escalas_funcoes')
+          .insert(
+            novasFuncoes.map(f => ({
+              escala_id: escalaId,
+              tag_id: f.tag_id,
+              usuario_id: f.usuario_id,
+              ordem: f.ordem,
+              confirmado: f.confirmado,
+              status: f.status
+            }))
+          );
+
+        if (insertError) throw insertError;
+      }
+
+      const funcoesParaAtualizar = funcoesEscala.filter(f => !f._isNew);
+      for (const funcao of funcoesParaAtualizar) {
+        const original = funcoesOriginais.find(o => o.id === funcao.id);
+        if (original && (original.confirmado !== funcao.confirmado || original.status !== funcao.status)) {
+          const { error: updateError } = await supabase
+            .from('escalas_funcoes')
+            .update({ 
+              confirmado: funcao.confirmado,
+              status: funcao.status
+            })
+            .eq('id', funcao.id);
+
+          if (updateError) throw updateError;
+        }
+      }
+
+      setMensagem('✅ Todas as alterações foram salvas com sucesso!');
+      await carregarDados();
       
-      // Verificar quantas pessoas já estão nesta função
-      const funcoesExistentes = funcoesEscala.filter(f => f.tag_id === tagId);
-      const ordem = funcoesExistentes.length;
-
-      const { error } = await supabase
-        .from('escalas_funcoes')
-        .insert({
-          escala_id: escalaId,
-          tag_id: tagId,
-          usuario_id: usuarioId,
-          ordem,
-          confirmado: false
-        });
-
-      if (error) throw error;
-
-      setMensagem('✅ Pessoa adicionada com sucesso!');
-      carregarDados();
     } catch (error: any) {
-      console.error('Erro ao adicionar função:', error);
-      setMensagem(`❌ Erro: ${error.message}`);
+      console.error('Erro ao salvar:', error);
+      setMensagem(`❌ Erro ao salvar: ${error.message}`);
     } finally {
       setSalvando(false);
-    }
-  };
-
-  const removerFuncao = async (funcaoId: string) => {
-    try {
-      setSalvando(true);
-
-      const { error } = await supabase
-        .from('escalas_funcoes')
-        .delete()
-        .eq('id', funcaoId);
-
-      if (error) throw error;
-
-      setMensagem('🗑️ Pessoa removida');
-      carregarDados();
-    } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const toggleConfirmacao = async (funcaoId: string, confirmadoAtual: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('escalas_funcoes')
-        .update({ confirmado: !confirmadoAtual })
-        .eq('id', funcaoId);
-
-      if (error) throw error;
-
-      // Atualizar localmente
-      setFuncoesEscala(prev => 
-        prev.map(f => f.id === funcaoId ? { ...f, confirmado: !confirmadoAtual } : f)
-      );
-    } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
     }
   };
 
@@ -259,6 +305,9 @@ export default function GerenciarEscalaPage() {
     (a, b) => getCategoriaOrdem(a) - getCategoriaOrdem(b)
   );
 
+  // Contar recusados
+  const totalRecusados = funcoesEscala.filter(f => f.status === 'recusado').length;
+
   if (totalLoading || loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -276,16 +325,58 @@ export default function GerenciarEscalaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Mensagem */}
         {mensagem && (
           <div className={`mb-6 p-4 rounded-lg ${
             mensagem.includes('✅') ? 'bg-green-50 text-green-800 border border-green-200' :
-            mensagem.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+            mensagem.includes('⚠️') || mensagem.includes('↩️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+            mensagem.includes('💾') ? 'bg-blue-50 text-blue-800 border border-blue-200' :
             'bg-red-50 text-red-800 border border-red-200'
           }`}>
             {mensagem}
+          </div>
+        )}
+
+        {/* Alerta de recusados */}
+        {totalRecusados > 0 && (
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-xl">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">⚠️</span>
+              <div>
+                <p className="font-bold text-red-900">
+                  {totalRecusados} {totalRecusados === 1 ? 'pessoa informou' : 'pessoas informaram'} que não {totalRecusados === 1 ? 'pode' : 'podem'} participar
+                </p>
+                <p className="text-sm text-red-700">
+                  Verifique abaixo quem não poderá comparecer e ajuste a escala conforme necessário.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de mudanças pendentes */}
+        {temMudancas && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-800 font-semibold">⚠️ Você tem alterações não salvas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelarMudancas}
+                disabled={salvando}
+                className="px-4 py-2 text-sm border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+              >
+                Descartar
+              </button>
+              <button
+                onClick={salvarTodasMudancas}
+                disabled={salvando}
+                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 font-semibold"
+              >
+                {salvando ? '💾 Salvando...' : '💾 Salvar Tudo'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -311,36 +402,52 @@ export default function GerenciarEscalaPage() {
 
                     return (
                       <div key={tag.id} className="flex items-start gap-3">
-                        {/* Label da Função */}
                         <div className="w-40 flex-shrink-0">
                           <label className="block text-sm font-semibold text-slate-700 pt-2">
                             {tag.nome.toUpperCase()}
                           </label>
                         </div>
 
-                        {/* Lista de Pessoas */}
                         <div className="flex-1 space-y-2">
                           {funcoesDestaTag.length > 0 ? (
-                            funcoesDestaTag.map((funcao, index) => {
+                            funcoesDestaTag.map((funcao) => {
                               const usuario = usuariosDisponiveis.find(u => u.id === funcao.usuario_id);
                               
                               return (
                                 <div key={funcao.id} className="flex items-center gap-2">
-                                  <div className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-900">
-                                      {usuario?.nome || 'Usuário não encontrado'}
-                                    </span>
+                                  <div className={`flex-1 px-3 py-2 border-2 rounded-lg flex items-center justify-between ${
+                                    funcao.status === 'recusado' 
+                                      ? 'bg-red-50 border-red-400'
+                                      : funcao._isNew 
+                                        ? 'bg-green-50 border-green-300' 
+                                        : 'bg-slate-50 border-slate-200'
+                                  }`}>
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => toggleConfirmacao(funcao.id, funcao.confirmado)}
-                                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${
-                                          funcao.confirmado
-                                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      {funcao._isNew && (
+                                        <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded font-semibold">
+                                          NOVO
+                                        </span>
+                                      )}
+                                      <span className="text-sm font-medium text-slate-900">
+                                        {usuario?.nome || 'Usuário não encontrado'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={funcao.status}
+                                        onChange={(e) => alterarStatus(funcao.id, e.target.value as any)}
+                                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors border ${
+                                          funcao.status === 'confirmado'
+                                            ? 'bg-green-100 text-green-800 border-green-300'
+                                            : funcao.status === 'recusado'
+                                              ? 'bg-red-100 text-red-800 border-red-300'
+                                              : 'bg-gray-100 text-gray-600 border-gray-300'
                                         }`}
                                       >
-                                        {funcao.confirmado ? '✓ Confirmado' : 'Pendente'}
-                                      </button>
+                                        <option value="pendente">⏳ Pendente</option>
+                                        <option value="confirmado">✓ Confirmado</option>
+                                        <option value="recusado">✗ Recusado</option>
+                                      </select>
                                       <button
                                         onClick={() => removerFuncao(funcao.id)}
                                         disabled={salvando}
@@ -359,7 +466,6 @@ export default function GerenciarEscalaPage() {
                             </div>
                           )}
 
-                          {/* Adicionar Nova Pessoa */}
                           <div className="flex items-center gap-2">
                             <select
                               onChange={(e) => {
@@ -396,10 +502,19 @@ export default function GerenciarEscalaPage() {
             ))}
           </div>
 
-          {/* Footer com Ações */}
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
             <div className="text-sm text-slate-600">
               {funcoesEscala.length} {funcoesEscala.length === 1 ? 'pessoa atribuída' : 'pessoas atribuídas'}
+              {totalRecusados > 0 && (
+                <span className="ml-2 text-red-600 font-semibold">
+                  ({totalRecusados} recusou{totalRecusados > 1 ? 'ram' : ''})
+                </span>
+              )}
+              {temMudancas && (
+                <span className="ml-2 text-amber-600 font-semibold">
+                  (não salvo)
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -408,6 +523,15 @@ export default function GerenciarEscalaPage() {
               >
                 Voltar
               </button>
+              {temMudancas && (
+                <button
+                  onClick={salvarTodasMudancas}
+                  disabled={salvando}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50"
+                >
+                  {salvando ? '💾 Salvando...' : '💾 Salvar Alterações'}
+                </button>
+              )}
             </div>
           </div>
         </div>

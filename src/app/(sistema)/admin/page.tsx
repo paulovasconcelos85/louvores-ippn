@@ -6,6 +6,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCargoLabel, getCargoCor } from '@/lib/permissions';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+
+interface MinhaProximaEscala {
+  escala_id: string;
+  data: string;
+  hora_inicio: string;
+  funcao: string;
+  tipo_culto: string;
+  confirmado: boolean;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -13,25 +23,84 @@ export default function AdminPage() {
   const { usuarioPermitido, loading: permLoading, permissoes } = usePermissions();
   
   const [menuAberto, setMenuAberto] = useState(false);
+  const [proximaEscala, setProximaEscala] = useState<MinhaProximaEscala | null>(null);
 
   const loading = authLoading || permLoading;
 
   useEffect(() => {
-    // Se não está carregando e não tem usuário, redireciona para login
     if (!loading && !user) {
       router.push('/login');
       return;
     }
 
-    // Se terminou de carregar e não tem permissão, redireciona para home
     if (!loading && user && !permissoes.podeAcessarAdmin) {
       router.push('/');
     }
   }, [user, loading, permissoes.podeAcessarAdmin, router]);
 
+  useEffect(() => {
+    if (user) {
+      buscarProximaEscala();
+    }
+  }, [user]);
+
+  const buscarProximaEscala = async () => {
+    if (!user) return;
+    
+    try {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const dataHoje = hoje.toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('escalas')
+        .select(`
+          id,
+          data,
+          hora_inicio,
+          tipo_culto,
+          escalas_funcoes!inner (
+            confirmado,
+            tags_funcoes (nome),
+            usuarios_permitidos!inner (id)
+          )
+        `)
+        .eq('escalas_funcoes.usuarios_permitidos.id', user.id)
+        .gte('data', dataHoje)
+        .in('status', ['publicada', 'rascunho'])
+        .order('data', { ascending: true })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const escala = data[0];
+        const funcoes = escala.escalas_funcoes as any;
+        setProximaEscala({
+          escala_id: escala.id,
+          data: escala.data,
+          hora_inicio: escala.hora_inicio,
+          tipo_culto: escala.tipo_culto,
+          funcao: funcoes[0]?.tags_funcoes?.nome || 'Função',
+          confirmado: funcoes[0]?.confirmado || false
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar próxima escala:', error);
+    }
+  };
+
   const handleLogout = async () => {
     await signOut();
     router.push('/');
+  };
+
+  const getTipoCultoLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      dominical_manha: 'Dominical - Manhã',
+      dominical_noite: 'Dominical - Noite',
+      quarta: 'Quarta-feira',
+      especial: 'Culto Especial'
+    };
+    return labels[tipo] || tipo;
   };
 
   if (loading) {
@@ -45,15 +114,12 @@ export default function AdminPage() {
     );
   }
 
-  // Se não tem usuário ou não tem permissão, não renderiza nada
   if (!user || !permissoes.podeAcessarAdmin) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Card */}
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-8 text-white mb-8">
@@ -82,9 +148,74 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Aviso de Próxima Escala */}
+        {proximaEscala && (
+          <div className={`${
+            proximaEscala.confirmado 
+              ? 'bg-green-50 border-green-300' 
+              : 'bg-amber-50 border-amber-400'
+          } border-2 rounded-xl p-5 mb-8 shadow-sm`}>
+            <div className="flex items-start gap-4">
+              <span className="text-4xl">{proximaEscala.confirmado ? '✅' : '⚠️'}</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <p className={`font-bold text-lg ${
+                    proximaEscala.confirmado ? 'text-green-900' : 'text-amber-900'
+                  }`}>
+                    {proximaEscala.confirmado 
+                      ? '🎵 Você está escalado e confirmado!' 
+                      : '🎵 Você está escalado - Confirme sua presença!'}
+                  </p>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    proximaEscala.confirmado 
+                      ? 'bg-green-200 text-green-800' 
+                      : 'bg-amber-200 text-amber-900'
+                  }`}>
+                    {proximaEscala.confirmado ? 'CONFIRMADO' : 'PENDENTE'}
+                  </span>
+                </div>
+                
+                <div className={`${
+                  proximaEscala.confirmado ? 'text-green-700' : 'text-amber-700'
+                } mb-3`}>
+                  <p className="font-semibold">
+                    📅 {new Date(proximaEscala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                      weekday: 'long',
+                      day: '2-digit',
+                      month: 'long'
+                    })} às {proximaEscala.hora_inicio}
+                  </p>
+                  <p className="text-sm mt-1">
+                    ⛪ {getTipoCultoLabel(proximaEscala.tipo_culto)} • 🎼 <span className="font-semibold">{proximaEscala.funcao}</span>
+                  </p>
+                </div>
+
+                {!proximaEscala.confirmado && (
+                  <div className={`bg-amber-100 border border-amber-300 rounded-lg p-3 text-sm ${
+                    proximaEscala.confirmado ? 'text-green-800' : 'text-amber-800'
+                  }`}>
+                    <p className="font-semibold mb-1">💬 Por favor, confirme sua presença:</p>
+                    <p>Entre em contato com o responsável pelas escalas ou acesse a página de escalas para confirmar.</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => router.push(`/escala/${proximaEscala.escala_id}`)}
+                  className={`mt-3 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                    proximaEscala.confirmado
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  {proximaEscala.confirmado ? '👁️ Ver Detalhes da Escala' : '✓ Confirmar Presença'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Usuários - APENAS PARA ADMINS E SUPER-ADMINS */}
           {permissoes.podeGerenciarUsuarios && (
             <button
               onClick={() => router.push('/admin/usuarios')}
@@ -105,7 +236,6 @@ export default function AdminPage() {
             </button>
           )}
 
-          {/* Escalas - Para Pastor, Presbítero, Staff, Admin */}
           {permissoes.podeGerenciarEscalas && (
             <button
               onClick={() => router.push('/admin/escalas')}
@@ -126,7 +256,6 @@ export default function AdminPage() {
             </button>
           )}
 
-          {/* Músicas */}
           <Link href="/canticos" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer">
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
@@ -142,7 +271,6 @@ export default function AdminPage() {
             </div>
           </Link>
 
-          {/* Cultos */}
           <Link href="/cultos" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer">
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
@@ -158,7 +286,6 @@ export default function AdminPage() {
             </div>
           </Link>
 
-          {/* Estatísticas */}
           <Link href="/dashboard" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer">
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">

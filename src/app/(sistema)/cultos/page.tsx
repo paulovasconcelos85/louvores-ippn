@@ -290,18 +290,68 @@ function ItemLiturgia({
 
   return (
     <div className={`${corCard} border-2 rounded-2xl p-4 shadow-sm transition-all`}>
+      {/* Header com posição e botões de movimento/remover */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="inline-block bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold">
+          Posição {item.ordem}
+        </span>
+        
+        <div className="flex gap-2">
+          {index > 0 && (
+            <button
+              onClick={onMoveUp}
+              className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold touch-manipulation"
+              type="button"
+            >
+              ⬆️
+            </button>
+          )}
+          
+          {index < total - 1 && (
+            <button
+              onClick={onMoveDown}
+              className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold touch-manipulation"
+              type="button"
+            >
+              ⬇️
+            </button>
+          )}
+          
+          <button
+            onClick={onRemove}
+            className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold touch-manipulation"
+            type="button"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      {/* Campo de Tipo Litúrgico */}
+      <div className="mb-3">
+        <label className="text-sm font-bold text-slate-700 mb-2 block">
+          🎭 Tipo Litúrgico
+        </label>
+        <select
+          value={item.tipo}
+          onChange={e => onUpdate({ ...item, tipo: e.target.value })}
+          className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base focus:border-emerald-600 focus:outline-none touch-manipulation bg-white"
+        >
+          {TIPOS_LITURGIA.map(tipo => (
+            <option key={tipo} value={tipo}>
+              {tipo}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Cântico */}
       {item.tipo !== 'Pregação' && (
         <>
           <div className="mb-3">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-bold text-slate-700">
-                Cântico
-              </label>
-              <span className="inline-block bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold">
-                Posição {item.ordem}
-              </span>
-            </div>
+            <label className="text-sm font-bold text-slate-700 mb-2 block">
+              🎵 Cântico
+            </label>
             <CanticoAutocomplete
               value={canticoSelecionado}
               onChange={c => onUpdate({ ...item, cantico_id: c?.id || null })}
@@ -310,7 +360,7 @@ function ItemLiturgia({
             />
           </div>
 
-          {/* Informação da última execução - FORA DOS CAMPOS */}
+          {/* Informação da última execução */}
           {item.cantico_id && (
             <div className="mb-4 -mt-2">
               {formatarUltimaExecucao()}
@@ -320,7 +370,7 @@ function ItemLiturgia({
           {/* Tom */}
           <div>
             <label className="text-sm font-bold text-slate-700 mb-2 block">
-              Tom (opcional)
+              🎼 Tom (opcional)
             </label>
             <select
               value={item.tom || ''}
@@ -341,14 +391,9 @@ function ItemLiturgia({
       {/* Mensagem para pregação */}
       {item.tipo === 'Pregação' && (
         <div className="bg-white border-2 border-amber-300 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-amber-800 font-medium">
-              📖 Momento da pregação (não requer cântico)
-            </p>
-            <span className="inline-block bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold">
-              Posição {item.ordem}
-            </span>
-          </div>
+          <p className="text-sm text-amber-800 font-medium">
+            📖 Momento da pregação (não requer cântico)
+          </p>
         </div>
       )}
     </div>

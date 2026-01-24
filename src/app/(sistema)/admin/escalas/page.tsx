@@ -17,21 +17,19 @@ interface Escala {
   status: 'rascunho' | 'publicada' | 'concluida';
   criado_em: string;
   culto_id: number | null;
-  funcoes?: EscalaFuncao[];
+  escalas_funcoes?: EscalaFuncao[];
 }
 
 interface EscalaFuncao {
   id: string;
-  tag_id: string;
-  usuario_id: string;
   ordem: number;
   confirmado: boolean;
-  tag: {
+  tags_funcoes: {
     nome: string;
     categoria: string;
     cor: string;
   };
-  usuario: {
+  usuarios_permitidos: {
     nome: string;
     email: string;
   };
@@ -58,12 +56,14 @@ export default function EscalasPage() {
 
   // Gerar lista de meses
   const gerarOpcoesDeMs = () => {
-    const opcoes = [];
+    const opcoes = [{ valor: 'todos', label: '📅 Todos os Meses' }]; // Opção "Todos"
+    
     const hoje = new Date();
     const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     
-    for (let i = -12; i <= 6; i++) {
+    // Sempre gera dinamicamente: 24 meses atrás até 24 à frente
+    for (let i = -24; i <= 24; i++) {
       const data = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
       const ano = data.getFullYear();
       const mes = String(data.getMonth() + 1).padStart(2, '0');
@@ -82,6 +82,7 @@ export default function EscalasPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [escalaEditando, setEscalaEditando] = useState<Escala | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [carregandoModal, setCarregandoModal] = useState(false);
   
   // Dados do formulário
   const [titulo, setTitulo] = useState('');
@@ -97,10 +98,56 @@ export default function EscalasPage() {
   const [cultoSelecionado, setCultoSelecionado] = useState<number | null>(null);
   const [criarNovoCulto, setcriarNovoCulto] = useState(true);
   const [buscandoCultos, setBuscandoCultos] = useState(false);
+  const [debugInfo, setDebugInfo] = useState(''); // Para debug
 
   const totalLoading = authLoading || permLoading;
 
+  // 🎯 Função para encontrar próximo domingo SEM escala cadastrada
+  const encontrarProximoDomingoDisponivel = async (): Promise<string> => {
+    try {
+      const hoje = new Date();
+      hoje.setHours(12, 0, 0, 0); // Meio-dia para evitar problemas de timezone
+      
+      const diaDaSemana = hoje.getDay();
+      console.log('📅 Hoje:', hoje.toISOString().split('T')[0]);
+      console.log('🗓️ Dia:', diaDaSemana, ['DOM','SEG','TER','QUA','QUI','SEX','SAB'][diaDaSemana]);
+      
+      const diasAteProximoDomingo = diaDaSemana === 0 ? 7 : (7 - diaDaSemana);
+      console.log('📊 Dias até domingo:', diasAteProximoDomingo);
+      
+      const datasParaVerificar: string[] = [];
+      
+      for (let i = 0; i < 8; i++) {
+        const domingo = new Date(hoje);
+        domingo.setDate(hoje.getDate() + diasAteProximoDomingo + (i * 7));
+        datasParaVerificar.push(domingo.toISOString().split('T')[0]);
+      }
+
+      console.log('📅 Domingos:', datasParaVerificar);
+
+      const { data: escalasExistentes, error } = await supabase
+        .from('escalas')
+        .select('data')
+        .in('data', datasParaVerificar)
+        .eq('tipo_culto', 'dominical_manha');
+
+      if (error) throw error;
+
+      const datasComEscala = new Set(escalasExistentes?.map(e => e.data) || []);
+      const domingoDisponivel = datasParaVerificar.find(data => !datasComEscala.has(data));
+      
+      return domingoDisponivel || datasParaVerificar[0];
+    } catch (error) {
+      const hoje = new Date();
+      const diaDaSemana = hoje.getDay();
+      const diasAteProximoDomingo = diaDaSemana === 0 ? 7 : (7 - diaDaSemana);
+      hoje.setDate(hoje.getDate() + diasAteProximoDomingo);
+      return hoje.toISOString().split('T')[0];
+    }
+  };
+
   useEffect(() => {
+
     if (!totalLoading && !user) {
       router.push('/login');
       return;
@@ -133,18 +180,40 @@ export default function EscalasPage() {
     try {
       setLoading(true);
       
-      const [ano, mes] = filtroMes.split('-');
-      const primeiroDia = `${ano}-${mes}-01`;
-      const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
-      const ultimoDiaFormatado = `${ano}-${mes}-${ultimoDia}`;
-
       let query = supabase
         .from('escalas')
-        .select('*')
-        .gte('data', primeiroDia)
-        .lte('data', ultimoDiaFormatado)
+        .select(`
+          *,
+          escalas_funcoes (
+            id,
+            ordem,
+            confirmado,
+            tags_funcoes (
+              nome,
+              categoria,
+              cor
+            ),
+            usuarios_permitidos (
+              nome,
+              email
+            )
+          )
+        `)
         .order('data', { ascending: true })
-        .order('hora_inicio', { ascending: true });
+        .order('hora_inicio', { ascending: true })
+        .order('ordem', { foreignTable: 'escalas_funcoes', ascending: true });
+
+      // Aplicar filtro de mês apenas se não for "todos"
+      if (filtroMes !== 'todos') {
+        const [ano, mes] = filtroMes.split('-');
+        const primeiroDia = `${ano}-${mes}-01`;
+        const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+        const ultimoDiaFormatado = `${ano}-${mes}-${ultimoDia}`;
+
+        query = query
+          .gte('data', primeiroDia)
+          .lte('data', ultimoDiaFormatado);
+      }
 
       if (filtroStatus !== 'todas') {
         query = query.eq('status', filtroStatus);
@@ -171,27 +240,47 @@ export default function EscalasPage() {
     if (!data) return;
     
     setBuscandoCultos(true);
+    setDebugInfo(`🔍 Buscando cultos para: ${data}`);
+    
     try {
+      // Buscar sem order - apenas verificar existência
       const { data: cultos, error } = await supabase
         .from('Louvores IPPN')
         .select('*')
-        .eq('Dia', data)
-        .order('Culto nr.', { ascending: false });
+        .eq('Dia', data);
 
-      if (error) throw error;
-
-      setCultosDisponiveis(cultos || []);
-      
-      // Se encontrou cultos, sugerir vincular ao existente
-      if (cultos && cultos.length > 0) {
-        setcriarNovoCulto(false);
-        setCultoSelecionado(cultos[0]['Culto nr.']);
-      } else {
+      if (error) {
+        console.error('❌ Erro:', error);
+        setDebugInfo(`❌ ${error.message}`);
         setcriarNovoCulto(true);
         setCultoSelecionado(null);
+        setBuscandoCultos(false);
+        return;
       }
-    } catch (error) {
-      console.error('Erro ao buscar cultos:', error);
+
+      // Ordenar no cliente se necessário
+      const cultosOrdenados = cultos?.sort((a, b) => b['Culto nr.'] - a['Culto nr.']) || [];
+
+      console.log('📊 Cultos encontrados para', data, ':', cultosOrdenados);
+
+      setCultosDisponiveis(cultosOrdenados);
+      
+      if (cultosOrdenados.length > 0) {
+        // ENCONTROU CULTO EXISTENTE - usar ao invés de criar novo
+        setcriarNovoCulto(false);
+        setCultoSelecionado(cultosOrdenados[0]['Culto nr.']);
+        setDebugInfo(`✅ Culto #${cultosOrdenados[0]['Culto nr.']} encontrado - será usado`);
+      } else {
+        // NÃO encontrou - permitir criar novo
+        setcriarNovoCulto(true);
+        setCultoSelecionado(null);
+        setDebugInfo(`⚠️ Nenhum culto encontrado - novo será criado`);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro:', error);
+      setDebugInfo(`❌ ${error?.message || 'Erro'}`);
+      setcriarNovoCulto(true);
+      setCultoSelecionado(null);
     } finally {
       setBuscandoCultos(false);
     }
@@ -200,6 +289,8 @@ export default function EscalasPage() {
   // 🎯 Criar novo culto em "Louvores IPPN"
   const criarCultoAutomaticamente = async (dataEscala: string): Promise<number | null> => {
     try {
+      console.log('🎵 Criando novo culto para data:', dataEscala);
+      
       const { data, error } = await supabase
         .from('Louvores IPPN')
         .insert({
@@ -208,27 +299,57 @@ export default function EscalasPage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro ao criar culto:', error);
+        throw error;
+      }
+      
+      console.log('✅ Culto criado:', data);
       return data['Culto nr.'];
     } catch (error) {
-      console.error('Erro ao criar culto:', error);
+      console.error('❌ Erro ao criar culto:', error);
       return null;
     }
   };
 
-  const abrirModalNova = () => {
+  const abrirModalNova = async () => {
+    setCarregandoModal(true);
+    setModalAberto(true);
+    
     setEscalaEditando(null);
-    setTitulo('');
-    setData('');
-    setHoraInicio('');
-    setHoraFim('');
-    setTipoCulto('dominical_manha');
     setObservacoes('');
     setStatus('rascunho');
     setCultosDisponiveis([]);
     setCultoSelecionado(null);
     setcriarNovoCulto(true);
-    setModalAberto(true);
+    setDebugInfo('');
+    
+    try {
+      // 🎯 Buscar próximo domingo disponível
+      const proximoDomingo = await encontrarProximoDomingoDisponivel();
+      setData(proximoDomingo);
+      
+      // 🎯 Gerar título sugerido baseado na data
+      const dataObj = new Date(proximoDomingo + 'T00:00:00');
+      const diaFormatado = dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+      const tituloSugerido = `Culto Dominical - ${diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1)}`;
+      setTitulo(tituloSugerido);
+      
+      // 🎯 Pré-preencher hora início com 09:00
+      setHoraInicio('09:00');
+      setHoraFim('');
+      setTipoCulto('dominical_manha');
+    } catch (error) {
+      console.error('Erro ao preparar modal:', error);
+      // Fallback para valores padrão
+      setData('');
+      setTitulo('');
+      setHoraInicio('09:00');
+      setHoraFim('');
+      setTipoCulto('dominical_manha');
+    } finally {
+      setCarregandoModal(false);
+    }
   };
 
   const abrirModalEdicao = (escala: Escala) => {
@@ -241,12 +362,16 @@ export default function EscalasPage() {
     setObservacoes(escala.observacoes || '');
     setStatus(escala.status);
     setCultoSelecionado(escala.culto_id);
+    setDebugInfo('');
+    setCarregandoModal(false); // Edição não precisa de loading
     setModalAberto(true);
   };
 
   const fecharModal = () => {
     setModalAberto(false);
     setEscalaEditando(null);
+    setDebugInfo('');
+    setCarregandoModal(false);
   };
 
   const salvarEscala = async (e: React.FormEvent) => {
@@ -257,13 +382,35 @@ export default function EscalasPage() {
     try {
       let cultoIdFinal = cultoSelecionado;
 
-      // 🎯 Se marcou para criar novo culto, cria agora
-      if (criarNovoCulto) {
-        const novoCultoId = await criarCultoAutomaticamente(data);
-        if (!novoCultoId) {
-          throw new Error('Falha ao criar culto automaticamente');
+      // 🎯 Verificar se deve criar novo culto
+      if (criarNovoCulto && !cultoSelecionado) {
+        // Antes de criar, fazer uma última verificação se não existe culto nesta data
+        console.log('🔍 Verificação final antes de criar culto para:', data);
+        
+        const { data: verificacao, error: errorVerif } = await supabase
+          .from('Louvores IPPN')
+          .select('*')
+          .eq('Dia', data);
+
+        if (errorVerif) {
+          console.error('❌ Erro na verificação:', errorVerif);
         }
-        cultoIdFinal = novoCultoId;
+
+        if (verificacao && verificacao.length > 0) {
+          // Encontrou culto existente! Usar ao invés de criar
+          console.log('✅ Culto encontrado na verificação final:', verificacao[0]['Culto nr.']);
+          cultoIdFinal = verificacao[0]['Culto nr.'];
+          setMensagem(`ℹ️ Culto #${cultoIdFinal} já existia para esta data, vinculando...`);
+        } else {
+          // Realmente não existe, criar novo
+          console.log('🎵 Criando novo culto para data:', data);
+          const novoCultoId = await criarCultoAutomaticamente(data);
+          if (!novoCultoId) {
+            throw new Error('Falha ao criar culto automaticamente');
+          }
+          console.log(`✅ Novo culto criado: #${novoCultoId}`);
+          cultoIdFinal = novoCultoId;
+        }
       }
 
       const dados = {
@@ -279,6 +426,8 @@ export default function EscalasPage() {
         atualizado_em: new Date().toISOString()
       };
 
+      console.log('💾 Salvando escala:', dados);
+
       if (escalaEditando) {
         // Atualizar
         const { error } = await supabase
@@ -288,7 +437,7 @@ export default function EscalasPage() {
 
         if (error) throw error;
         setMensagem(cultoIdFinal 
-          ? '✅ Escala atualizada e vinculada ao culto!'
+          ? `✅ Escala atualizada e vinculada ao Culto #${cultoIdFinal}!`
           : '✅ Escala atualizada com sucesso!');
       } else {
         // Criar nova
@@ -305,7 +454,7 @@ export default function EscalasPage() {
       fecharModal();
       carregarEscalas();
     } catch (error: any) {
-      console.error('Erro ao salvar escala:', error);
+      console.error('❌ Erro ao salvar escala:', error);
       setMensagem(`❌ Erro: ${error.message}`);
     } finally {
       setSalvando(false);
@@ -536,6 +685,47 @@ export default function EscalasPage() {
                       </div>
                     )}
 
+                    {/* 👥 Mostrar pessoas escaladas */}
+                    {escala.escalas_funcoes && escala.escalas_funcoes.length > 0 ? (
+                      <div className="border-t border-slate-200 pt-3 mt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold text-slate-600 uppercase">
+                            👥 Escalados ({escala.escalas_funcoes.length})
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {escala.escalas_funcoes
+                            .sort((a, b) => a.ordem - b.ordem)
+                            .map((func) => (
+                              <div
+                                key={func.id}
+                                className="flex items-center gap-2 text-xs bg-slate-50 rounded px-2 py-1.5"
+                              >
+                                <div
+                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: func.tags_funcoes.cor || '#64748b' }}
+                                />
+                                <span className="font-medium text-slate-700 truncate flex-1">
+                                  {func.usuarios_permitidos.nome}
+                                </span>
+                                <span className="text-slate-500 text-[10px] truncate">
+                                  {func.tags_funcoes.nome}
+                                </span>
+                                {func.confirmado && (
+                                  <span className="text-green-600 text-xs">✓</span>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-t border-slate-200 pt-3 mt-3">
+                        <div className="text-xs text-slate-400 text-center py-2 bg-slate-50 rounded">
+                          👤 Nenhuma pessoa escalada ainda
+                        </div>
+                      </div>
+                    )}
+
                     {escala.observacoes && (
                       <div className="text-xs text-slate-600 bg-slate-50 rounded p-2">
                         💬 {escala.observacoes}
@@ -589,6 +779,18 @@ export default function EscalasPage() {
             </div>
 
             <form onSubmit={salvarEscala} className="p-6 space-y-4">
+              {/* Loading inicial do modal */}
+              {carregandoModal && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700 mx-auto"></div>
+                    <p className="text-sm text-slate-600 mt-3">Preparando próximo domingo...</p>
+                  </div>
+                </div>
+              )}
+
+              {!carregandoModal && (
+                <>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Título da Escala *
@@ -666,11 +868,18 @@ export default function EscalasPage() {
                 </div>
               </div>
 
-              {/* 🎯 Seção de Vínculo com Culto */}
+              {/* 🎯 Seção de Vínculo com Culto - COM DEBUG */}
               <div className="border-t border-slate-200 pt-4">
                 <label className="block text-sm font-medium text-slate-700 mb-3">
                   🎵 Vínculo com Programação Musical
                 </label>
+
+                {/* Debug Info */}
+                {debugInfo && (
+                  <div className="mb-3 p-2 bg-slate-100 rounded text-xs text-slate-700 font-mono">
+                    {debugInfo}
+                  </div>
+                )}
 
                 {buscandoCultos ? (
                   <div className="text-center py-4">
@@ -737,14 +946,6 @@ export default function EscalasPage() {
                         </div>
                       </label>
                     )}
-
-                    {cultosDisponiveis.length === 0 && data && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-900">
-                          ℹ️ Nenhum culto encontrado para esta data. Um novo será criado automaticamente.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -778,11 +979,13 @@ export default function EscalasPage() {
                   disabled={salvando}
                 />
               </div>
+              </>
+              )}
 
               <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="submit"
-                  disabled={salvando}
+                  disabled={salvando || carregandoModal}
                   className="flex-1 bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {salvando ? 'Salvando...' : escalaEditando ? 'Salvar Alterações' : 'Criar Escala'}
@@ -790,7 +993,7 @@ export default function EscalasPage() {
                 <button
                   type="button"
                   onClick={fecharModal}
-                  disabled={salvando}
+                  disabled={salvando || carregandoModal}
                   className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-50"
                 >
                   Cancelar
