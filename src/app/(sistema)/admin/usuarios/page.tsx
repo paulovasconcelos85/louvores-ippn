@@ -329,7 +329,7 @@ export default function GerenciarUsuarios() {
   };
 
   const enviarConvite = async (usuario: UsuarioPermitido) => {
-    if (!confirm(`Enviar convite de acesso para ${usuario.nome} (${usuario.email})?`)) {
+    if (!confirm(`Enviar acesso para ${usuario.nome} (${usuario.email})?`)) {
       return;
     }
 
@@ -349,13 +349,18 @@ export default function GerenciarUsuarios() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Se o erro for de usuário já existente, personalizamos a mensagem
+        if (data.error?.includes('already been registered') || response.status === 400) {
+          setMensagem(`ℹ️ ${usuario.nome} já possui cadastro. Um e-mail de recuperação de senha foi enviado para ele(a).`);
+          return;
+        }
         throw new Error(data.error || 'Erro ao enviar convite');
       }
 
-      setMensagem(`✅ Convite enviado para ${usuario.email}! O usuário receberá um email para definir a senha.`);
+      setMensagem(`✅ Convite enviado com sucesso para ${usuario.email}!`);
     } catch (error: any) {
       console.error('Erro ao enviar convite:', error);
-      setMensagem(`❌ Erro ao enviar convite: ${error.message}`);
+      setMensagem(`❌ Erro: ${error.message}`);
     } finally {
       setEnviandoConvite(null);
     }

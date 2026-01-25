@@ -9,9 +9,10 @@ import { jsPDF } from 'jspdf';
 // --- CONFIGURAÇÕES DE ACESSO ---
 const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin'];
 const TIPOS_LITURGIA_OPCOES = [
-  'Prelúdio', 'Saudação e Acolhida', 'Cânticos Congregacionais', 
-  'Confissão de Pecados', 'Dízimos e Ofertas', 'Cântico para as Ofertas', 
-  'Oração pelas Crianças', 'Pregação da Palavra', 'Cântico Final', 'Lembretes', 'Oração'
+  'Prelúdio', 'Leitura Inicial', 'Saudação e Acolhida à Igreja', 'Cânticos Congregacionais',
+  'Confissão de Pecados', 'Dízimos e Ofertas', 'Cântico para as Ofertas',
+  'Oração pelas Crianças', 'Pregação da Palavra', 'Cântico Final', 'Lembretes', 
+  'Oração', 'Poslúdio', 'Amém Tríplice'
 ];
 
 interface Cantico { 
@@ -205,7 +206,7 @@ function TipoLiturgiaSelector({ value, onChange, disabled }: any) {
 // --- ITEM DA LITURGIA ---
 function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCreate, userRole }: any) {
   const isLideranca = CARGOS_LIDERANCA.includes(userRole);
-  const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio');
+  const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio') || item.tipo.toLowerCase().includes('poslúdio');
 
   const adicionarMusica = () => {
     const novaLista = [...item.lista_musicas, { cantico_id: null, tom: null }];
@@ -213,7 +214,7 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
   };
 
   const removerMusica = (mIdx: number) => {
-    if (item.lista_musicas.length <= 1) return; // Manter pelo menos uma
+    if (item.lista_musicas.length <= 1) return;
     const novaLista = item.lista_musicas.filter((_: any, i: number) => i !== mIdx);
     onUpdate({ ...item, lista_musicas: novaLista });
   };
@@ -267,7 +268,6 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
               
               return (
                 <div key={mIdx} className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100 relative group print:p-0 print:bg-transparent print:border-none">
-                  {/* Botão remover música (só aparece se tiver mais de uma) */}
                   {isLideranca && item.lista_musicas.length > 1 && (
                     <button
                       onClick={() => removerMusica(mIdx)}
@@ -330,7 +330,6 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
               );
             })}
             
-            {/* Botão adicionar música */}
             {isLideranca && (
               <button
                 onClick={adicionarMusica}
@@ -355,41 +354,22 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
 
-  // === CABEÇALHO COM FUNDO VERDE (PAPEL TIMBRADO) ===
+  // === CABEÇALHO COM FUNDO VERDE ===
   const headerHeight = 35;
   
-  // Fundo verde escuro
-  doc.setFillColor(26, 77, 61); // Cor verde da logo
+  doc.setFillColor(16, 60, 48);
   doc.rect(0, 0, pageWidth, headerHeight, 'F');
   
-  try {
-    // Carregar logo do WordPress
-    const logoUrl = 'https://ippontanegra.wordpress.com/wp-content/uploads/2025/06/ippn-logo-1-edited-e1751169919732.png';
-    
-    const imgLogo = await fetch(logoUrl)
-      .then(res => res.blob())
-      .then(blob => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      }));
-    
-    // Logo centralizada
-    const logoWidth = 80;
-    const logoHeight = 25;
-    const logoX = (pageWidth - logoWidth) / 2;
-    const logoY = 5;
-    
-    doc.addImage(imgLogo as string, 'PNG', logoX, logoY, logoWidth, logoHeight);
-  } catch (error) {
-    console.error('Erro ao carregar logo:', error);
-    // Se falhar, mostrar texto branco no cabeçalho
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('IGREJA PRESBITERIANA PONTA NEGRA', pageWidth / 2, 17, { align: 'center' });
-  }
+  // Texto do cabeçalho em branco
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text('Uma igreja da família de Deus', pageWidth / 2, 22, { align: 'center' });
+  doc.setFontSize(9);
+  doc.text('Manaus - AM', pageWidth / 2, 29, { align: 'center' });
 
   let yPos = headerHeight + 15;
 
@@ -398,26 +378,31 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
 
   // === TÍTULO ===
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(18);
   doc.text('LITURGIA', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 10;
   
   // === DATA ===
-  doc.setFontSize(12);
+  doc.setFontSize(14);
   const dataFormatada = new Date(culto.Dia + 'T00:00:00')
-    .toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    .toLocaleDateString('pt-BR', { 
+      weekday: 'long',
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric' 
+    })
     .toUpperCase();
   doc.text(dataFormatada, pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 12;
 
   // Linha decorativa
-  doc.setDrawColor(26, 77, 61);
-  doc.setLineWidth(0.5);
+  doc.setDrawColor(16, 60, 48);
+  doc.setLineWidth(0.8);
   doc.line(margin, yPos, pageWidth - margin, yPos);
   
-  yPos += 10;
+  yPos += 12;
 
   // === ITENS LITÚRGICOS ===
   doc.setFont('helvetica', 'normal');
@@ -427,84 +412,59 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
 
   for (const item of itens) {
     // Verificar se precisa de nova página
-    if (yPos > pageHeight - 30) {
+    if (yPos > pageHeight - 40) {
       doc.addPage();
       
-      // Adicionar cabeçalho em todas as páginas
-      doc.setFillColor(26, 77, 61);
+      // Cabeçalho nas páginas seguintes
+      doc.setFillColor(16, 60, 48);
       doc.rect(0, 0, pageWidth, headerHeight, 'F');
       
-      try {
-        const logoUrl = 'https://ippontanegra.wordpress.com/wp-content/uploads/2025/06/ippn-logo-1-edited-e1751169919732.png';
-        const imgLogo = await fetch(logoUrl)
-          .then(res => res.blob())
-          .then(blob => new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          }));
-        
-        const logoWidth = 80;
-        const logoHeight = 25;
-        const logoX = (pageWidth - logoWidth) / 2;
-        const logoY = 5;
-        
-        doc.addImage(imgLogo as string, 'PNG', logoX, logoY, logoWidth, logoHeight);
-      } catch (error) {
-        console.error('Erro ao carregar logo na nova página:', error);
-      }
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
       
       doc.setTextColor(0, 0, 0);
       yPos = headerHeight + 15;
     }
 
-    // NÚMERO E TIPO (em negrito)
+    // NÚMERO E TIPO (em negrito e maiúsculo)
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.text(`${itemNumero}. ${item.tipo.toUpperCase()}`, margin, yPos);
-    yPos += 6;
+    yPos += 7;
 
-    // DESCRIÇÃO (subitens com bullets)
-    if (item.descricao) {
+    // DESCRIÇÃO
+    if (item.descricao && item.descricao.trim()) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
-      const linhas = item.descricao.split('\n');
+      const linhas = item.descricao.split('\n').filter(l => l.trim());
       
       for (const linha of linhas) {
-        if (linha.trim()) {
-          // Verificar espaço
-          if (yPos > pageHeight - 30) {
-            doc.addPage();
-            
-            // Cabeçalho
-            doc.setFillColor(26, 77, 61);
-            doc.rect(0, 0, pageWidth, headerHeight, 'F');
-            
-            try {
-              const logoUrl = 'https://ippontanegra.wordpress.com/wp-content/uploads/2025/06/ippn-logo-1-edited-e1751169919732.png';
-              const imgLogo = await fetch(logoUrl)
-                .then(res => res.blob())
-                .then(blob => new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result);
-                  reader.readAsDataURL(blob);
-                }));
-              
-              doc.addImage(imgLogo as string, 'PNG', (pageWidth - 80) / 2, 5, 80, 25);
-            } catch (error) {
-              console.error('Erro ao carregar logo:', error);
-            }
-            
-            doc.setTextColor(0, 0, 0);
-            yPos = headerHeight + 15;
-          }
-          
-          const textoFormatado = doc.splitTextToSize(`● ${linha.trim()}`, pageWidth - 2 * margin - 5);
-          
-          for (const pedaco of textoFormatado) {
-            doc.text(pedaco, margin + 5, yPos);
-            yPos += 5;
-          }
+        if (yPos > pageHeight - 30) {
+          doc.addPage();
+          doc.setFillColor(16, 60, 48);
+          doc.rect(0, 0, pageWidth, headerHeight, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(14);
+          doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
+          doc.setTextColor(0, 0, 0);
+          yPos = headerHeight + 15;
+        }
+        
+        // Substituir bullets por hífens
+        const linhaLimpa = linha.trim().replace(/^●\s*/, '- ').replace(/^%I\s*/, '- ');
+        const textoLinha = doc.splitTextToSize(linhaLimpa, pageWidth - 2 * margin - 10);
+        for (const pedaco of textoLinha) {
+          doc.text(`     ${pedaco}`, margin, yPos);
+          yPos += 5.5;
         }
       }
     }
@@ -512,52 +472,45 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
     // MÚSICAS
     const permiteMusica = item.tem_cantico || 
                          item.tipo.toLowerCase().includes('cântico') || 
-                         item.tipo.toLowerCase().includes('prelúdio');
+                         item.tipo.toLowerCase().includes('prelúdio') ||
+                         item.tipo.toLowerCase().includes('poslúdio');
 
-    if (permiteMusica && item.lista_musicas) {
+    if (permiteMusica && item.lista_musicas && item.lista_musicas.length > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      
       for (const musica of item.lista_musicas) {
         if (musica.cantico_id) {
           const cantico = canticos.find(c => c.id === musica.cantico_id);
           if (cantico) {
-            // Verificar espaço
             if (yPos > pageHeight - 30) {
               doc.addPage();
-              
-              doc.setFillColor(26, 77, 61);
+              doc.setFillColor(16, 60, 48);
               doc.rect(0, 0, pageWidth, headerHeight, 'F');
-              
-              try {
-                const logoUrl = 'https://ippontanegra.wordpress.com/wp-content/uploads/2025/06/ippn-logo-1-edited-e1751169919732.png';
-                const imgLogo = await fetch(logoUrl)
-                  .then(res => res.blob())
-                  .then(blob => new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
-                  }));
-                
-                doc.addImage(imgLogo as string, 'PNG', (pageWidth - 80) / 2, 5, 80, 25);
-              } catch (error) {
-                console.error('Erro ao carregar logo:', error);
-              }
-              
+              doc.setTextColor(255, 255, 255);
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(14);
+              doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(10);
+              doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
               doc.setTextColor(0, 0, 0);
               yPos = headerHeight + 15;
             }
             
-            const textoMusica = `● ${cantico.nome}${musica.tom ? ` (${musica.tom})` : ''}`;
-            const linhasMusica = doc.splitTextToSize(textoMusica, pageWidth - 2 * margin - 5);
+            const textoMusica = `     - ${cantico.nome}${musica.tom ? ` (${musica.tom})` : ''}`;
+            const linhasMusica = doc.splitTextToSize(textoMusica, pageWidth - 2 * margin - 10);
             
             for (const linha of linhasMusica) {
-              doc.text(linha, margin + 5, yPos);
-              yPos += 5;
+              doc.text(linha, margin, yPos);
+              yPos += 5.5;
             }
           }
         }
       }
     }
 
-    yPos += 8; // Espaço entre itens
+    yPos += 8;
     itemNumero++;
   }
 
@@ -566,7 +519,8 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont('helvetica', 'italic');
     doc.text(
       `Página ${i} de ${totalPages}`,
       pageWidth / 2,
@@ -576,9 +530,65 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
   }
 
   // Salvar PDF
-  const nomeArquivo = `LITURGIA_${culto.Dia.replace(/-/g, '.')}.pdf`;
+  const dataArquivo = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR').replace(/\//g, '.');
+  const nomeArquivo = `LITURGIA_${dataArquivo}.pdf`;
   doc.save(nomeArquivo);
 };
+
+// --- COMPONENTE DE VISUALIZAÇÃO DE LITURGIA ---
+function LiturgiaView({ culto, itens, canticos, onClose }: any) {
+  return (
+    <div className="mt-4 bg-slate-50 rounded-2xl p-6 border-2 border-slate-200">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-black text-slate-800">LITURGIA COMPLETA</h3>
+        <button 
+          onClick={onClose}
+          className="text-slate-500 hover:text-slate-700 font-bold text-2xl"
+        >
+          ✕
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        {itens.map((item: LouvorItem, idx: number) => {
+          const permiteMusica = item.tem_cantico || 
+                               item.tipo.toLowerCase().includes('cântico') || 
+                               item.tipo.toLowerCase().includes('prelúdio') ||
+                               item.tipo.toLowerCase().includes('poslúdio');
+          
+          return (
+            <div key={idx} className="bg-white rounded-xl p-4 border border-slate-200">
+              <h4 className="font-bold text-slate-800 mb-2 text-sm uppercase">
+                {idx + 1}. {item.tipo}
+              </h4>
+              
+              {item.descricao && (
+                <p className="text-slate-600 text-sm mb-2 whitespace-pre-line">
+                  {item.descricao}
+                </p>
+              )}
+              
+              {permiteMusica && item.lista_musicas && item.lista_musicas.length > 0 && (
+                <div className="space-y-1 mt-2">
+                  {item.lista_musicas.map((m, mIdx) => {
+                    const cantico = canticos.find((c: any) => c.id === m.cantico_id);
+                    if (!cantico) return null;
+                    
+                    return (
+                      <div key={mIdx} className="text-sm text-emerald-700 font-medium">
+                        🎵 {cantico.nome} {m.tom ? `(${m.tom})` : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // --- PÁGINA PRINCIPAL ---
 export default function CultosPage() {
@@ -590,38 +600,35 @@ export default function CultosPage() {
   const [dia, setDia] = useState('');
   const [itens, setItens] = useState<LouvorItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cultoExpandido, setCultoExpandido] = useState<number | null>(null);
+  const [liturgiasCarregadas, setLiturgiasCarregadas] = useState<{[key: number]: LouvorItem[]}>({});
 
   const isLideranca = CARGOS_LIDERANCA.includes(userRole);
 
   useEffect(() => { carregarDados(); }, []);
 
   const carregarDados = async () => {
-    // PRIMEIRA FASE: Carregar cânticos básicos (rápido)
     const { data: todosCanticos } = await supabase
       .from('canticos')
       .select('id, nome')
       .order('nome');
     
     if (todosCanticos) {
-      // Mostrar cânticos imediatamente sem datas
       setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
     }
 
-    // SEGUNDA FASE: Carregar cultos (rápido)
     const { data: cu } = await supabase
       .from('Louvores IPPN')
       .select('*')
       .order('Dia', { ascending: false });
     if (cu) setCultos(cu || []);
 
-    // TERCEIRA FASE: Carregar datas em background (não bloqueia a UI)
     if (todosCanticos) {
       buscarUltimasDatas(todosCanticos);
     }
   };
 
   const buscarUltimasDatas = async (canticosBase: any[]) => {
-    // Buscar TODOS os itens de louvor de uma vez
     const { data: todosItens } = await supabase
       .from('louvor_itens')
       .select('cantico_id, culto_id')
@@ -629,20 +636,17 @@ export default function CultosPage() {
 
     if (!todosItens) return;
 
-    // Buscar TODOS os cultos de uma vez
     const { data: todosCultos } = await supabase
       .from('Louvores IPPN')
       .select('"Culto nr.", Dia');
 
     if (!todosCultos) return;
 
-    // Criar mapa de culto_id -> data
     const mapaCultos = new Map();
     todosCultos.forEach((c: any) => {
       mapaCultos.set(c['Culto nr.'], c.Dia);
     });
 
-    // Criar mapa de cantico_id -> última data
     const mapaUltimasDatas = new Map();
     
     todosItens.forEach((item: any) => {
@@ -655,7 +659,6 @@ export default function CultosPage() {
       }
     });
 
-    // Atualizar os cânticos com as datas
     const canticosAtualizados = canticosBase.map(c => ({
       ...c,
       ultima_vez: mapaUltimasDatas.get(c.id) || null
@@ -664,20 +667,175 @@ export default function CultosPage() {
     setCanticos(canticosAtualizados);
   };
 
+  // --- EXPANDIR/CONTRAIR CULTO ---
+  const toggleExpandirCulto = async (cultoNr: number) => {
+    if (cultoExpandido === cultoNr) {
+      setCultoExpandido(null);
+      return;
+    }
+
+    // Se já carregou antes, só expande
+    if (liturgiasCarregadas[cultoNr]) {
+      setCultoExpandido(cultoNr);
+      return;
+    }
+
+    // Carregar liturgia
+    const { data, error } = await supabase
+      .from('louvor_itens')
+      .select('*')
+      .eq('culto_id', cultoNr)
+      .order('ordem');
+    
+    if (error || !data) {
+      alert('Erro ao carregar liturgia!');
+      return;
+    }
+
+    // Agrupar músicas
+    const agrupados: LouvorItem[] = [];
+    data.forEach((linha) => {
+      const ultimo = agrupados[agrupados.length - 1];
+      
+      if (ultimo && 
+          ultimo.tipo === linha.tipo && 
+          ultimo.descricao === linha.descricao &&
+          (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
+        ultimo.lista_musicas.push({ 
+          cantico_id: linha.cantico_id, 
+          tom: linha.tom 
+        });
+      } else {
+        agrupados.push({
+          tipo: linha.tipo,
+          ordem: linha.ordem,
+          descricao: linha.descricao,
+          tem_cantico: !!linha.cantico_id,
+          lista_musicas: [{ 
+            cantico_id: linha.cantico_id, 
+            tom: linha.tom 
+          }]
+        });
+      }
+    });
+
+    setLiturgiasCarregadas(prev => ({ ...prev, [cultoNr]: agrupados }));
+    setCultoExpandido(cultoNr);
+  };
+
   // --- FUNÇÕES DE EXPORTAÇÃO ---
   const shareWhatsApp = async (culto: any) => {
-    const { data } = await supabase.from('louvor_itens').select('*').eq('culto_id', culto['Culto nr.']).order('ordem');
-    if (!data) return;
-
-    let texto = `*LITURGIA IP PONTA NEGRA*\n${new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' }).toUpperCase()}\n\n`;
+    const cultoNr = culto['Culto nr.'];
+    let itensParaExportar = liturgiasCarregadas[cultoNr];
     
-    data.forEach((linha: any, idx: number) => {
-      texto += `${idx + 1}. *${linha.tipo.toUpperCase()}*\n`;
-      if (linha.descricao) texto += `   - ${linha.descricao}\n`;
-      const nomeM = canticos.find(c => c.id === linha.cantico_id)?.nome;
-      if (nomeM) texto += `   🎵 _${nomeM}_ ${linha.tom ? `(${linha.tom})` : ''}\n`;
+    if (!itensParaExportar) {
+      const { data } = await supabase
+        .from('louvor_itens')
+        .select('*')
+        .eq('culto_id', cultoNr)
+        .order('ordem');
+      
+      if (!data) return;
+      
+      const agrupados: LouvorItem[] = [];
+      data.forEach((linha) => {
+        const ultimo = agrupados[agrupados.length - 1];
+        if (ultimo && 
+            ultimo.tipo === linha.tipo && 
+            ultimo.descricao === linha.descricao &&
+            (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
+          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
+        } else {
+          agrupados.push({
+            tipo: linha.tipo,
+            ordem: linha.ordem,
+            descricao: linha.descricao,
+            tem_cantico: !!linha.cantico_id,
+            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
+          });
+        }
+      });
+      itensParaExportar = agrupados;
+    }
+
+    const dataFormatada = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
+    
+    let texto = `LITURGIA DO CULTO DE *${dataFormatada}*\n\n`;
+
+    let contadorMusica = 1;
+    
+    itensParaExportar.forEach((item: LouvorItem) => {
+      const tipoUpper = item.tipo.toUpperCase();
+      const permiteMusica = item.tem_cantico || 
+                           item.tipo.toLowerCase().includes('cântico') || 
+                           item.tipo.toLowerCase().includes('prelúdio') ||
+                           item.tipo.toLowerCase().includes('poslúdio');
+      
+      texto += `*${tipoUpper}*\n`;
+      
+      // Descrição
+      if (item.descricao && item.descricao.trim()) {
+        const linhas = item.descricao.split('\n').filter(l => l.trim());
+        linhas.forEach(linha => {
+          const limpa = linha.trim().replace(/^●\s*/, '- ');
+          texto += `   ${limpa}\n`;
+        });
+      }
+      
+      // Músicas
+      if (permiteMusica && item.lista_musicas && item.lista_musicas.length > 0) {
+        item.lista_musicas.forEach(m => {
+          const cantico = canticos.find(c => c.id === m.cantico_id);
+          if (cantico) {
+            texto += `${contadorMusica}. ${cantico.nome}${m.tom ? ` (${m.tom})` : ''}\n`;
+            contadorMusica++;
+          }
+        });
+      }
+      
       texto += `\n`;
     });
+
+    // Buscar escala vinculada ao culto
+    const { data: escala } = await supabase
+      .from('escalas')
+      .select('id')
+      .eq('culto_id', cultoNr)
+      .single();
+
+    texto += `-----\n*ESCALA*\n`;
+
+    if (escala) {
+      const { data: funcoes } = await supabase
+        .from('escalas_funcoes')
+        .select(`
+          ordem,
+          tags_funcoes(nome),
+          usuarios_permitidos(nome)
+        `)
+        .eq('escala_id', escala.id)
+        .order('ordem');
+
+      if (funcoes && funcoes.length > 0) {
+        funcoes.forEach((f: any) => {
+          texto += `- ${f.tags_funcoes.nome}: ${f.usuarios_permitidos.nome}\n`;
+        });
+      } else {
+        // escala existe, mas está vazia
+        texto += `- Ministracao: _A definir_\n`;
+        texto += `- Violao: _A definir_\n`;
+        texto += `- Voz 1: _A definir_\n`;
+        texto += `- Voz 2: _A definir_\n`;
+        texto += `- Voz 3: _A definir_\n`;
+      }
+    } else {
+      // não existe escala para esse culto
+      texto += `- Ministracao: _A definir_\n`;
+      texto += `- Violao: _A definir_\n`;
+      texto += `- Voz 1: _A definir_\n`;
+      texto += `- Voz 2: _A definir_\n`;
+      texto += `- Voz 3: _A definir_\n`;
+    }
 
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   };
@@ -685,103 +843,87 @@ export default function CultosPage() {
   const sharePDF = async (culto: any) => {
     setLoading(true);
     
-    const { data } = await supabase
-      .from('louvor_itens')
-      .select('*')
-      .eq('culto_id', culto['Culto nr.'])
-      .order('ordem');
+    const cultoNr = culto['Culto nr.'];
+    let itensParaExportar = liturgiasCarregadas[cultoNr];
     
-    if (data && data.length > 0) {
-      const agrupados: LouvorItem[] = [];
+    if (!itensParaExportar) {
+      const { data } = await supabase
+        .from('louvor_itens')
+        .select('*')
+        .eq('culto_id', cultoNr)
+        .order('ordem');
       
+      if (!data) {
+        setLoading(false);
+        return;
+      }
+      
+      const agrupados: LouvorItem[] = [];
       data.forEach((linha) => {
         const ultimo = agrupados[agrupados.length - 1];
-        
         if (ultimo && 
             ultimo.tipo === linha.tipo && 
             ultimo.descricao === linha.descricao &&
             (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-          ultimo.lista_musicas.push({ 
-            cantico_id: linha.cantico_id, 
-            tom: linha.tom 
-          });
+          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
         } else {
           agrupados.push({
             tipo: linha.tipo,
             ordem: linha.ordem,
             descricao: linha.descricao,
             tem_cantico: !!linha.cantico_id,
-            lista_musicas: [{ 
-              cantico_id: linha.cantico_id, 
-              tom: linha.tom 
-            }]
+            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
           });
         }
       });
-      
-      await gerarPDF(culto, agrupados, canticos);
+      itensParaExportar = agrupados;
     }
     
+    await gerarPDF(culto, itensParaExportar, canticos);
     setLoading(false);
   };
 
   const iniciarEdicao = async (culto: any) => {
     setLoading(true);
-    console.log('🔍 Carregando liturgia do culto:', culto['Culto nr.']);
     
-    const { data, error } = await supabase
-      .from('louvor_itens')
-      .select('*')
-      .eq('culto_id', culto['Culto nr.'])
-      .order('ordem');
+    const cultoNr = culto['Culto nr.'];
+    let itensParaEditar = liturgiasCarregadas[cultoNr];
     
-    if (error) {
-      console.error('❌ Erro ao carregar liturgia:', error);
-      alert('Erro ao carregar liturgia!');
-      setLoading(false);
-      return;
-    }
-    
-    console.log('📋 Dados carregados:', data);
-    
-    if (data && data.length > 0) {
-      const agrupados: LouvorItem[] = [];
+    if (!itensParaEditar) {
+      const { data, error } = await supabase
+        .from('louvor_itens')
+        .select('*')
+        .eq('culto_id', cultoNr)
+        .order('ordem');
       
+      if (error || !data) {
+        alert('Erro ao carregar liturgia!');
+        setLoading(false);
+        return;
+      }
+      
+      const agrupados: LouvorItem[] = [];
       data.forEach((linha) => {
         const ultimo = agrupados[agrupados.length - 1];
-        
-        // Agrupar apenas se for o mesmo tipo E mesma descrição E consecutivos
         if (ultimo && 
             ultimo.tipo === linha.tipo && 
             ultimo.descricao === linha.descricao &&
             (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-          // Adicionar música ao item existente
-          ultimo.lista_musicas.push({ 
-            cantico_id: linha.cantico_id, 
-            tom: linha.tom 
-          });
+          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
         } else {
-          // Criar novo item
           agrupados.push({
             tipo: linha.tipo,
             ordem: linha.ordem,
             descricao: linha.descricao,
             tem_cantico: !!linha.cantico_id,
-            lista_musicas: [{ 
-              cantico_id: linha.cantico_id, 
-              tom: linha.tom 
-            }]
+            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
           });
         }
       });
-      
-      console.log('📦 Itens agrupados:', agrupados);
-      setItens(agrupados);
-    } else {
-      console.log('⚠️ Nenhum item encontrado, iniciando vazio');
-      setItens([]);
+      itensParaEditar = agrupados;
     }
     
+    setItens(itensParaEditar);
     setCultoEditando(culto);
     setDia(culto.Dia);
     setModoEdicao(true);
@@ -789,14 +931,109 @@ export default function CultosPage() {
   };
 
   const criarCultoPadrao = async () => {
-    const { data } = await supabase.from('modelo_culto_padrao').select('*').order('ordem');
-    if (data) {
-      setItens(data.map(m => ({
-          tipo: m.tipo, ordem: m.ordem, descricao: m.descricao_padrao, tem_cantico: m.tem_cantico,
-          lista_musicas: m.descricao_padrao?.includes('3 músicas') ? Array(3).fill({ cantico_id: null, tom: null }) : [{ cantico_id: null, tom: null }]
-      })));
-      setCultoEditando(null); setDia(new Date().toISOString().split('T')[0]); setModoEdicao(true);
+    // Função para calcular próximo domingo
+    const calcularProximoDomingo = (data: Date): Date => {
+      const resultado = new Date(data);
+      const diasAteProximoDomingo = (7 - resultado.getDay()) % 7 || 7;
+      resultado.setDate(resultado.getDate() + diasAteProximoDomingo);
+      return resultado;
+    };
+
+    // Buscar todos os cultos salvos
+    const { data: cultosExistentes } = await supabase
+      .from('Louvores IPPN')
+      .select('Dia')
+      .order('Dia', { ascending: false });
+
+    // Encontrar próximo domingo sem liturgia
+    let proximoDomingo = calcularProximoDomingo(new Date());
+    const datasExistentes = new Set(cultosExistentes?.map(c => c.Dia) || []);
+    
+    while (datasExistentes.has(proximoDomingo.toISOString().split('T')[0])) {
+      proximoDomingo = calcularProximoDomingo(new Date(proximoDomingo.getTime() + 24 * 60 * 60 * 1000));
     }
+
+    const modeloPadrao: LouvorItem[] = [
+      {
+        tipo: 'Prelúdio',
+        ordem: 1,
+        descricao: null,
+        tem_cantico: true,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Saudação e Acolhida à Igreja',
+        ordem: 2,
+        descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)',
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Cânticos Congregacionais',
+        ordem: 3,
+        descricao: null,
+        tem_cantico: true,
+        lista_musicas: [
+          { cantico_id: null, tom: null },
+          { cantico_id: null, tom: null },
+          { cantico_id: null, tom: null }
+        ]
+      },
+      {
+        tipo: 'Confissão de Pecados',
+        ordem: 4,
+        descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.',
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Dízimos e Ofertas',
+        ordem: 5,
+        descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.',
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Cântico para as Ofertas',
+        ordem: 6,
+        descricao: 'Oração pelas ofertas e dízimo.',
+        tem_cantico: true,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Pregação da Palavra',
+        ordem: 7,
+        descricao: null,
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Cântico Final',
+        ordem: 8,
+        descricao: 'Poslúdio',
+        tem_cantico: true,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Oração - Bênção Apostólica',
+        ordem: 9,
+        descricao: 'Amém tríplice',
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      },
+      {
+        tipo: 'Lembretes - Liturgo',
+        ordem: 10,
+        descricao: 'Apresentação dos convidados\nAniversariantes / Casamento',
+        tem_cantico: false,
+        lista_musicas: [{ cantico_id: null, tom: null }]
+      }
+    ];
+    
+    setItens(modeloPadrao);
+    setCultoEditando(null);
+    setDia(proximoDomingo.toISOString().split('T')[0]);
+    setModoEdicao(true);
   };
 
   const salvar = async () => {
@@ -804,64 +1041,43 @@ export default function CultosPage() {
     setLoading(true);
     
     try {
-      console.log('🔍 Iniciando salvamento...');
-      console.log('📅 Data:', dia);
-      console.log('📋 Itens para salvar:', itens);
-      
       let cId = cultoEditando?.['Culto nr.'];
       
-      // Se for edição, atualiza o culto existente
       if (!cId) {
-        console.log('➕ Criando novo culto...');
         const { data, error: errorCulto } = await supabase
           .from('Louvores IPPN')
           .insert({ Dia: dia })
           .select()
           .single();
         
-        if (errorCulto) {
-          console.error('❌ Erro ao criar culto:', errorCulto);
-          throw errorCulto;
-        }
-        
+        if (errorCulto) throw errorCulto;
         cId = data['Culto nr.'];
-        console.log('✅ Culto criado com ID:', cId);
       } else {
-        console.log('📝 Atualizando culto existente:', cId);
         const { error: errorUpdate } = await supabase
           .from('Louvores IPPN')
           .update({ Dia: dia })
           .eq('"Culto nr."', cId);
         
-        if (errorUpdate) {
-          console.error('❌ Erro ao atualizar culto:', errorUpdate);
-          throw errorUpdate;
-        }
+        if (errorUpdate) throw errorUpdate;
         
-        // Deletar itens antigos
-        console.log('🗑️ Deletando itens antigos...');
         const { error: errorDelete } = await supabase
           .from('louvor_itens')
           .delete()
           .eq('culto_id', cId);
         
-        if (errorDelete) {
-          console.error('❌ Erro ao deletar itens antigos:', errorDelete);
-          throw errorDelete;
-        }
+        if (errorDelete) throw errorDelete;
       }
       
-      // Montar as linhas para inserir
       const rows: any[] = [];
       let ord = 1;
       
       itens.forEach((it) => {
         const permiteMusica = it.tem_cantico === true || 
                             it.tipo.toLowerCase().includes('cântico') || 
-                            it.tipo.toLowerCase().includes('prelúdio');
+                            it.tipo.toLowerCase().includes('prelúdio') ||
+                            it.tipo.toLowerCase().includes('poslúdio');
         
         if (permiteMusica && it.lista_musicas && it.lista_musicas.length > 0) {
-          // Tem música - criar uma linha para cada música
           it.lista_musicas.forEach((m) => {
             rows.push({
               culto_id: cId,
@@ -873,7 +1089,6 @@ export default function CultosPage() {
             });
           });
         } else {
-          // Não tem música - criar uma linha sem cantico_id
           rows.push({
             culto_id: cId,
             ordem: ord++,
@@ -885,39 +1100,29 @@ export default function CultosPage() {
         }
       });
       
-      console.log('💾 Linhas a inserir:', rows);
-      console.log('📊 Total de linhas:', rows.length);
-      
       if (rows.length === 0) {
         alert('Adicione pelo menos um item litúrgico!');
         setLoading(false);
         return;
       }
       
-      // Inserir os novos itens
       const { error: errorInsert } = await supabase
         .from('louvor_itens')
         .insert(rows);
       
-      if (errorInsert) {
-        console.error('❌ Erro ao inserir itens:', errorInsert);
-        throw errorInsert;
-      }
+      if (errorInsert) throw errorInsert;
       
-      console.log('✅ Liturgia salva com sucesso!');
       alert('Liturgia salva com sucesso! ✅');
-      
       setModoEdicao(false);
+      setLiturgiasCarregadas({});
       await carregarDados();
     } catch (e: any) {
-      console.error('💥 ERRO COMPLETO:', e);
       alert(`Erro ao salvar: ${e.message || 'Erro desconhecido'}`);
     }
     
     setLoading(false);
   };
 
-  // Adicione esta função antes do bloco "if (modoEdicao)"
   const adicionarItemEm = (posicao: number) => {
     const novoItem: LouvorItem = {
       tipo: posicao === 0 ? 'Prelúdio' : 'Cânticos Congregacionais',
@@ -947,14 +1152,13 @@ if (modoEdicao) return (
       </div>
       
       <div className="space-y-4">
-        {/* Botão ANTES do primeiro item */}
         {isLideranca && (
           <button
             onClick={() => adicionarItemEm(0)}
             className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-2xl text-emerald-600 hover:bg-emerald-50 hover:border-emerald-400 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
           >
             <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
-            <span>Adicionar Prelúdio</span>
+            <span>Adicionar item no início</span>
           </button>
         )}
 
@@ -979,7 +1183,6 @@ if (modoEdicao) return (
               }}
             />
             
-            {/* Botão DEPOIS de cada item */}
             {isLideranca && (
               <button
                 onClick={() => adicionarItemEm(idx + 1)}
@@ -1010,27 +1213,71 @@ if (modoEdicao) return (
           <button onClick={criarCultoPadrao} className="w-full bg-emerald-800 text-white py-5 rounded-3xl font-bold text-xl shadow-xl mb-8 active:scale-95 transition-all">+ Nova Liturgia Padrão</button>
         )}
         <div className="space-y-4">
-          {cultos.map(c => (
-            <div key={c['Culto nr.']} 
-              className="bg-white border-2 border-slate-200 rounded-3xl p-6 flex justify-between items-center shadow-sm">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Registro #{c['Culto nr.']}</p>
-                <h2 className="text-xl font-bold text-slate-800">{new Date(c.Dia + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</h2>
+          {cultos.map(c => {
+            const cultoNr = c['Culto nr.'];
+            const expandido = cultoExpandido === cultoNr;
+            const liturgia = liturgiasCarregadas[cultoNr];
+            
+            return (
+              <div key={cultoNr} className="bg-white border-2 border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+                <div 
+                  className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+                  onClick={() => toggleExpandirCulto(cultoNr)}
+                >
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Registro #{cultoNr}</p>
+                    <h2 className="text-xl font-bold text-slate-800">
+                      {new Date(c.Dia + 'T00:00:00').toLocaleDateString('pt-BR', { 
+                        day: '2-digit', 
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </h2>
+                  </div>
+                  
+                  <div className="flex gap-2 items-center">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); shareWhatsApp(c); }} 
+                      className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl hover:bg-emerald-100 transition-colors" 
+                      title="Compartilhar WhatsApp"
+                    >
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.559 4.189 1.619 6.011L0 24l6.117-1.605a11.847 11.847 0 005.925 1.586h.005c6.635 0 12.032-5.396 12.035-12.032a11.76 11.76 0 00-3.528-8.485" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); sharePDF(c); }} 
+                      className="bg-slate-50 text-slate-600 p-4 rounded-2xl hover:bg-slate-100 transition-colors" 
+                      title="Gerar PDF"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); iniciarEdicao(c); }} 
+                      className="bg-slate-50 text-slate-800 p-4 rounded-2xl hover:bg-slate-100 transition-colors" 
+                      title="Editar"
+                    >
+                      <span className="text-xl">✏️</span>
+                    </button>
+                    <span className={`text-2xl transition-transform ${expandido ? 'rotate-180' : ''}`}>
+                      ▼
+                    </span>
+                  </div>
+                </div>
+
+                {expandido && liturgia && (
+                  <LiturgiaView 
+                    culto={c} 
+                    itens={liturgia} 
+                    canticos={canticos}
+                    onClose={() => setCultoExpandido(null)}
+                  />
+                )}
               </div>
-              
-              <div className="flex gap-2">
-                <button onClick={() => shareWhatsApp(c)} className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl hover:bg-emerald-100 transition-colors" title="Compartilhar WhatsApp">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.559 4.189 1.619 6.011L0 24l6.117-1.605a11.847 11.847 0 005.925 1.586h.005c6.635 0 12.032-5.396 12.035-12.032a11.76 11.76 0 00-3.528-8.485" /></svg>
-                </button>
-                <button onClick={() => sharePDF(c)} className="bg-slate-50 text-slate-600 p-4 rounded-2xl hover:bg-slate-100 transition-colors" title="Gerar PDF">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                </button>
-                <button onClick={() => iniciarEdicao(c)} className="bg-slate-50 text-slate-800 p-4 rounded-2xl hover:bg-slate-100 transition-colors" title="Editar">
-                  <span className="text-xl">✏️</span>
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

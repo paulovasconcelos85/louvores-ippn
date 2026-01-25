@@ -33,10 +33,11 @@ export default function AdminPage() {
       return;
     }
 
-    if (!loading && user && !permissoes.podeAcessarAdmin) {
-      router.push('/');
-    }
-  }, [user, loading, permissoes.podeAcessarAdmin, router]);
+    // Se o usuário está logado, mas não tem NENHUM cargo/permissão no sistema
+    //if (!loading && user && !usuarioPermitido) {
+    //  router.push('/sem-acesso'); // Ou uma página de aviso
+    //}
+  }, [user, loading, usuarioPermitido, router]);
 
   useEffect(() => {
     if (user) {
@@ -114,7 +115,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!user || !permissoes.podeAcessarAdmin) {
+  if (!user || !usuarioPermitido) {
     return null;
   }
 
@@ -299,7 +300,7 @@ export default function AdminPage() {
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
                 Acessar
-              </span>a
+              </span>
             </div>
           </Link>
         </div>

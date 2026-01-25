@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  // 1. Pegamos o parâmetro 'next' da URL, ou mandamos para /admin por padrão
+  const next = requestUrl.searchParams.get('next') ?? '/admin';
 
   if (code) {
     const cookieStore = await cookies();
@@ -27,9 +29,14 @@ export async function GET(request: Request) {
       }
     );
 
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (!error) {
+      // 2. Redireciona para o valor de 'next' (ex: /redefinir-senha)
+      return NextResponse.redirect(new URL(next, request.url));
+    }
   }
 
-  // Redirecionar para admin após login
-  return NextResponse.redirect(new URL('/admin', request.url));
+  // Em caso de erro, volta para o login
+  return NextResponse.redirect(new URL('/login', request.url));
 }
