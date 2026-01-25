@@ -7,38 +7,40 @@ import { supabase } from '@/lib/supabase';
 export default function LetraPage() {
   const { nome } = useParams();
   const router = useRouter();
-  const [letra, setLetra] = useState<string | null>(null);
+  const [dados, setDados] = useState<{
+    letra: string | null;
+    referencia: string | null;
+    tags: string[] | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
-
   useEffect(() => {
-    async function fetchLetra() {
+    async function fetchDados() {
       setLoading(true);
-
       const nomeDecodificado = decodeURIComponent(nome as string);
 
       const { data, error } = await supabase
         .from('canticos')
-        .select('letra')
+        .select('letra, referencia, tags') // Buscando os novos campos
         .eq('nome', nomeDecodificado)
         .maybeSingle();
 
       if (error) {
-        console.error('Erro ao buscar letra:', error);
+        console.error('Erro ao buscar dados:', error);
       }
 
-      setLetra(data?.letra || null);
+      setDados(data || null);
       setLoading(false);
     }
 
-    fetchLetra();
+    fetchDados();
   }, [nome]);
 
-
+  const nomeExibicao = decodeURIComponent(nome as string);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4">
-      <header className="flex items-center justify-between mb-4">
+      <header className="flex items-center justify-between mb-6">
         <button onClick={() => router.back()} className="text-emerald-700 font-semibold">
           ← Voltar
         </button>
@@ -47,12 +49,43 @@ export default function LetraPage() {
         </button>
       </header>
 
-      <h1 className="text-xl font-bold mb-4">{decodeURIComponent(nome as string)}</h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 leading-tight mb-2">
+          {nomeExibicao}
+        </h1>
+        
+        {!loading && dados && (
+          <div className="space-y-2">
+            {/* Referência Bíblica Discreta */}
+            {dados.referencia && (
+              <p className="text-sm text-slate-500 italic flex items-center gap-1">
+                <span>📖</span> {dados.referencia}
+              </p>
+            )}
+
+            {/* Tags Litúrgicas Pequenas */}
+            {dados.tags && dados.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {dados.tags.map((tag) => (
+                  <span 
+                    key={tag} 
+                    className="text-[10px] uppercase tracking-wider font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {loading ? (
-        <p className="text-slate-500">Carregando letra...</p>
-      ) : letra ? (
-        <div className="whitespace-pre-wrap text-2xl leading-loose font-sans">{letra}</div>
+        <p className="text-slate-400 animate-pulse">Carregando letra...</p>
+      ) : dados?.letra ? (
+        <div className="whitespace-pre-wrap text-2xl leading-relaxed font-sans text-slate-800 pb-20">
+          {dados.letra}
+        </div>
       ) : (
         <p className="text-slate-500">Letra ainda não disponível.</p>
       )}
