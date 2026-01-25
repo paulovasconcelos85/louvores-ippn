@@ -196,13 +196,22 @@ export default function Home() {
       let dataDeCorteFuturos: Date;
 
       if (user) {
+        // Administrador: Vê tudo (14 dias à frente)
         dataDeCorteFuturos = new Date();
         dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
       } else {
-        if ((diaSemana === 6 && horaAtual >= 14) || diaSemana === 0) {
+        // Público Geral:
+        if (diaSemana === 6 && horaAtual >= 14) {
+          // Se for Sábado após as 14h: Vê o culto de AMANHÃ (+1 dia)
           dataDeCorteFuturos = new Date();
-          dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 7);
+          dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 1);
+          dataDeCorteFuturos.setHours(23, 59, 59); // Garante que pegue o dia seguinte inteiro
+        } else if (diaSemana === 0) {
+          // Se for Domingo: Vê o culto de HOJE
+          dataDeCorteFuturos = new Date();
+          dataDeCorteFuturos.setHours(23, 59, 59);
         } else {
+          // Dias de semana (Seg-Sex): Só vê o que já passou (Ontem)
           dataDeCorteFuturos = new Date();
           dataDeCorteFuturos.setHours(0, 0, 0, 0);
         }
