@@ -299,7 +299,7 @@ export default function AdminPage() {
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
                 Acessar
-              </span>
+              </span>a
             </div>
           </Link>
         </div>

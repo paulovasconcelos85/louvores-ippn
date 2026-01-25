@@ -33,6 +33,9 @@ interface UsuarioComTags extends UsuarioPermitido {
   tags?: Tag[];
 }
 
+type SortField = 'nome' | 'email' | 'telefone' | 'cargo' | 'ativo' | 'criado_em';
+type SortDirection = 'asc' | 'desc';
+
 export default function GerenciarUsuarios() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -44,6 +47,13 @@ export default function GerenciarUsuarios() {
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [enviandoConvite, setEnviandoConvite] = useState<string | null>(null);
+
+  // Estados de ordenação e filtro
+  const [sortField, setSortField] = useState<SortField>('nome');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const [mostrarInativos, setMostrarInativos] = useState(true);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   // Estados para Novo Usuário
   const [novoEmail, setNovoEmail] = useState('');
@@ -155,6 +165,61 @@ export default function GerenciarUsuarios() {
     }
   };
 
+  // --- FUNÇÕES DE ORDENAÇÃO E FILTRO ---
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) return '↕️';
+    return sortDirection === 'asc' ? '↑' : '↓';
+  };
+
+  const usuariosFiltrados = usuarios
+    .filter(u => {
+      // Filtro de status ativo/inativo
+      if (!mostrarInativos && !u.ativo) return false;
+      
+      // Filtro de busca por texto
+      if (filtroTexto === '') return true;
+      const busca = filtroTexto.toLowerCase();
+      return (
+        u.nome.toLowerCase().includes(busca) ||
+        u.email.toLowerCase().includes(busca) ||
+        getCargoLabel(u.cargo).toLowerCase().includes(busca) ||
+        (u.telefone && formatPhoneNumber(u.telefone).includes(busca))
+      );
+    })
+    .sort((a, b) => {
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
+
+      if (sortField === 'cargo') {
+        aValue = getCargoLabel(a.cargo);
+        bValue = getCargoLabel(b.cargo);
+      }
+
+      if (sortField === 'telefone') {
+        aValue = a.telefone || '';
+        bValue = b.telefone || '';
+      }
+
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
   // --- AÇÕES ---
 
   const toggleTag = async (tagId: string) => {
@@ -214,6 +279,7 @@ export default function GerenciarUsuarios() {
       setNovoNome('');
       setNovoTelefone('');
       setNovoCargo('musico');
+      setMostrarFormulario(false);
       carregarUsuarios();
     } catch (error: any) {
       if (error.code === '23505') {
@@ -364,6 +430,20 @@ export default function GerenciarUsuarios() {
     <div className="min-h-screen bg-slate-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Gerenciar Usuários</h1>
+              <p className="text-slate-600 mt-1">Controle de acesso e permissões do sistema</p>
+            </div>
+            <button
+              onClick={() => router.push('/admin')}
+              className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              ← Voltar
+            </button>
+          </div>
+
           {/* Info do usuário logado */}
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
             <div className="flex items-center gap-3 flex-wrap">
@@ -390,208 +470,311 @@ export default function GerenciarUsuarios() {
               mensagem.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
               'bg-red-50 text-red-800 border border-red-200'
             }`}>
-              {mensagem}
+              <div className="flex items-center justify-between">
+                <span>{mensagem}</span>
+                <button
+                  onClick={() => setMensagem('')}
+                  className="text-current opacity-50 hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Formulário Adicionar */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <span>➕</span>
-              Adicionar Novo Usuário
-            </h3>
-            <form onSubmit={adicionarUsuario} className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    E-mail * <span className="text-xs text-slate-500">(usado para login)</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={novoEmail}
-                    onChange={(e) => setNovoEmail(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="usuario@email.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Nome Completo *
-                  </label>
-                  <input
-                    type="text"
-                    value={novoNome}
-                    onChange={(e) => setNovoNome(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="João da Silva"
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Telefone <span className="text-xs text-slate-500">(opcional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={novoTelefone}
-                    onChange={(e) => setNovoTelefone(formatPhoneNumber(e.target.value))}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                    placeholder="(92) 98139-4605"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Cargo / Função *
-                  </label>
-                  <select
-                    value={novoCargo}
-                    onChange={(e) => setNovoCargo(e.target.value as CargoTipo)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                  >
-                    <option value="musico">🎵 Músico/Cantor</option>
-                    <option value="seminarista">📚 Seminarista</option>
-                    <option value="presbitero">👔 Presbítero</option>
-                    <option value="staff">🛠️ Staff/Equipe</option>
-                    <option value="pastor">📖 Pastor</option>
-                    <option value="admin">🔐 Administrador</option>
-                  </select>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={salvando}
-                className="w-full sm:w-auto bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {salvando ? 'Adicionando...' : 'Adicionar Usuário'}
-              </button>
-            </form>
+          {/* Botão Adicionar */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setMostrarFormulario(!mostrarFormulario)}
+              className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center gap-2"
+            >
+              {mostrarFormulario ? '✕ Cancelar' : '➕ Adicionar Usuário'}
+            </button>
           </div>
 
-          {/* Lista de Usuários */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Usuários Cadastrados ({usuarios.length})
+          {/* Formulário Adicionar (Colapsável) */}
+          {mostrarFormulario && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <span>➕</span>
+                Novo Usuário
               </h3>
+              <form onSubmit={adicionarUsuario} className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      E-mail *
+                    </label>
+                    <input
+                      type="email"
+                      value={novoEmail}
+                      onChange={(e) => setNovoEmail(e.target.value)}
+                      required
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                      placeholder="usuario@email.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Nome Completo *
+                    </label>
+                    <input
+                      type="text"
+                      value={novoNome}
+                      onChange={(e) => setNovoNome(e.target.value)}
+                      required
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                      placeholder="João da Silva"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Telefone
+                    </label>
+                    <input
+                      type="tel"
+                      value={novoTelefone}
+                      onChange={(e) => setNovoTelefone(formatPhoneNumber(e.target.value))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                      placeholder="(92) 98139-4605"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Cargo / Função *
+                    </label>
+                    <select
+                      value={novoCargo}
+                      onChange={(e) => setNovoCargo(e.target.value as CargoTipo)}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                    >
+                      <option value="musico">🎵 Músico/Cantor</option>
+                      <option value="seminarista">📚 Seminarista</option>
+                      <option value="presbitero">👔 Presbítero</option>
+                      <option value="staff">🛠️ Staff/Equipe</option>
+                      <option value="pastor">📖 Pastor</option>
+                      <option value="admin">🔐 Administrador</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={salvando}
+                  className="w-full sm:w-auto bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {salvando ? 'Adicionando...' : 'Adicionar Usuário'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Tabela de Usuários */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <span>👥</span>
+                  Usuários Cadastrados
+                  <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">
+                    {usuariosFiltrados.length} {usuariosFiltrados.length === 1 ? 'usuário' : 'usuários'}
+                  </span>
+                </h3>
+              </div>
             </div>
 
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700"></div>
+            <div className="p-6">
+              {/* Filtros */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+                <input
+                  type="text"
+                  placeholder="🔍 Buscar por nome, email, cargo ou telefone..."
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                
+                <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={mostrarInativos}
+                    onChange={(e) => setMostrarInativos(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">
+                    Mostrar inativos
+                  </span>
+                </label>
               </div>
-            ) : (
-              <div className="divide-y divide-slate-200">
-                {usuarios.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500">
-                    Nenhum usuário cadastrado ainda
-                  </div>
-                ) : (
-                  usuarios.map((usuario) => (
-                    <div
-                      key={usuario.id}
-                      className="p-6 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h4 className="text-lg font-medium text-slate-900">
-                              {usuario.nome}
-                            </h4>
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${getCargoCor(usuario.cargo)}`}>
+
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700 mx-auto"></div>
+                  <p className="mt-2 text-slate-600">Carregando usuários...</p>
+                </div>
+              ) : usuariosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p className="text-4xl mb-2">🔍</p>
+                  <p>Nenhum usuário encontrado</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-slate-200">
+                        <th 
+                          onClick={() => handleSort('nome')}
+                          className="text-left px-4 py-3 font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            Nome {getSortIcon('nome')}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => handleSort('email')}
+                          className="text-left px-4 py-3 font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors hidden lg:table-cell"
+                        >
+                          <div className="flex items-center gap-2">
+                            Email {getSortIcon('email')}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => handleSort('telefone')}
+                          className="text-left px-4 py-3 font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors hidden xl:table-cell"
+                        >
+                          <div className="flex items-center gap-2">
+                            Telefone {getSortIcon('telefone')}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => handleSort('cargo')}
+                          className="text-left px-4 py-3 font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            Cargo {getSortIcon('cargo')}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => handleSort('ativo')}
+                          className="text-center px-4 py-3 font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors hidden md:table-cell"
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            Status {getSortIcon('ativo')}
+                          </div>
+                        </th>
+                        <th className="text-center px-4 py-3 font-semibold text-slate-700">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usuariosFiltrados.map((usuario) => (
+                        <tr 
+                          key={usuario.id}
+                          className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${
+                            !usuario.ativo ? 'opacity-60' : ''
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-900">{usuario.nome}</div>
+                            <div className="text-sm text-slate-500 lg:hidden">{usuario.email}</div>
+                            {usuario.tags && usuario.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {usuario.tags.slice(0, 2).map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600"
+                                  >
+                                    {tag.nome}
+                                  </span>
+                                ))}
+                                {usuario.tags.length > 2 && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-200 text-slate-600">
+                                    +{usuario.tags.length - 2}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 text-sm hidden lg:table-cell">
+                            {usuario.email}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 text-sm hidden xl:table-cell">
+                            {usuario.telefone ? formatPhoneNumber(usuario.telefone) : '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getCargoCor(usuario.cargo)}`}>
                               {getCargoIcone(usuario.cargo)} {getCargoLabel(usuario.cargo)}
                             </span>
-                            {!usuario.ativo && (
-                              <span className="px-2 py-1 rounded text-xs font-medium bg-gray-200 text-gray-700">
-                                ⚠️ Desativado
+                          </td>
+                          <td className="px-4 py-3 text-center hidden md:table-cell">
+                            {usuario.ativo ? (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                ✓ Ativo
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                ✗ Inativo
                               </span>
                             )}
-                          </div>
-                          <p className="text-slate-600 text-sm mb-1">📧 {usuario.email}</p>
-                          {usuario.telefone && (
-                            <p className="text-slate-600 text-sm mb-1">📱 {formatPhoneNumber(usuario.telefone)}</p>
-                          )}
-                          {usuario.tags && usuario.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {usuario.tags.slice(0, 4).map((tag) => (
-                                <span
-                                  key={tag.id}
-                                  className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
-                                >
-                                  {tag.nome}
-                                </span>
-                              ))}
-                              {usuario.tags.length > 4 && (
-                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-200 text-slate-600">
-                                  +{usuario.tags.length - 4}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <p className="text-slate-400 text-xs mt-1">
-                            Adicionado em {new Date(usuario.criado_em).toLocaleDateString('pt-BR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {/* Botão Enviar Convite */}
-                          <button
-                            onClick={() => enviarConvite(usuario)}
-                            disabled={enviandoConvite === usuario.id || !usuario.ativo}
-                            className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                          >
-                            {enviandoConvite === usuario.id ? (
-                              <>
-                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Enviando...</span>
-                              </>
-                            ) : (
-                              <>📧 Convite</>
-                            )}
-                          </button>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => enviarConvite(usuario)}
+                                disabled={enviandoConvite === usuario.id || !usuario.ativo}
+                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Enviar convite"
+                              >
+                                {enviandoConvite === usuario.id ? (
+                                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <span className="text-lg">📧</span>
+                                )}
+                              </button>
+                              
+                              <button
+                                onClick={() => abrirModalEdicao(usuario)}
+                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition-colors"
+                                title="Editar"
+                              >
+                                <span className="text-lg">✏️</span>
+                              </button>
 
-                          <button
-                            onClick={() => abrirModalEdicao(usuario)}
-                            className="px-3 py-1.5 rounded text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-all"
-                          >
-                            ✏️ Editar
-                          </button>
-                          <button
-                            onClick={() => alterarStatus(usuario.id, !usuario.ativo)}
-                            className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                              usuario.ativo
-                                ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                                : 'bg-green-100 text-green-800 hover:bg-green-200'
-                            }`}
-                          >
-                            {usuario.ativo ? '⏸️ Desativar' : '▶️ Ativar'}
-                          </button>
-                          <button
-                            onClick={() => removerUsuario(usuario.id, usuario.email, usuario.nome)}
-                            className="px-3 py-1.5 rounded text-sm font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-all"
-                          >
-                            🗑️ Remover
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+                              <button
+                                onClick={() => alterarStatus(usuario.id, !usuario.ativo)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  usuario.ativo
+                                    ? 'hover:bg-yellow-50 text-yellow-600'
+                                    : 'hover:bg-green-50 text-green-600'
+                                }`}
+                                title={usuario.ativo ? 'Desativar' : 'Ativar'}
+                              >
+                                <span className="text-lg">{usuario.ativo ? '⏸️' : '▶️'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => removerUsuario(usuario.id, usuario.email, usuario.nome)}
+                                className="p-1.5 rounded hover:bg-red-50 text-red-600 transition-colors"
+                                title="Remover"
+                              >
+                                <span className="text-lg">🗑️</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Informações sobre Cargos */}
@@ -681,7 +864,7 @@ export default function GerenciarUsuarios() {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Telefone <span className="text-xs text-slate-500">(opcional)</span>
+                    Telefone
                   </label>
                   <input
                     type="tel"

@@ -10,6 +10,7 @@ interface Cantico {
   nome: string;
   letra: string | null;
   cifra: string | null;
+  tags: string[] | null;
 }
 
 export default function CanticosPage() {
@@ -18,11 +19,17 @@ export default function CanticosPage() {
   const [busca, setBusca] = useState('');
   const [editando, setEditando] = useState<string | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
-  const [form, setForm] = useState<{ nome: string; letra: string; cifra: string }>({
+  const [form, setForm] = useState<{ nome: string; letra: string; cifra: string; tags: string[] }>({
     nome: '',
     letra: '',
     cifra: '',
+    tags: [],
   });
+  const TAGS = [
+  'Prelúdio', 'Poslúdio', 'Oferta', 'Ceia', 'Comunhão', 'Hino', 'Salmo',
+  'Adoração', 'Confissão', 'Arrependimento', 'Edificação', 'Instrução',
+  'Consagração', 'Doxologia', 'Bençãos', 'Gratidão'
+  ];
   const [avisoSimilaridade, setAvisoSimilaridade] = useState<string[]>([]);
 
   useEffect(() => {
@@ -32,7 +39,7 @@ export default function CanticosPage() {
   const fetchCanticos = async () => {
     const { data } = await supabase
       .from('canticos')
-      .select('id, nome, letra, cifra')
+      .select('id, nome, letra, cifra, tags')
       .order('nome');
 
     if (data) setCanticos(data);
@@ -80,6 +87,7 @@ export default function CanticosPage() {
       nome: c.nome,
       letra: c.letra || '',
       cifra: c.cifra || '',
+      tags: c.tags || [],
     });
     setAvisoSimilaridade([]);
   };
@@ -91,6 +99,7 @@ export default function CanticosPage() {
       nome: '',
       letra: '',
       cifra: '',
+      tags: [],
     });
     setAvisoSimilaridade([]);
   };
@@ -98,7 +107,7 @@ export default function CanticosPage() {
   const cancelar = () => {
     setCriandoNovo(false);
     setEditando(null);
-    setForm({ nome: '', letra: '', cifra: '' });
+    setForm({ nome: '', letra: '', cifra: '', tags: [] });
     setAvisoSimilaridade([]);
   };
 
@@ -116,13 +125,14 @@ export default function CanticosPage() {
           nome: form.nome.trim(),
           letra: form.letra.trim(),
           cifra: form.cifra.trim(),
+          tags: form.tags,
         })
         .eq('id', editando);
 
       if (!error) {
         await fetchCanticos();
         setEditando(null);
-        setForm({ nome: '', letra: '', cifra: '' });
+        setForm({ nome: '', letra: '', cifra: '', tags: [] });
         alert('✅ Cântico atualizado com sucesso!');
       } else {
         console.error(error);
@@ -148,12 +158,13 @@ export default function CanticosPage() {
         nome: form.nome.trim(),
         letra: form.letra.trim(),
         cifra: form.cifra.trim(),
+        tags: form.tags,
       });
 
     if (!error) {
       await fetchCanticos();
       setCriandoNovo(false);
-      setForm({ nome: '', letra: '', cifra: '' });
+      setForm({ nome: '', letra: '', cifra: '', tags: [] });
       setAvisoSimilaridade([]);
       alert('✅ Cântico criado com sucesso!');
     } else {
@@ -249,6 +260,41 @@ export default function CanticosPage() {
                   </div>
                 )}
               </div>
+              
+              <div>
+                <label className="font-bold text-sm text-slate-700 mb-2 block">
+                  Tags Litúrgicas
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  {TAGS.map(tag => {
+                    const ativo = form.tags.includes(tag);
+
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setForm(prev => ({
+                            ...prev,
+                            tags: ativo
+                              ? prev.tags.filter(t => t !== tag)
+                              : [...prev.tags, tag]
+                          }));
+                        }}
+                        className={`px-3 py-2 rounded-xl border-2 text-sm font-semibold transition
+                          ${ativo
+                            ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
+                            : 'bg-white border-slate-300 text-slate-600 hover:border-emerald-400'
+                          }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
 
               <div>
                 <label className="font-bold text-sm text-slate-700 mb-2 block">
@@ -331,6 +377,39 @@ export default function CanticosPage() {
                       value={form.nome}
                       onChange={e => setForm({ ...form, nome: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <label className="font-bold text-sm text-slate-700 mb-2 block">
+                      Tags Litúrgicas
+                    </label>
+
+                    <div className="flex flex-wrap gap-2">
+                      {TAGS.map(tag => {
+                        const ativo = form.tags.includes(tag);
+
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setForm(prev => ({
+                                ...prev,
+                                tags: ativo
+                                  ? prev.tags.filter(t => t !== tag)
+                                  : [...prev.tags, tag]
+                              }));
+                            }}
+                            className={`px-3 py-2 rounded-xl border-2 text-sm font-semibold transition
+                              ${ativo
+                                ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
+                                : 'bg-white border-slate-300 text-slate-600 hover:border-emerald-400'
+                              }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div>

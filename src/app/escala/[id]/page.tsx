@@ -38,10 +38,31 @@ export default function EscalaPublicaPage() {
   const [funcoes, setFuncoes] = useState<Funcao[]>([]);
   const [loading, setLoading] = useState(true);
   const [atualizando, setAtualizando] = useState<string | null>(null);
+  const [nomeUsuario, setNomeUsuario] = useState<string>('');
 
   useEffect(() => {
     carregar();
   }, [id]);
+
+  useEffect(() => {
+    if (user) {
+      buscarNomeUsuario();
+    }
+  }, [user]);
+
+  const buscarNomeUsuario = async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('usuarios_permitidos')
+      .select('nome')
+      .eq('email', user.email)
+      .single();
+    
+    if (data?.nome) {
+      setNomeUsuario(data.nome);
+    }
+  };
 
   const carregar = async () => {
     setLoading(true);
@@ -119,131 +140,176 @@ export default function EscalaPublicaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-6">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border-2 border-slate-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white p-6">
-          <h1 className="text-2xl font-bold mb-2">{escala.titulo}</h1>
-          <div className="flex items-center gap-2 text-emerald-100 mb-3">
-            <span>📅</span>
-            <p className="text-sm">
-              {new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', { 
-                weekday: 'long', 
-                day: '2-digit', 
-                month: 'long' 
-              })}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Header */}
+      <header className="bg-white border-b shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+          {/* Botão Voltar */}
+          <button
+            onClick={() => window.location.href = '/admin'}
+            className="flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors"
+          >
+            ← Voltar para Painel
+          </button>
+
+          {/* Logo do Sistema */}
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-emerald-700 rounded-lg flex items-center justify-center text-white font-bold">
+              🎵
+            </div>
+            <span className="hidden sm:block font-bold text-slate-900">Louvores IPPN</span>
+          </div>
+
+          {/* Usuário ou Login */}
+          <div>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 bg-emerald-700 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  {(nomeUsuario || user.email)?.[0]?.toUpperCase() || 'U'}
+                </span>
+                <span className="hidden sm:block text-sm text-slate-700">
+                  {nomeUsuario?.split(' ')[0] || user.email?.split('@')[0]}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => window.location.href = '/login'}
+                className="px-4 py-2 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 transition-colors"
+              >
+                Entrar
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Conteúdo Principal */}
+      <div className="px-4 py-6">
+        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border-2 border-slate-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white p-6">
+            <h1 className="text-2xl font-bold mb-2">{escala.titulo}</h1>
+            <div className="flex items-center gap-2 text-emerald-100 mb-3">
+              <span>📅</span>
+              <p className="text-sm">
+                {new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', { 
+                  weekday: 'long', 
+                  day: '2-digit', 
+                  month: 'long' 
+                })}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="text-xs bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                🕐 {escala.hora_inicio}{escala.hora_fim && ` - ${escala.hora_fim}`}
+              </span>
+              <span className="text-xs bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                ⛪ {getTipoCultoLabel(escala.tipo_culto)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border-b-2 border-blue-200 px-6 py-4">
+            <p className="text-sm text-blue-900">
+              <span className="font-bold">ℹ️ Instruções:</span> Confirme sua presença ou informe se não poderá participar.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="text-xs bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
-              🕐 {escala.hora_inicio}{escala.hora_fim && ` - ${escala.hora_fim}`}
-            </span>
-            <span className="text-xs bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
-              ⛪ {getTipoCultoLabel(escala.tipo_culto)}
-            </span>
-          </div>
-        </div>
 
-        <div className="bg-blue-50 border-b-2 border-blue-200 px-6 py-4">
-          <p className="text-sm text-blue-900">
-            <span className="font-bold">ℹ️ Instruções:</span> Confirme sua presença ou informe se não poderá participar.
-          </p>
-        </div>
+          <div className="p-6 space-y-6">
+            {categorias.map(cat => (
+              <div key={cat}>
+                <h3 className="font-bold text-slate-900 mb-3 pb-2 border-b-2 border-slate-200">
+                  {getCategoriaLabel(cat)}
+                </h3>
 
-        <div className="p-6 space-y-6">
-          {categorias.map(cat => (
-            <div key={cat}>
-              <h3 className="font-bold text-slate-900 mb-3 pb-2 border-b-2 border-slate-200">
-                {getCategoriaLabel(cat)}
-              </h3>
+                <div className="space-y-3">
+                  {funcoes.filter(f => f.tag.categoria === cat).map(funcao => {
+                    const souEu = user?.id === funcao.usuario.id;
+                    const estaAtualizando = atualizando === funcao.id;
 
-              <div className="space-y-3">
-                {funcoes.filter(f => f.tag.categoria === cat).map(funcao => {
-                  const souEu = user?.id === funcao.usuario.id;
-                  const estaAtualizando = atualizando === funcao.id;
-
-                  return (
-                    <div 
-                      key={funcao.id} 
-                      className={`border-2 rounded-xl p-4 transition-all ${
-                        funcao.status === 'confirmado' ? 'bg-green-50 border-green-300' :
-                        funcao.status === 'recusado' ? 'bg-red-50 border-red-300' :
-                        'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2 flex-1">
-                          <div 
-                            className="w-3 h-3 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: funcao.tag.cor }}
-                          />
-                          <div>
-                            <p className="font-bold text-slate-900">{funcao.usuario.nome}</p>
-                            <p className="text-sm text-slate-600">{funcao.tag.nome}</p>
+                    return (
+                      <div 
+                        key={funcao.id} 
+                        className={`border-2 rounded-xl p-4 transition-all ${
+                          funcao.status === 'confirmado' ? 'bg-green-50 border-green-300' :
+                          funcao.status === 'recusado' ? 'bg-red-50 border-red-300' :
+                          'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div 
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: funcao.tag.cor }}
+                            />
+                            <div>
+                              <p className="font-bold text-slate-900">{funcao.usuario.nome}</p>
+                              <p className="text-sm text-slate-600">{funcao.tag.nome}</p>
+                            </div>
                           </div>
+
+                          <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                            funcao.status === 'confirmado' ? 'bg-green-200 text-green-900' :
+                            funcao.status === 'recusado' ? 'bg-red-200 text-red-900' :
+                            'bg-amber-200 text-amber-900'
+                          }`}>
+                            {funcao.status === 'confirmado' ? '✅ CONFIRMADO' :
+                             funcao.status === 'recusado' ? '❌ NÃO VAI' :
+                             '⏳ PENDENTE'}
+                          </span>
                         </div>
 
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                          funcao.status === 'confirmado' ? 'bg-green-200 text-green-900' :
-                          funcao.status === 'recusado' ? 'bg-red-200 text-red-900' :
-                          'bg-amber-200 text-amber-900'
-                        }`}>
-                          {funcao.status === 'confirmado' ? '✅ CONFIRMADO' :
-                           funcao.status === 'recusado' ? '❌ NÃO VAI' :
-                           '⏳ PENDENTE'}
-                        </span>
+                        {souEu && (
+                          <div className="flex gap-2">
+                            <button
+                              disabled={estaAtualizando || funcao.status === 'confirmado'}
+                              onClick={() => atualizarStatus(funcao.id, 'confirmado')}
+                              className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                                funcao.status === 'confirmado'
+                                  ? 'bg-green-200 text-green-800 cursor-default'
+                                  : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                              } disabled:opacity-50`}
+                            >
+                              {estaAtualizando ? '...' : '✓ Confirmar Presença'}
+                            </button>
+                            <button
+                              disabled={estaAtualizando || funcao.status === 'recusado'}
+                              onClick={() => atualizarStatus(funcao.id, 'recusado')}
+                              className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                                funcao.status === 'recusado'
+                                  ? 'bg-red-200 text-red-800 cursor-default'
+                                  : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+                              } disabled:opacity-50`}
+                            >
+                              {estaAtualizando ? '...' : '✗ Não Posso Ir'}
+                            </button>
+                          </div>
+                        )}
+
+                        {!souEu && funcao.status === 'pendente' && (
+                          <p className="text-xs text-slate-500 italic">
+                            Aguardando confirmação...
+                          </p>
+                        )}
                       </div>
-
-                      {souEu && (
-                        <div className="flex gap-2">
-                          <button
-                            disabled={estaAtualizando || funcao.status === 'confirmado'}
-                            onClick={() => atualizarStatus(funcao.id, 'confirmado')}
-                            className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                              funcao.status === 'confirmado'
-                                ? 'bg-green-200 text-green-800 cursor-default'
-                                : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
-                            } disabled:opacity-50`}
-                          >
-                            {estaAtualizando ? '...' : '✓ Confirmar Presença'}
-                          </button>
-                          <button
-                            disabled={estaAtualizando || funcao.status === 'recusado'}
-                            onClick={() => atualizarStatus(funcao.id, 'recusado')}
-                            className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
-                              funcao.status === 'recusado'
-                                ? 'bg-red-200 text-red-800 cursor-default'
-                                : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
-                            } disabled:opacity-50`}
-                          >
-                            {estaAtualizando ? '...' : '✗ Não Posso Ir'}
-                          </button>
-                        </div>
-                      )}
-
-                      {!souEu && funcao.status === 'pendente' && (
-                        <p className="text-xs text-slate-500 italic">
-                          Aguardando confirmação...
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div className="border-t p-4 text-center">
-          <a
-            target="_blank"
-            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-              `ESCALA – ${escala.titulo}\n${new Date(escala.data).toLocaleDateString('pt-BR')}\n\n` +
-              funcoes.map(f => `• ${f.tag.nome}: ${f.usuario.nome}`).join('\n')
-            )}`}
-            className="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            📲 Enviar no WhatsApp
-          </a>
+          <div className="border-t p-4 text-center">
+            <a
+              target="_blank"
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                `ESCALA – ${escala.titulo}\n${new Date(escala.data).toLocaleDateString('pt-BR')}\n\n` +
+                funcoes.map(f => `• ${f.tag.nome}: ${f.usuario.nome}`).join('\n')
+              )}`}
+              className="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              📲 Enviar no WhatsApp
+            </a>
+          </div>
         </div>
       </div>
     </div>
