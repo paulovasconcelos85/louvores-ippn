@@ -605,7 +605,7 @@ export default function CultosPage() {
   const [cultoExpandido, setCultoExpandido] = useState<number | null>(null);
   const [liturgiasCarregadas, setLiturgiasCarregadas] = useState<{[key: number]: LouvorItem[]}>({});
 
-  const isLideranca = CARGOS_LIDERANCA.includes(userRole);
+  const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
 
   const carregarUsuario = async () => {
     const { data: { user } } = await supabase.auth.getUser();
