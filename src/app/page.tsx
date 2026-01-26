@@ -182,6 +182,8 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (user === undefined) return;
+    
     async function fetchCultos() {
       setLoading(true);
 
@@ -248,7 +250,7 @@ export default function Home() {
     }
 
     fetchCultos();
-  }, [page, user]);
+  }, [page, user?.id]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
