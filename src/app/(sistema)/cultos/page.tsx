@@ -206,8 +206,8 @@ function TipoLiturgiaSelector({ value, onChange, disabled }: any) {
 
 // --- ITEM DA LITURGIA ---
 function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCreate, userRole }: any) {
-  const isLideranca = CARGOS_LIDERANCA.includes(userRole);
-  const isMusico = CARGOS_MUSICA.includes(userRole);
+  const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
+  const isMusico = userRole ? CARGOS_MUSICA.includes(userRole) : false;
   const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio') || item.tipo.toLowerCase().includes('poslúdio');
 
   const adicionarMusica = () => {
@@ -624,7 +624,7 @@ export default function CultosPage() {
     if (data?.cargo) {
       setUserRole(data.cargo);
     } else {
-      setUserRole('staff'); // fallback seguro
+      setUserRole('staff');
     }
   };
 
