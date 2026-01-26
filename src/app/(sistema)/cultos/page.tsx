@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf';
 
 // --- CONFIGURAÇÕES DE ACESSO ---
 const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin'];
+const CARGOS_MUSICA = ['musico'];
 const TIPOS_LITURGIA_OPCOES = [
   'Prelúdio', 'Leitura Inicial', 'Saudação e Acolhida à Igreja', 'Cânticos Congregacionais',
   'Confissão de Pecados', 'Dízimos e Ofertas', 'Cântico para as Ofertas',
@@ -206,6 +207,7 @@ function TipoLiturgiaSelector({ value, onChange, disabled }: any) {
 // --- ITEM DA LITURGIA ---
 function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCreate, userRole }: any) {
   const isLideranca = CARGOS_LIDERANCA.includes(userRole);
+  const isMusico = CARGOS_MUSICA.includes(userRole);
   const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio') || item.tipo.toLowerCase().includes('poslúdio');
 
   const adicionarMusica = () => {
@@ -288,7 +290,7 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
                             novaLista[mIdx] = { ...novaLista[mIdx], cantico_id: c?.id || null };
                             onUpdate({ ...item, lista_musicas: novaLista });
                           }}
-                          canticos={canticos} onCreate={onCreate} disabled={!isLideranca}
+                          canticos={canticos} onCreate={onCreate} disabled={!(isLideranca || isMusico)}
                         />
                         {canticoSelecionado && (
                           <div className={`inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg border-2 ${status.corFundo}`}>
@@ -318,7 +320,7 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
                           novaLista[mIdx] = { ...novaLista[mIdx], tom: e.target.value };
                           onUpdate({ ...item, lista_musicas: novaLista });
                         }}
-                        disabled={!isLideranca}
+                        disabled={!(isLideranca || isMusico)}
                         className="w-full border-2 border-emerald-100 rounded-xl p-3 bg-white text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50"
                       >
                         <option value="">Tom</option>
@@ -592,7 +594,7 @@ function LiturgiaView({ culto, itens, canticos, onClose }: any) {
 
 // --- PÁGINA PRINCIPAL ---
 export default function CultosPage() {
-  const [userRole, setUserRole] = useState('admin'); 
+  const [userRole, setUserRole] = useState<string | null>(null); 
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<any[]>([]);
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -605,7 +607,26 @@ export default function CultosPage() {
 
   const isLideranca = CARGOS_LIDERANCA.includes(userRole);
 
-  useEffect(() => { carregarDados(); }, []);
+  const carregarUsuario = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setUserRole('staff');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('usuarios_permitidos')
+      .select('cargo')
+      .eq('id', user.id)
+      .single();
+
+    if (data?.cargo) {
+      setUserRole(data.cargo);
+    } else {
+      setUserRole('staff'); // fallback seguro
+    }
+  };
 
   const carregarDados = async () => {
     const { data: todosCanticos } = await supabase
@@ -666,6 +687,19 @@ export default function CultosPage() {
 
     setCanticos(canticosAtualizados);
   };
+
+    useEffect(() => { 
+    carregarUsuario();
+    carregarDados(); 
+  }, []);
+
+  if (!userRole) {
+    return (
+      <div className="p-8 text-center font-bold text-slate-500">
+        Carregando...
+      </div>
+    );
+  }
 
   // --- EXPANDIR/CONTRAIR CULTO ---
   const toggleExpandirCulto = async (cultoNr: number) => {
