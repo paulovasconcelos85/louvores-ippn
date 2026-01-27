@@ -50,33 +50,9 @@ export default function EscalasPage() {
   const [mensagem, setMensagem] = useState('');
   
   // Filtros
-  const [filtroMes, setFiltroMes] = useState(new Date().toISOString().slice(0, 7));
+  const [filtroPeriodo, setFiltroPeriodo] = useState<'30dias' | '3meses' | 'todos'>('30dias');
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
-
-  // Gerar lista de meses
-  const gerarOpcoesDeMs = () => {
-    const opcoes = [{ valor: 'todos', label: '📅 Todos os Meses' }]; // Opção "Todos"
-    
-    const hoje = new Date();
-    const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-                        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    
-    // Sempre gera dinamicamente: 24 meses atrás até 24 à frente
-    for (let i = -24; i <= 24; i++) {
-      const data = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
-      const ano = data.getFullYear();
-      const mes = String(data.getMonth() + 1).padStart(2, '0');
-      const valor = `${ano}-${mes}`;
-      const label = `${mesesNomes[data.getMonth()]}/${ano}`;
-      
-      opcoes.push({ valor, label });
-    }
-    
-    return opcoes;
-  };
-
-  const mesesDisponiveis = gerarOpcoesDeMs();
   
   // Modal de criação/edição
   const [modalAberto, setModalAberto] = useState(false);
@@ -162,7 +138,7 @@ export default function EscalasPage() {
     if (user && permissoes.podeGerenciarEscalas) {
       carregarEscalas();
     }
-  }, [user, permissoes.podeGerenciarEscalas, filtroMes, filtroStatus, filtroTipo]);
+  }, [user, permissoes.podeGerenciarEscalas, filtroPeriodo, filtroStatus, filtroTipo]);
 
   // 🔍 Buscar cultos quando a data mudar
   useEffect(() => {
@@ -203,17 +179,29 @@ export default function EscalasPage() {
         .order('hora_inicio', { ascending: true })
         .order('ordem', { foreignTable: 'escalas_funcoes', ascending: true });
 
-      // Aplicar filtro de mês apenas se não for "todos"
-      if (filtroMes !== 'todos') {
-        const [ano, mes] = filtroMes.split('-');
-        const primeiroDia = `${ano}-${mes}-01`;
-        const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
-        const ultimoDiaFormatado = `${ano}-${mes}-${ultimoDia}`;
+      // Aplicar filtro de período
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const dataHoje = hoje.toISOString().split('T')[0];
 
+      if (filtroPeriodo === '30dias') {
+        const dataFim = new Date(hoje);
+        dataFim.setDate(dataFim.getDate() + 30);
+        const dataFimStr = dataFim.toISOString().split('T')[0];
+        
         query = query
-          .gte('data', primeiroDia)
-          .lte('data', ultimoDiaFormatado);
+          .gte('data', dataHoje)
+          .lte('data', dataFimStr);
+      } else if (filtroPeriodo === '3meses') {
+        const dataFim = new Date(hoje);
+        dataFim.setMonth(dataFim.getMonth() + 3);
+        const dataFimStr = dataFim.toISOString().split('T')[0];
+        
+        query = query
+          .gte('data', dataHoje)
+          .lte('data', dataFimStr);
       }
+      // Se filtroPeriodo === 'todos', não aplica filtro de data
 
       if (filtroStatus !== 'todas') {
         query = query.eq('status', filtroStatus);
@@ -286,12 +274,13 @@ export default function EscalasPage() {
     }
   };
 
-  // 🎯 Criar novo culto em "Louvores IPPN"
+  // 🎯 Criar novo culto em "Louvores IPPN" COM MODELO PRÉ-PREENCHIDO
   const criarCultoAutomaticamente = async (dataEscala: string): Promise<number | null> => {
     try {
       console.log('🎵 Criando novo culto para data:', dataEscala);
       
-      const { data, error } = await supabase
+      // 1. Criar o culto
+      const { data: novoCulto, error: errorCulto } = await supabase
         .from('Louvores IPPN')
         .insert({
           Dia: dataEscala
@@ -299,13 +288,127 @@ export default function EscalasPage() {
         .select()
         .single();
 
-      if (error) {
-        console.error('❌ Erro ao criar culto:', error);
-        throw error;
+      if (errorCulto) {
+        console.error('❌ Erro ao criar culto:', errorCulto);
+        throw errorCulto;
       }
       
-      console.log('✅ Culto criado:', data);
-      return data['Culto nr.'];
+      const cultoId = novoCulto['Culto nr.'];
+      console.log('✅ Culto criado com ID:', cultoId);
+
+      // 2. Criar modelo padrão de liturgia
+      const modeloPadrao = [
+        {
+          culto_id: cultoId,
+          ordem: 1,
+          tipo: 'Prelúdio',
+          descricao: null,
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 2,
+          tipo: 'Saudação e Acolhida à Igreja',
+          descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 3,
+          tipo: 'Cânticos Congregacionais',
+          descricao: null,
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 4,
+          tipo: 'Cânticos Congregacionais',
+          descricao: null,
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 5,
+          tipo: 'Cânticos Congregacionais',
+          descricao: null,
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 6,
+          tipo: 'Confissão de Pecados',
+          descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 7,
+          tipo: 'Dízimos e Ofertas',
+          descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 8,
+          tipo: 'Cântico para as Ofertas',
+          descricao: 'Oração pelas ofertas e dízimo.',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 9,
+          tipo: 'Pregação da Palavra',
+          descricao: null,
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 10,
+          tipo: 'Cântico Final',
+          descricao: 'Poslúdio',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 11,
+          tipo: 'Oração - Bênção Apostólica',
+          descricao: 'Amém tríplice',
+          cantico_id: null,
+          tom: null
+        },
+        {
+          culto_id: cultoId,
+          ordem: 12,
+          tipo: 'Lembretes - Liturgo',
+          descricao: 'Apresentação dos convidados\nAniversariantes / Casamento',
+          cantico_id: null,
+          tom: null
+        }
+      ];
+
+      const { error: errorItens } = await supabase
+        .from('louvor_itens')
+        .insert(modeloPadrao);
+
+      if (errorItens) {
+        console.error('⚠️ Erro ao criar itens litúrgicos:', errorItens);
+        // Não vou fazer throw aqui porque o culto já foi criado
+        // Melhor deixar o culto existir e os itens podem ser adicionados depois
+      } else {
+        console.log('✅ Modelo de liturgia criado com sucesso!');
+      }
+      
+      return cultoId;
     } catch (error) {
       console.error('❌ Erro ao criar culto:', error);
       return null;
@@ -402,13 +505,13 @@ export default function EscalasPage() {
           cultoIdFinal = verificacao[0]['Culto nr.'];
           setMensagem(`ℹ️ Culto #${cultoIdFinal} já existia para esta data, vinculando...`);
         } else {
-          // Realmente não existe, criar novo
-          console.log('🎵 Criando novo culto para data:', data);
+          // Realmente não existe, criar novo COM MODELO PRÉ-PREENCHIDO
+          console.log('🎵 Criando novo culto COM LITURGIA PADRÃO para data:', data);
           const novoCultoId = await criarCultoAutomaticamente(data);
           if (!novoCultoId) {
             throw new Error('Falha ao criar culto automaticamente');
           }
-          console.log(`✅ Novo culto criado: #${novoCultoId}`);
+          console.log(`✅ Novo culto criado COM LITURGIA: #${novoCultoId}`);
           cultoIdFinal = novoCultoId;
         }
       }
@@ -447,7 +550,7 @@ export default function EscalasPage() {
 
         if (error) throw error;
         setMensagem(cultoIdFinal 
-          ? `✅ Escala criada e vinculada ao Culto #${cultoIdFinal}!`
+          ? `✅ Escala criada e vinculada ao Culto #${cultoIdFinal} (com liturgia padrão)!`
           : '✅ Escala criada com sucesso!');
       }
 
@@ -555,62 +658,87 @@ export default function EscalasPage() {
 
           {/* Filtros e Botão Criar */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              {/* Filtros */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Mês</label>
-                  <select
-                    value={filtroMes}
-                    onChange={(e) => setFiltroMes(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none min-w-[160px]"
+            <div className="flex flex-col gap-4">
+              {/* Botões de Período */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2">📅 Período</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setFiltroPeriodo('30dias')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      filtroPeriodo === '30dias'
+                        ? 'bg-emerald-700 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    {mesesDisponiveis.map(opcao => (
-                      <option key={opcao.valor} value={opcao.valor}>
-                        {opcao.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
-                  <select
-                    value={filtroStatus}
-                    onChange={(e) => setFiltroStatus(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                    Próximos 30 dias
+                  </button>
+                  <button
+                    onClick={() => setFiltroPeriodo('3meses')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      filtroPeriodo === '3meses'
+                        ? 'bg-emerald-700 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    <option value="todas">Todas</option>
-                    <option value="rascunho">Rascunho</option>
-                    <option value="publicada">Publicada</option>
-                    <option value="concluida">Concluída</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Tipo</label>
-                  <select
-                    value={filtroTipo}
-                    onChange={(e) => setFiltroTipo(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                    Próximos 3 meses
+                  </button>
+                  <button
+                    onClick={() => setFiltroPeriodo('todos')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      filtroPeriodo === 'todos'
+                        ? 'bg-emerald-700 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    <option value="todos">Todos</option>
-                    <option value="dominical_manha">Dominical - Manhã</option>
-                    <option value="dominical_noite">Dominical - Noite</option>
-                    <option value="quarta">Quarta-feira</option>
-                    <option value="especial">Especial</option>
-                  </select>
+                    Todas as escalas
+                  </button>
                 </div>
               </div>
 
-              {/* Botão Criar Nova */}
-              <button
-                onClick={abrirModalNova}
-                className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center gap-2 whitespace-nowrap"
-              >
-                <span className="text-lg">➕</span>
-                Criar Nova Escala
-              </button>
+              {/* Linha de filtros e botão criar */}
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+                {/* Filtros de Status e Tipo */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                    <select
+                      value={filtroStatus}
+                      onChange={(e) => setFiltroStatus(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="rascunho">Rascunho</option>
+                      <option value="publicada">Publicada</option>
+                      <option value="concluida">Concluída</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Tipo</label>
+                    <select
+                      value={filtroTipo}
+                      onChange={(e) => setFiltroTipo(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
+                    >
+                      <option value="todos">Todos</option>
+                      <option value="dominical_manha">Dominical - Manhã</option>
+                      <option value="dominical_noite">Dominical - Noite</option>
+                      <option value="quarta">Quarta-feira</option>
+                      <option value="especial">Especial</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Botão Criar Nova */}
+                <button
+                  onClick={abrirModalNova}
+                  className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  <span className="text-lg">➕</span>
+                  Criar Nova Escala
+                </button>
+              </div>
             </div>
           </div>
 
@@ -904,7 +1032,7 @@ export default function EscalasPage() {
                       <div className="flex-1">
                         <p className="font-medium text-slate-900">✨ Criar novo culto automaticamente</p>
                         <p className="text-xs text-slate-600 mt-1">
-                          Um novo registro será criado em "Louvores IPPN" para esta data
+                          Um novo registro será criado em "Louvores IPPN" com liturgia padrão pré-preenchida
                         </p>
                       </div>
                     </label>

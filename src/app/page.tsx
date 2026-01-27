@@ -324,10 +324,10 @@ export default function Home() {
         <section className="mb-16">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-slate-900 mb-2">
-              Programação Musical
+              Liturgia dos Cultos
             </h2>
             <p className="text-slate-600">
-              Confira as músicas dos últimos cultos
+              Confira a liturgia completa dos cultos realizados na IPPN.
             </p>
           </div>
 
