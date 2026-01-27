@@ -208,6 +208,15 @@ function TipoLiturgiaSelector({ value, onChange, disabled }: any) {
 function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCreate, userRole }: any) {
   const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
   const isMusico = userRole ? CARGOS_MUSICA.includes(userRole) : false;
+
+    // 🔍 DEBUG - REMOVER DEPOIS
+    console.log('🎵 ItemLiturgia Debug:', {
+      userRole,
+      isLideranca,
+      isMusico,
+      disabled: !(isLideranca || isMusico)
+    });
+
   const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio') || item.tipo.toLowerCase().includes('poslúdio');
 
   const adicionarMusica = () => {
@@ -270,7 +279,7 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
               
               return (
                 <div key={mIdx} className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100 relative group print:p-0 print:bg-transparent print:border-none">
-                  {isLideranca && item.lista_musicas.length > 1 && (
+                  {(isLideranca || isMusico) && item.lista_musicas.length > 1 && (
                     <button
                       onClick={() => removerMusica(mIdx)}
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg print:hidden"
@@ -332,7 +341,7 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
               );
             })}
             
-            {isLideranca && (
+            {(isLideranca || isMusico) && (
               <button
                 onClick={adicionarMusica}
                 className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-600 hover:bg-emerald-50 hover:border-emerald-400 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
@@ -609,11 +618,16 @@ export default function CultosPage() {
 
   const carregarUsuario = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    
+    console.log('👤 User:', user?.id);
 
     if (!user) {
+      console.log('❌ Usuário não está logado!');
       setUserRole('staff');
       return;
     }
+
+    console.log('🔍 Buscando cargo para:', user.id);
 
     const { data, error } = await supabase
       .from('usuarios_permitidos')
@@ -621,9 +635,13 @@ export default function CultosPage() {
       .eq('id', user.id)
       .single();
 
+    console.log('📊 Resultado:', { data, error });
+
     if (data?.cargo) {
+      console.log('✅ Cargo encontrado:', data.cargo);
       setUserRole(data.cargo);
     } else {
+      console.log('❌ Cargo não encontrado, error:', error);
       setUserRole('staff');
     }
   };
