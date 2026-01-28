@@ -629,10 +629,13 @@ export default function CultosPage() {
 
     console.log('🔍 Buscando cargo para:', user.id);
 
+    // CORRIGIDO: Buscar em 'pessoas' com 'usuario_id'
     const { data, error } = await supabase
-      .from('usuarios_permitidos')
+      .from('pessoas')  // ✅ TABELA CORRETA!
       .select('cargo')
-      .eq('id', user.id)
+      .eq('usuario_id', user.id)  // ✅ CAMPO CORRETO!
+      .eq('tem_acesso', true)  // ✅ Verificar acesso
+      .eq('ativo', true)  // ✅ Verificar ativo
       .single();
 
     console.log('📊 Resultado:', { data, error });
@@ -644,7 +647,7 @@ export default function CultosPage() {
       console.log('❌ Cargo não encontrado, error:', error);
       setUserRole('staff');
     }
-  };
+};
 
   const carregarDados = async () => {
     const { data: todosCanticos } = await supabase

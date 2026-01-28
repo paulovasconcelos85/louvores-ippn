@@ -1,4 +1,3 @@
-// hooks/usePermissions.ts
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -24,7 +23,7 @@ interface UsePermissionsReturn {
     podeGerenciarConteudo: boolean;
     isSuperAdmin: boolean;
   };
-  isSuperAdmin: boolean; // ← SÓ ADICIONAR ESTA LINHA
+  isSuperAdmin: boolean;
   refetch: () => Promise<void>;
 }
 
@@ -35,7 +34,7 @@ export function usePermissions(): UsePermissionsReturn {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPermissions = async () => {
-    if (!user?.email) {
+    if (!user?.id) {
       setUsuarioPermitido(null);
       setLoading(false);
       return;
@@ -48,62 +47,80 @@ export function usePermissions(): UsePermissionsReturn {
       // Verificar se é super-admin (da lista hardcoded)
       const ehSuperAdmin = isSuperAdmin(user.email);
 
-      // Se for super-admin, não precisa estar no banco
-      // Mas ainda tentamos buscar para pegar nome/telefone se houver
-      const { data, error: fetchError } = await supabase
-        .from('usuarios_permitidos')
-        .select('id, email, nome, cargo, ativo, telefone, foto_url, observacoes')
-        .eq('email', user.email)
-        .maybeSingle(); // usa maybeSingle ao invés de single para não dar erro se não existir
+      // Buscar pessoa pelo usuario_id (id do auth.users)
+      const { data: pessoa, error: fetchError } = await supabase
+        .from('pessoas')
+        .select('id, email, nome, cargo, ativo, tem_acesso, telefone, foto_url, observacoes, usuario_id')
+        .eq('usuario_id', user.id)
+        .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
-        // PGRST116 = nenhuma linha encontrada (ok para super-admin)
-        console.error('Erro ao buscar permissões:', fetchError);
+        console.error('Erro ao buscar pessoa:', fetchError);
         
         // Se é super-admin mas não está no banco, ainda permite acesso
         if (ehSuperAdmin) {
           setUsuarioPermitido({
             id: user.id,
-            email: user.email,
-            nome: user.email.split('@')[0], // usa parte antes do @ como nome
+            email: user.email || '',
+            nome: user.email?.split('@')[0] || 'Admin',
             cargo: 'admin',
             ativo: true
           });
           return;
         }
         
-        setError('Usuário não autorizado');
+        setError('Erro ao verificar permissões');
         setUsuarioPermitido(null);
         return;
       }
 
-      // Se não achou no banco E não é super-admin
-      if (!data && !ehSuperAdmin) {
-        setError('Usuário não cadastrado no sistema');
+      // Se não achou pessoa E não é super-admin
+      if (!pessoa && !ehSuperAdmin) {
+        setError('Você não tem permissão para acessar o sistema');
         setUsuarioPermitido(null);
         return;
       }
 
-      // Se não achou no banco MAS é super-admin
-      if (!data && ehSuperAdmin) {
+      // Se não achou pessoa MAS é super-admin
+      if (!pessoa && ehSuperAdmin) {
         setUsuarioPermitido({
           id: user.id,
-          email: user.email,
-          nome: user.email.split('@')[0],
+          email: user.email || '',
+          nome: user.email?.split('@')[0] || 'Admin',
           cargo: 'admin',
           ativo: true
         });
         return;
       }
 
+      // Pessoa existe - verificar se tem acesso
+      if (pessoa && !pessoa.tem_acesso && !ehSuperAdmin) {
+        setError('Você não tem permissão para acessar o sistema');
+        setUsuarioPermitido(null);
+        return;
+      }
+
       // Verificar se está ativo (exceto super-admins)
-      if (data && !data.ativo && !ehSuperAdmin) {
+      if (pessoa && !pessoa.ativo && !ehSuperAdmin) {
         setError('Usuário desativado');
         setUsuarioPermitido(null);
         return;
       }
 
-      setUsuarioPermitido(data as UsuarioPermitido);
+      // Tudo ok - definir permissões
+      if (pessoa) {
+        setUsuarioPermitido({
+          id: pessoa.usuario_id || pessoa.id, // Priorizar usuario_id (id do auth)
+          email: pessoa.email || user.email || '',
+          nome: pessoa.nome,
+          cargo: pessoa.cargo,
+          ativo: pessoa.ativo,
+          telefone: pessoa.telefone,
+          foto_url: pessoa.foto_url,
+          observacoes: pessoa.observacoes
+        });
+      }
+
     } catch (err) {
       console.error('Erro ao buscar permissões:', err);
       setError('Erro ao verificar permissões');
@@ -117,13 +134,13 @@ export function usePermissions(): UsePermissionsReturn {
     if (!authLoading) {
       fetchPermissions();
     }
-  }, [user?.email, authLoading]);
+  }, [user?.id, authLoading]);
 
   const permissoes = {
     podeAcessarAdmin: podeAcessarAdmin(usuarioPermitido?.cargo || null),
     podeGerenciarUsuarios: podeGerenciarUsuarios(
       usuarioPermitido?.cargo || null,
-      user?.email // ← IMPORTANTE: Passa o email para verificar super-admin
+      user?.email
     ),
     podeGerenciarEscalas: podeGerenciarEscalas(usuarioPermitido?.cargo || null),
     podeGerenciarConteudo: podeGerenciarConteudo(usuarioPermitido?.cargo || null),
@@ -135,7 +152,7 @@ export function usePermissions(): UsePermissionsReturn {
     loading: authLoading || loading,
     error,
     permissoes,
-    isSuperAdmin: isSuperAdmin(user?.email), // ← SÓ ADICIONAR ESTA LINHA
+    isSuperAdmin: isSuperAdmin(user?.email),
     refetch: fetchPermissions
   };
 }

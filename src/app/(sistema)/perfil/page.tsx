@@ -28,29 +28,41 @@ export default function PerfilPage() {
   }, [user]);
 
   const carregar = async () => {
-    const { data: usuario } = await supabase
-      .from('usuarios_permitidos')
-      .select('nome, telefone')
-      .eq('id', user!.id)
+    // Buscar dados da pessoa
+    const { data: pessoa } = await supabase
+      .from('pessoas')
+      .select('id, nome, telefone')
+      .eq('usuario_id', user!.id)
+      .eq('tem_acesso', true)
+      .eq('ativo', true)
       .single();
 
-    if (usuario) {
-      setNome(usuario.nome || '');
-      setTelefone(usuario.telefone ? formatPhoneNumber(usuario.telefone) : '');
+    if (pessoa) {
+      setNome(pessoa.nome || '');
+      setTelefone(pessoa.telefone ? formatPhoneNumber(pessoa.telefone) : '');
+
+      // Carregar tags (excluir tags de liderança que só admin pode atribuir)
+      const { data: tagsData } = await supabase
+        .from('tags_funcoes')
+        .select('*')
+        .eq('ativo', true)
+        .order('ordem');
+
+      // Filtrar tags que só admin pode editar
+      const tagsRestritas = ['Pastor', 'Presbítero', 'Pregação', 'Diácono'];
+      const tagsFiltered = (tagsData || []).filter(
+        tag => !tagsRestritas.includes(tag.nome)
+      );
+
+      setTags(tagsFiltered);
+
+      // Carregar minhas tags usando pessoa_id
+      const { data: minhasTagsData } = await supabase
+        .from('usuarios_tags')
+        .select('tag_id')
+        .eq('usuario_id', pessoa.id);
+      setMinhasTags((minhasTagsData || []).map(t => t.tag_id));
     }
-
-    const { data: tagsData } = await supabase
-      .from('tags_funcoes')
-      .select('*')
-      .eq('ativo', true)
-      .order('ordem');
-    setTags(tagsData || []);
-
-    const { data: minhasTagsData } = await supabase
-      .from('usuarios_tags')
-      .select('tag_id')
-      .eq('usuario_id', user!.id);
-    setMinhasTags((minhasTagsData || []).map(t => t.tag_id));
   };
 
   const salvar = async (e: React.FormEvent) => {
@@ -60,13 +72,13 @@ export default function PerfilPage() {
 
     try {
       await supabase
-        .from('usuarios_permitidos')
+        .from('pessoas')
         .update({
           nome: nome.trim(),
           telefone: telefone ? unformatPhoneNumber(telefone) : null,
           atualizado_em: new Date().toISOString()
         })
-        .eq('id', user!.id);
+        .eq('usuario_id', user!.id);
 
       setMensagem('✅ Perfil atualizado!');
     } catch (error: any) {
@@ -79,18 +91,27 @@ export default function PerfilPage() {
   const toggleTag = async (tagId: string) => {
     const tem = minhasTags.includes(tagId);
 
+    // Buscar pessoa_id
+    const { data: pessoa } = await supabase
+      .from('pessoas')
+      .select('id')
+      .eq('usuario_id', user!.id)
+      .single();
+
+    if (!pessoa) return;
+
     try {
       if (tem) {
         await supabase
           .from('usuarios_tags')
           .delete()
-          .eq('usuario_id', user!.id)
+          .eq('usuario_id', pessoa.id)
           .eq('tag_id', tagId);
         setMinhasTags(prev => prev.filter(t => t !== tagId));
       } else {
         await supabase
           .from('usuarios_tags')
-          .insert({ usuario_id: user!.id, tag_id: tagId, nivel_habilidade: 1 });
+          .insert({ usuario_id: pessoa.id, tag_id: tagId, nivel_habilidade: 1 });
         setMinhasTags(prev => [...prev, tagId]);
       }
     } catch (error: any) {
