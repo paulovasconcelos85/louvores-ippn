@@ -30,7 +30,7 @@ interface EscalaFuncao {
   confirmado: boolean;
   observacoes?: string;
   tags_funcoes: Tag;
-  usuarios_permitidos: Usuario;
+  pessoas: Usuario;
 }
 
 interface Escala {
@@ -148,7 +148,7 @@ export default function GerenciarEscalaPage() {
               cor,
               icone
             ),
-            usuarios_permitidos (
+            pessoas (
               id,
               nome,
               email,
@@ -175,7 +175,7 @@ export default function GerenciarEscalaPage() {
       
       // Carregar usuários
       const { data: usuarios } = await supabase
-        .from('usuarios_permitidos')
+        .from('pessoas')
         .select('id, nome, email, telefone')
         .eq('ativo', true)
         .order('nome');
@@ -254,7 +254,7 @@ export default function GerenciarEscalaPage() {
       ordem: 0,
       confirmado: false,
       tags_funcoes: tag,
-      usuarios_permitidos: usuario,
+      pessoas: usuario,
     };
 
     setEscala(prev => ({
@@ -351,7 +351,7 @@ export default function GerenciarEscalaPage() {
       texto += `${catInfo.nome.toUpperCase()}\n`;
 
       funcoes.forEach(func => {
-        texto += `- ${func.usuarios_permitidos.nome} - ${func.tags_funcoes.nome}\n`;
+        texto += `- ${func.pessoas.nome} - ${func.tags_funcoes.nome}\n`;
       });
 
       texto += `\n`;
@@ -376,7 +376,7 @@ export default function GerenciarEscalaPage() {
 
       const payload = escala.escalas_funcoes.map(f => ({
         escala_id: escalaId,
-        usuario_id: f.usuarios_permitidos.id,
+        usuario_id: f.pessoas.id,
         tag_id: f.tags_funcoes.id,
         ordem: f.ordem,
         confirmado: f.confirmado
@@ -614,15 +614,15 @@ export default function GerenciarEscalaPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-semibold text-slate-900">
-                                  {func.usuarios_permitidos.nome}
+                                  {func.pessoas.nome}
                                 </span>
                                 <span className="text-sm text-slate-600">
                                   {func.tags_funcoes.icone} {func.tags_funcoes.nome}
                                 </span>
                               </div>
-                              {func.usuarios_permitidos.telefone && (
+                              {func.pessoas.telefone && (
                                 <div className="text-xs text-slate-500 mt-0.5">
-                                  📱 {formatPhoneNumber(func.usuarios_permitidos.telefone)}
+                                  📱 {formatPhoneNumber(func.pessoas.telefone)}
                                 </div>
                               )}
                             </div>
@@ -640,7 +640,7 @@ export default function GerenciarEscalaPage() {
                               </button>
                               
                               <button
-                                onClick={() => removerPessoa(func.id, func.usuarios_permitidos.nome)}
+                                onClick={() => removerPessoa(func.id, func.pessoas.nome)}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Remover"
                               >

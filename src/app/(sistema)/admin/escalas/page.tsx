@@ -29,7 +29,7 @@ interface EscalaFuncao {
     categoria: string;
     cor: string;
   };
-  usuarios_permitidos: {
+  pessoas: {
     nome: string;
     email: string;
   };
@@ -169,7 +169,7 @@ export default function EscalasPage() {
               categoria,
               cor
             ),
-            usuarios_permitidos (
+            pessoas (
               nome,
               email
             )
@@ -834,7 +834,7 @@ export default function EscalasPage() {
                                   style={{ backgroundColor: func.tags_funcoes.cor || '#64748b' }}
                                 />
                                 <span className="font-medium text-slate-700 truncate flex-1">
-                                  {func.usuarios_permitidos.nome}
+                                  {func.pessoas.nome}
                                 </span>
                                 <span className="text-slate-500 text-[10px] truncate">
                                   {func.tags_funcoes.nome}
