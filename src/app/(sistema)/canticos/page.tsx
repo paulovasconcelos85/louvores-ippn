@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -12,6 +12,13 @@ interface Cantico {
   referencia: string | null;
   tags: string[] | null;
 }
+
+// Movido para fora para não ser recriado em cada render
+const TAGS = [
+  'Prelúdio', 'Poslúdio', 'Oferta', 'Ceia', 'Comunhão', 'Hino', 'Salmo',
+  'Adoração', 'Confissão', 'Arrependimento', 'Edificação', 'Instrução',
+  'Consagração', 'Doxologia', 'Bençãos', 'Gratidão'
+];
 
 export default function CanticosPage() {
   const router = useRouter();
@@ -26,27 +33,20 @@ export default function CanticosPage() {
     tags: [],
   });
   
-  const TAGS = [
-    'Prelúdio', 'Poslúdio', 'Oferta', 'Ceia', 'Comunhão', 'Hino', 'Salmo',
-    'Adoração', 'Confissão', 'Arrependimento', 'Edificação', 'Instrução',
-    'Consagração', 'Doxologia', 'Bençãos', 'Gratidão'
-  ];
   const [avisoSimilaridade, setAvisoSimilaridade] = useState<string[]>([]);
 
-  useEffect(() => {
-    fetchCanticos();
-  }, []);
+  // --- FUNÇÕES MOVIDAS PARA CIMA (RESOLVE O ERRO DE HOISTING) ---
 
-  const fetchCanticos = async () => {
+  const fetchCanticos = useCallback(async () => {
     const { data } = await supabase
       .from('canticos')
       .select('id, nome, letra, referencia, tags')
       .order('nome');
 
     if (data) setCanticos(data);
-  };
+  }, []);
 
-  const calcularSimilaridade = (str1: string, str2: string): number => {
+  const calcularSimilaridade = useCallback((str1: string, str2: string): number => {
     const s1 = str1.toLowerCase().trim();
     const s2 = str2.toLowerCase().trim();
     if (s1 === s2) return 1;
@@ -56,7 +56,13 @@ export default function CanticosPage() {
     const palavrasComuns = palavras1.filter(p => palavras2.includes(p)).length;
     const totalPalavras = Math.max(palavras1.length, palavras2.length);
     return palavrasComuns / totalPalavras;
-  };
+  }, []);
+
+  // --- EFEITOS ---
+
+  useEffect(() => {
+    fetchCanticos();
+  }, [fetchCanticos]);
 
   useEffect(() => {
     if (criandoNovo && form.nome.length > 2) {
@@ -67,7 +73,9 @@ export default function CanticosPage() {
     } else {
       setAvisoSimilaridade([]);
     }
-  }, [form.nome, criandoNovo, canticos]);
+  }, [form.nome, criandoNovo, canticos, calcularSimilaridade]);
+
+  // --- HANDLERS ---
 
   const iniciarEdicao = (c: Cantico) => {
     setCriandoNovo(false);
@@ -126,7 +134,6 @@ export default function CanticosPage() {
     } else alert('❌ Erro ao criar.');
   };
 
-  // BUSCA ATUALIZADA: Nome, Referência e Letra
   const filtrados = canticos.filter(c => {
     const termo = busca.toLowerCase().trim();
     if (!termo) return true;

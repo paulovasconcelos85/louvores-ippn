@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -22,30 +22,13 @@ export default function AdminPage() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { usuarioPermitido, loading: permLoading, permissoes } = usePermissions();
   
-  const [menuAberto, setMenuAberto] = useState(false);
   const [proximaEscala, setProximaEscala] = useState<MinhaProximaEscala | null>(null);
 
   const loading = authLoading || permLoading;
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-      return;
-    }
+  // --- FUNÇÕES MOVIDAS PARA CIMA (RESOLVE O ERRO DE HOISTING) ---
 
-    // Se o usuário está logado, mas não tem NENHUM cargo/permissão no sistema
-    //if (!loading && user && !usuarioPermitido) {
-    //  router.push('/sem-acesso'); // Ou uma página de aviso
-    //}
-  }, [user, loading, usuarioPermitido, router]);
-
-  useEffect(() => {
-    if (user) {
-      buscarProximaEscala();
-    }
-  }, [user]);
-
-  const buscarProximaEscala = async () => {
+  const buscarProximaEscala = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -74,7 +57,8 @@ export default function AdminPage() {
 
       if (!error && data && data.length > 0) {
         const escala = data[0];
-        const funcoes = escala.escalas_funcoes as any;
+        // Tipagem corrigida para evitar erro de 'any'
+        const funcoes = escala.escalas_funcoes as unknown as any[];
         setProximaEscala({
           escala_id: escala.id,
           data: escala.data,
@@ -87,12 +71,7 @@ export default function AdminPage() {
     } catch (error) {
       console.error('Erro ao buscar próxima escala:', error);
     }
-  };
-
-  const handleLogout = async () => {
-    await signOut();
-    router.push('/');
-  };
+  }, [user]);
 
   const getTipoCultoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
@@ -103,6 +82,20 @@ export default function AdminPage() {
     };
     return labels[tipo] || tipo;
   };
+
+  // --- EFEITOS ---
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    if (user) {
+      buscarProximaEscala();
+    }
+  }, [user, buscarProximaEscala]);
 
   if (loading) {
     return (

@@ -17,10 +17,10 @@ const supabaseAdmin = createClient(
 // ============================================
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Corrigido: Agora é Promise
 ) {
   try {
-    const { id } = params;
+    const { id } = await params; // Corrigido: Adicionado await
 
     const { data: pessoa, error } = await supabaseAdmin
       .from('pessoas')
@@ -71,10 +71,10 @@ export async function GET(
 // ============================================
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Corrigido: Agora é Promise
 ) {
   try {
-    const { id } = params;
+    const { id } = await params; // Corrigido: Adicionado await
     const body = await request.json();
     
     const { nome, cargo, email, telefone, ativo, observacoes } = body;
@@ -82,7 +82,7 @@ export async function PATCH(
     // Verificar se pessoa existe
     const { data: pessoaExistente } = await supabaseAdmin
     .from('pessoas')
-    .select('id, nome, tem_acesso, email')  // ✅ agora tem email
+    .select('id, nome, tem_acesso, email')
     .eq('id', id)
     .single();
 
@@ -151,10 +151,10 @@ export async function PATCH(
 // ============================================
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // Corrigido: Agora é Promise
 ) {
   try {
-    const { id } = params;
+    const { id } = await params; // Corrigido: Adicionado await
 
     // Verificar se pessoa existe
     const { data: pessoa } = await supabaseAdmin
