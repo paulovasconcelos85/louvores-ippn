@@ -333,7 +333,7 @@ export default function AceitarConvite() {
               </button>
 
               <p className="text-xs text-slate-500 text-center mt-6">
-                Ao aceitar, você terá acesso ao sistema de louvores da IPPN
+                Ao aceitar, você terá acesso ao OIKOS Hub - IPPN
               </p>
             </div>
           ) : (

@@ -116,7 +116,7 @@ export default function AdminPage() {
         {/* Welcome Card */}
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-8 text-white mb-8">
           <h2 className="text-3xl font-bold mb-2">
-            Bem-vindo ao Sistema de Gestão IPPN! 🎉
+            Bem-vindo ao OIKOS Hub - IPPN! 🎉
           </h2>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <p className="text-emerald-100">

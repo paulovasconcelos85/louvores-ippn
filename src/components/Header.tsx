@@ -40,7 +40,7 @@ export default function Header() {
               🎵
             </div>
             <div>
-              <p className="font-bold leading-tight">Sistema de Louvores IPPN</p>
+              <p className="font-bold leading-tight">OIKOS Hub - IPPN</p>
               <p className="text-xs text-slate-500">Painel</p>
             </div>
           </div>

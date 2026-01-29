@@ -92,7 +92,7 @@ export default function LoginPage() {
             <div className="h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
           </div>
           <p className="text-emerald-100 mt-3 text-sm">
-            Sistema de Louvores
+            OIKOS Hub
           </p>
         </div>
 

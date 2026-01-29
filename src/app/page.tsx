@@ -262,7 +262,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold">
-                  Sistema de Louvores IPPN
+                  OIKOS Hub - IPPN
                 </h1>
                 <p className="text-emerald-100 text-sm mt-1">
                   Igreja Presbiteriana Ponta Negra
@@ -445,7 +445,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center">
             <p className="text-emerald-100 text-sm">
-              Sistema de Louvores - Igreja Presbiteriana Ponta Negra
+              OIKOS Hub - Igreja Presbiteriana Ponta Negra
             </p>
             <p className="text-emerald-200/60 text-xs mt-2">
               Manaus, Amazonas

@@ -1105,7 +1105,7 @@ export default function GerenciarPessoas() {
                 <button
                   onClick={() => {
                     const msg = `Olá *${nomeConvidado}*! 👋\n\n` +
-                      `Você foi convidado(a) para acessar o *Sistema de Louvores* da Igreja Presbiteriana Ponta Negra.\n\n` +
+                      `Você foi convidado(a) para acessar o *OIKOS Hub* da Igreja Presbiteriana Ponta Negra.\n\n` +
                       `✅ *Clique aqui para aceitar:*\n${linkConvite}\n\n` +
                       `⏰ _Este convite expira em 7 dias._`;
                     
