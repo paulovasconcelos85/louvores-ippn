@@ -262,7 +262,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold">
-                  OIKOS Hub - IPPN
+                  Liturgias - IPPN
                 </h1>
                 <p className="text-emerald-100 text-sm mt-1">
                   Igreja Presbiteriana Ponta Negra
