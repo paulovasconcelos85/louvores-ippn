@@ -26,8 +26,6 @@ export default function AdminPage() {
 
   const loading = authLoading || permLoading;
 
-  // --- FUNÇÕES MOVIDAS PARA CIMA (RESOLVE O ERRO DE HOISTING) ---
-
   const buscarProximaEscala = useCallback(async () => {
     if (!user) return;
     
@@ -46,10 +44,10 @@ export default function AdminPage() {
           escalas_funcoes!inner (
             confirmado,
             tags_funcoes (nome),
-            usuarios_permitidos!inner (id)
+            pessoas!inner (id)
           )
         `)
-        .eq('escalas_funcoes.usuarios_permitidos.id', user.id)
+        .eq('escalas_funcoes.pessoas.id', user.id)
         .gte('data', dataHoje)
         .in('status', ['publicada', 'rascunho'])
         .order('data', { ascending: true })
@@ -57,7 +55,6 @@ export default function AdminPage() {
 
       if (!error && data && data.length > 0) {
         const escala = data[0];
-        // Tipagem corrigida para evitar erro de 'any'
         const funcoes = escala.escalas_funcoes as unknown as any[];
         setProximaEscala({
           escala_id: escala.id,
@@ -82,8 +79,6 @@ export default function AdminPage() {
     };
     return labels[tipo] || tipo;
   };
-
-  // --- EFEITOS ---
 
   useEffect(() => {
     if (!loading && !user) {
@@ -112,13 +107,16 @@ export default function AdminPage() {
     return null;
   }
 
+  const podeAcessarMembros = permissoes.isSuperAdmin || 
+    ['admin', 'pastor', 'presbitero', 'seminarista'].includes(usuarioPermitido?.cargo || '');
+
   return (
     <div className="min-h-screen bg-slate-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Card */}
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-8 text-white mb-8">
           <h2 className="text-3xl font-bold mb-2">
-            Bem-vindo ao Sistema de Louvores! 🎉
+            Bem-vindo ao Sistema de Gestão IPPN! 🎉
           </h2>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <p className="text-emerald-100">
@@ -137,7 +135,7 @@ export default function AdminPage() {
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 inline-block">
             <p className="text-sm">
-              ✨ Gerencie cultos, músicas, letras e cifras
+              ✨ Gerencie cultos, músicas, escalas e membros
             </p>
           </div>
         </div>
@@ -230,12 +228,32 @@ export default function AdminPage() {
             </button>
           )}
 
-          {permissoes.podeGerenciarEscalas && (
+          {podeAcessarMembros && (
             <button
-              onClick={() => router.push('/admin/escalas')}
+              onClick={() => router.push('/admin/membros')}
               className="bg-white rounded-xl p-6 shadow-sm border-2 border-blue-600 hover:shadow-lg transition-all text-left group"
             >
               <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <span className="text-2xl">🐑</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                Pastorear Membros
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                Acompanhamento e cuidado pastoral
+              </p>
+              <span className="text-xs text-blue-700 font-semibold bg-blue-100 px-3 py-1 rounded-full">
+                ✓ Disponível
+              </span>
+            </button>
+          )}
+
+          {permissoes.podeGerenciarEscalas && (
+            <button
+              onClick={() => router.push('/admin/escalas')}
+              className="bg-white rounded-xl p-6 shadow-sm border-2 border-purple-600 hover:shadow-lg transition-all text-left group"
+            >
+              <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <span className="text-2xl">📋</span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
@@ -244,7 +262,7 @@ export default function AdminPage() {
               <p className="text-slate-600 text-sm mb-4">
                 Crie e organize as escalas de músicos
               </p>
-              <span className="text-xs text-blue-700 font-semibold bg-blue-100 px-3 py-1 rounded-full">
+              <span className="text-xs text-purple-700 font-semibold bg-purple-100 px-3 py-1 rounded-full">
                 ✓ Disponível
               </span>
             </button>

@@ -24,7 +24,7 @@ interface Culto {
 
 export default function Home() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const [cultos, setCultos] = useState<Culto[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -72,104 +72,101 @@ export default function Home() {
     return `${day}/${month}/${year}`;
   };
 
-  // Gera mensagem para WhatsApp com ESCALA integrada
+  // Gera mensagem para WhatsApp com LITURGIA COMPLETA e ESCALA integrada (SE logado)
   const gerarMensagemWhatsApp = async (culto: Culto) => {
     const musicas = getMusicas(culto);
     const data = formatDateShort(culto.Dia);
     
-    // 🎯 Buscar escala do culto
+    // 🎯 Buscar escala do culto (SOMENTE SE LOGADO)
     let escalaTexto = '';
-    try {
-      const dataCulto = culto.Dia.split('T')[0];
-      
-      const { data: escalas } = await supabase
-        .from('escalas')
-        .select('id')
-        .eq('data', dataCulto)
-        .eq('tipo_culto', 'dominical_manha')
-        .single();
+    if (user) {
+      try {
+        const dataCulto = culto.Dia.split('T')[0];
+        
+        const { data: escalas } = await supabase
+          .from('escalas')
+          .select('id')
+          .eq('data', dataCulto)
+          .eq('tipo_culto', 'dominical_manha')
+          .single();
 
-      if (escalas) {
-        const { data: funcoes } = await supabase
-          .from('escalas_funcoes')
-          .select(`
-            ordem,
-            tags_funcoes (nome),
-            usuarios_permitidos (nome)
-          `)
-          .eq('escala_id', escalas.id)
-          .order('ordem', { ascending: true });
+        if (escalas) {
+          const { data: funcoes } = await supabase
+            .from('escalas_funcoes')
+            .select(`
+              ordem,
+              tags_funcoes (nome),
+              pessoas (nome)
+            `)
+            .eq('escala_id', escalas.id)
+            .order('ordem', { ascending: true });
 
-        if (funcoes && funcoes.length > 0) {
-          escalaTexto = '\n-----\n\n*ESCALA*\n';
-          funcoes.forEach((f: any) => {
-            escalaTexto += `• ${f.tags_funcoes?.nome}: ${f.usuarios_permitidos?.nome}\n`;
-          });
+          if (funcoes && funcoes.length > 0) {
+            escalaTexto = '\n━━━━━━━━━━━━━━━\n\n*ESCALA DO CULTO*\n';
+            funcoes.forEach((f: any) => {
+              escalaTexto += `• ${f.tags_funcoes?.nome}: ${f.pessoas?.nome}\n`;
+            });
+          }
         }
+      } catch (error) {
+        console.error('Erro ao buscar escala:', error);
       }
-    } catch (error) {
-      console.error('Erro ao buscar escala:', error);
-    }
+    }  
     
-    let mensagem = `CÂNTICOS DO CULTO DE *${data}*\n🎼🎵🎶\n\n`;
+    let mensagem = `*LITURGIA DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
+    
+    // PARTE 1: TÍTULOS DA LITURGIA
+    mensagem += `🎹 *PRELÚDIO*\n`;
+    mensagem += `👋 *SAUDAÇÃO E ACOLHIDA À IGREJA*\n`;
+    mensagem += `🎤 *CÂNTICOS CONGREGACIONAIS*\n`;
+    mensagem += `🙏 *CONFISSÃO DE PECADOS*\n`;
+    mensagem += `💰 *DÍZIMOS E OFERTAS*\n`;
+    mensagem += `🎤 *CÂNTICOS OFERTA*\n`;
+    mensagem += `📖 *PREGAÇÃO DA PALAVRA*\n`;
+    mensagem += `🎤 *CÂNTICO FINAL - POSLÚDIO*\n`;
+    mensagem += `✋ *ORAÇÃO - BÊNÇÃO APOSTÓLICA*\n`;
+    mensagem += `📢 *LEMBRETES - LITURGO*\n`;
+    
+    // PARTE 2: LISTA DE CÂNTICOS NUMERADOS
+    mensagem += `\n━━━━━━━━━━━━━━━\n\n*CÂNTICOS DO CULTO:*\n`;
     
     let numeroSequencial = 1;
     
     // Prelúdio
     const preludio = musicas.find(m => m.tipo === 'Prelúdio');
     if (preludio) {
-      mensagem += `🎹 *PRELÚDIO*\n`;
-      mensagem += `${numeroSequencial}. ${preludio.nome}${preludio.tom ? ` (${preludio.tom})` : ''}\n\n`;
+      mensagem += `${numeroSequencial}. ${preludio.nome}${preludio.tom ? ` (${preludio.tom})` : ''}\n`;
       numeroSequencial++;
     }
     
-    // Salmo (Leitura Inicial) - SEM NÚMERO
-    const salmo = musicas.find(m => m.tipo === 'Salmo');
-    if (salmo) {
-      mensagem += `📖 *LEITURA INICIAL*\n`;
-      mensagem += `${salmo.nome}${salmo.tom ? ` (${salmo.tom})` : ''}\n\n`;
-    }
-    
-    // Cânticos de Ministração
+    // Cânticos Congregacionais
     const canticos = musicas.filter(m => m.tipo.startsWith('Cântico'));
-    if (canticos.length > 0) {
-      mensagem += `🎤 *MINISTRAÇÃO LOUVOR*\n`;
-      canticos.forEach(c => {
-        mensagem += `${numeroSequencial}. ${c.nome}${c.tom ? ` (${c.tom})` : ''}\n`;
-        numeroSequencial++;
-      });
-      mensagem += '\n';
-    }
+    canticos.forEach(c => {
+      mensagem += `${numeroSequencial}. ${c.nome}${c.tom ? ` (${c.tom})` : ''}\n`;
+      numeroSequencial++;
+    });
     
     // Oferta
     const oferta = musicas.find(m => m.tipo === 'Oferta');
     if (oferta) {
-      mensagem += `💰 *OFERTA*\n`;
-      mensagem += `${numeroSequencial}. ${oferta.nome}${oferta.tom ? ` (${oferta.tom})` : ''}\n\n`;
+      mensagem += `${numeroSequencial}. ${oferta.nome}${oferta.tom ? ` (${oferta.tom})` : ''}\n`;
       numeroSequencial++;
     }
     
-    // Pregação - SEMPRE APARECE
-    mensagem += `📖 *PREGAÇÃO*\n\n`;
+    // Pósludio (Cântico Final)
+    const posludio = musicas.find(m => m.tipo === 'Pósludio');
+    if (posludio) {
+      mensagem += `${numeroSequencial}. ${posludio.nome}${posludio.tom ? ` (${posludio.tom})` : ''}\n`;
+      numeroSequencial++;
+    }
     
     // Ceia (se houver)
     const ceia = musicas.find(m => m.tipo === 'Ceia');
     if (ceia) {
-      mensagem += `🥖 *CEIA*\n`;
-      mensagem += `${numeroSequencial}. ${ceia.nome}${ceia.tom ? ` (${ceia.tom})` : ''}\n\n`;
-      numeroSequencial++;
+      mensagem += `${numeroSequencial}. ${ceia.nome}${ceia.tom ? ` (${ceia.tom})` : ''}\n`;
     }
     
-    // Pósludio
-    const posludio = musicas.find(m => m.tipo === 'Pósludio');
-    if (posludio) {
-      mensagem += `🎺 *PÓSLÚDIO*\n`;
-      mensagem += `${numeroSequencial}. ${posludio.nome}${posludio.tom ? ` (${posludio.tom})` : ''}\n\n`;
-    }
-    
-    mensagem += `🙏 *AMÉM TRÍPLICE*`;
-    
-    // Adicionar escala no final
+    // PARTE 3: ESCALA
     mensagem += escalaTexto;
     
     return mensagem;
@@ -182,7 +179,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (user === undefined) return;
+    // ✅ CORREÇÃO: Espera o auth carregar antes de buscar cultos
+    if (authLoading) return;
     
     async function fetchCultos() {
       setLoading(true);
@@ -198,7 +196,7 @@ export default function Home() {
       let dataDeCorteFuturos: Date;
 
       if (user) {
-        // Administrador: Vê tudo (14 dias à frente)
+        // Usuário Logado: Vê tudo (14 dias à frente)
         dataDeCorteFuturos = new Date();
         dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
       } else {
@@ -250,7 +248,7 @@ export default function Home() {
     }
 
     fetchCultos();
-  }, [page, user?.id]);
+  }, [page, user, authLoading]); // ✅ CORREÇÃO: user completo + authLoading
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -403,7 +401,9 @@ export default function Home() {
                         key={idx}
                         className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
                       >
-                        <div className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-600 mt-2"></div>
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-700 text-white font-bold text-sm flex items-center justify-center">
+                          {idx + 1}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-emerald-700 uppercase mb-1">
                             {musica.tipo}

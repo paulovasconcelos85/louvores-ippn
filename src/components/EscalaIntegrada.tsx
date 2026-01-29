@@ -10,15 +10,41 @@ interface EscalaIntegradaProps {
 }
 
 // Ordem das categorias (baseado no schema do banco)
-const ORDEM_CATEGORIAS = ['lideranca', 'vocal', 'instrumento', 'tecnica', 'apoio'];
+const ORDEM_CATEGORIAS = [
+  'lideranca_pastor',
+  'lideranca_presbitero', 
+  'lideranca_diacono',
+  'lideranca',
+  'louvor_lideranca',
+  'louvor_vocal',
+  'louvor_instrumento',
+  'instrumento',
+  'tecnica',
+  'tecnico_audio',
+  'tecnico_video',
+  'ministerio_infantil',
+  'apoio_seguranca',
+  'apoio_geral',
+  'apoio'
+];
 
 // Labels amigáveis
 const LABELS_CATEGORIAS: Record<string, string> = {
-  lideranca: '📖 Liderança',
-  vocal: '🎤 Vozes',
-  instrumento: '🎸 Instrumentos',
+  lideranca_pastor: '⛪ Pastor',
+  lideranca_presbitero: '📖 Presbítero',
+  lideranca_diacono: '🤝 Diácono',
+  lideranca: '👔 Liderança',
+  louvor_lideranca: '🎤 Ministração',
+  louvor_vocal: '🎵 Vozes',
+  louvor_instrumento: '🎸 Instrumentos',
+  instrumento: '🎹 Instrumentos',
   tecnica: '🎛️ Técnica',
-  apoio: '👥 Apoio'
+  tecnico_audio: '🔊 Áudio',
+  tecnico_video: '📹 Vídeo',
+  ministerio_infantil: '👶 Ministério Infantil',
+  apoio_seguranca: '🛡️ Segurança',
+  apoio_geral: '👥 Apoio',
+  apoio: '🤲 Apoio'
 };
 
 export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaIntegradaProps) {

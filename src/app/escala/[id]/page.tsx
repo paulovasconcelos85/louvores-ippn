@@ -25,7 +25,7 @@ interface EscalaFuncao {
   confirmado: boolean;
   observacoes?: string;
   tags_funcoes: Tag;
-  usuarios_permitidos: Usuario;
+  pessoas: Usuario;
 }
 
 interface Escala {
@@ -82,7 +82,7 @@ export default function EscalaPublicaPage() {
   useEffect(() => {
     if (escala && user) {
       const funcoes = escala.escalas_funcoes.filter(
-        f => f.usuarios_permitidos.id === user.id
+        f => f.pessoas.id === user.id
       );
       setMinhasFuncoes(funcoes);
     }
@@ -108,7 +108,7 @@ export default function EscalaPublicaPage() {
               cor,
               icone
             ),
-            usuarios_permitidos (
+            pessoas (
               id,
               nome,
               email

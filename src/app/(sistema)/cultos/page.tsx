@@ -866,14 +866,14 @@ export default function CultosPage() {
         .select(`
           ordem,
           tags_funcoes(nome),
-          usuarios_permitidos(nome)
+          pessoas(nome)
         `)
         .eq('escala_id', escala.id)
         .order('ordem');
 
       if (funcoes && funcoes.length > 0) {
         funcoes.forEach((f: any) => {
-          texto += `- ${f.tags_funcoes.nome}: ${f.usuarios_permitidos.nome}\n`;
+          texto += `- ${f.tags_funcoes.nome}: ${f.pessoas.nome}\n`;
         });
       } else {
         // escala existe, mas está vazia
