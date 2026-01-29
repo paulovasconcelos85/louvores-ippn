@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { 
+  Building2, 
+  Eye, 
+  Music, 
+  Church, 
+  Calendar,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { EscalaIntegrada } from '@/components/EscalaIntegrada';
@@ -258,7 +267,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
-                <span className="text-2xl">🎵</span>
+                <Building2 className="w-6 h-6" />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold">
@@ -306,7 +315,7 @@ export default function Home() {
         {user && (
           <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
             <div className="flex items-start gap-3">
-              <span className="text-2xl">👁️</span>
+              <Eye className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-blue-900">
                   Você está logado e pode ver cultos futuros
@@ -338,7 +347,7 @@ export default function Home() {
 
           {!loading && cultos.length === 0 && (
             <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-slate-200">
-              <span className="text-6xl mb-4 block">🎵</span>
+              <Music className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">Nenhum culto cadastrado ainda</p>
             </div>
           )}
@@ -364,9 +373,10 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-3">
                       {user && new Date(culto.Dia) > new Date() && (
-                        <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-300/30 px-3 py-1 rounded-lg">
+                        <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-300/30 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-amber-100" />
                           <span className="text-xs font-semibold text-amber-100">
-                            🔜 Próximo
+                            Próximo
                           </span>
                         </div>
                       )}
@@ -381,7 +391,7 @@ export default function Home() {
                         <span className="hidden sm:inline">WhatsApp</span>
                       </button>
                       <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                        <span className="text-2xl">🎶</span>
+                        <Church className="w-6 h-6 text-white" />
                       </div>
                     </div>
                   </div>
@@ -426,16 +436,18 @@ export default function Home() {
           <div className="flex justify-center gap-4 mt-8">
             <button
               onClick={() => setPage(p => Math.max(p - 1, 0))}
-              className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={page === 0}
             >
-              ← Anteriores
+              <ChevronLeft className="w-4 h-4" />
+              Anteriores
             </button>
             <button
               onClick={() => setPage(p => p + 1)}
-              className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm"
+              className="flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm"
             >
-              Próximos →
+              Próximos
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </section>

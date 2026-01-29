@@ -1,7 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Users, Loader2 } from 'lucide-react';
+import { 
+  ChevronDown, 
+  ChevronUp, 
+  Users, 
+  Loader2,
+  Church,
+  BookOpen,
+  Handshake,
+  User,
+  Mic2,
+  Music2,
+  Guitar,
+  Piano,
+  Sliders,
+  Volume2,
+  Video,
+  Baby,
+  Shield,
+  UsersRound,
+  Heart,
+  CheckCircle2,
+  Clock
+} from 'lucide-react';
 import { useEscalaDoCulto } from '@/hooks/useEscalaDoCulto';
 
 interface EscalaIntegradaProps {
@@ -28,23 +50,42 @@ const ORDEM_CATEGORIAS = [
   'apoio'
 ];
 
+// Ícones por categoria
+const ICONES_CATEGORIAS: Record<string, any> = {
+  lideranca_pastor: Church,
+  lideranca_presbitero: BookOpen,
+  lideranca_diacono: Handshake,
+  lideranca: User,
+  louvor_lideranca: Mic2,
+  louvor_vocal: Music2,
+  louvor_instrumento: Guitar,
+  instrumento: Piano,
+  tecnica: Sliders,
+  tecnico_audio: Volume2,
+  tecnico_video: Video,
+  ministerio_infantil: Baby,
+  apoio_seguranca: Shield,
+  apoio_geral: UsersRound,
+  apoio: Heart
+};
+
 // Labels amigáveis
 const LABELS_CATEGORIAS: Record<string, string> = {
-  lideranca_pastor: '⛪ Pastor',
-  lideranca_presbitero: '📖 Presbítero',
-  lideranca_diacono: '🤝 Diácono',
-  lideranca: '👔 Liderança',
-  louvor_lideranca: '🎤 Ministração',
-  louvor_vocal: '🎵 Vozes',
-  louvor_instrumento: '🎸 Instrumentos',
-  instrumento: '🎹 Instrumentos',
-  tecnica: '🎛️ Técnica',
-  tecnico_audio: '🔊 Áudio',
-  tecnico_video: '📹 Vídeo',
-  ministerio_infantil: '👶 Ministério Infantil',
-  apoio_seguranca: '🛡️ Segurança',
-  apoio_geral: '👥 Apoio',
-  apoio: '🤲 Apoio'
+  lideranca_pastor: 'Pastor',
+  lideranca_presbitero: 'Presbítero',
+  lideranca_diacono: 'Diácono',
+  lideranca: 'Liderança',
+  louvor_lideranca: 'Ministração',
+  louvor_vocal: 'Vozes',
+  louvor_instrumento: 'Instrumentos',
+  instrumento: 'Instrumentos',
+  tecnica: 'Técnica',
+  tecnico_audio: 'Áudio',
+  tecnico_video: 'Vídeo',
+  ministerio_infantil: 'Ministério Infantil',
+  apoio_seguranca: 'Segurança',
+  apoio_geral: 'Apoio',
+  apoio: 'Apoio'
 };
 
 export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaIntegradaProps) {
@@ -108,10 +149,12 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
               {categoriasOrdenadas.map((categoria) => {
                 const funcoes = funcoesPorCategoria![categoria];
                 const label = LABELS_CATEGORIAS[categoria] || categoria;
+                const IconeCategoria = ICONES_CATEGORIAS[categoria] || User;
                 
                 return (
                   <div key={categoria}>
-                    <h4 className="text-xs font-semibold text-emerald-100 uppercase mb-2 px-2">
+                    <h4 className="text-xs font-semibold text-emerald-100 uppercase mb-2 px-2 flex items-center gap-2">
+                      <IconeCategoria className="w-3.5 h-3.5" />
                       {label}
                     </h4>
                     <div className="space-y-1.5">
@@ -136,13 +179,23 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
                             </div>
                           </div>
                           <span
-                            className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold ${
                               funcao.confirmado
                                 ? 'bg-green-500/30 text-green-100'
                                 : 'bg-yellow-500/30 text-yellow-100'
                             }`}
                           >
-                            {funcao.confirmado ? '✓ Confirmado' : '⏱ Pendente'}
+                            {funcao.confirmado ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3" />
+                                Confirmado
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3 h-3" />
+                                Pendente
+                              </>
+                            )}
                           </span>
                         </div>
                       ))}

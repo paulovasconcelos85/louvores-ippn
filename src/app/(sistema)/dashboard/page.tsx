@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { 
+  BarChart3,
+  Music,
+  TrendingUp,
+  Award,
+  Calendar,
+  Globe,
+  Trophy,
+  Target,
+  Activity
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -274,7 +285,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
 
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">📊 Dashboard de Louvores</h1>
+        <h1 className="text-3xl font-bold text-slate-800 mb-2 flex items-center gap-3">
+          <BarChart3 className="w-8 h-8 text-emerald-600" />
+          Dashboard de Louvores
+        </h1>
         <p className="text-slate-600">Análise completa de execuções e tendências</p>
       </div>
 
@@ -283,13 +297,16 @@ export default function DashboardPage() {
         <h3 className="font-semibold text-slate-700 mb-3">Filtros</h3>
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-sm text-slate-600 mb-1">Ano</label>
+            <label className="block text-sm text-slate-600 mb-1 flex items-center gap-2">
+              <Globe className="w-4 h-4" />
+              Ano
+            </label>
             <select
               value={ano || ''}
               onChange={e => setAno(e.target.value ? Number(e.target.value) : null)}
               className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             >
-              <option value="">🌍 Todos os anos</option>
+              <option value="">Todos os anos</option>
               {anos.map(a => (
                 <option key={a} value={a}>{a}</option>
               ))}
@@ -297,13 +314,16 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex-1">
-            <label className="block text-sm text-slate-600 mb-1">Mês</label>
+            <label className="block text-sm text-slate-600 mb-1 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Mês
+            </label>
             <select
               value={mes || ''}
               onChange={e => setMes(e.target.value ? Number(e.target.value) : null)}
               className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             >
-              <option value="">📅 Todos os meses</option>
+              <option value="">Todos os meses</option>
               {[
                 { v: 1, n: 'Janeiro' }, { v: 2, n: 'Fevereiro' }, { v: 3, n: 'Março' },
                 { v: 4, n: 'Abril' }, { v: 5, n: 'Maio' }, { v: 6, n: 'Junho' },
@@ -320,27 +340,42 @@ export default function DashboardPage() {
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-emerald-100 text-sm mb-1">Total de Execuções</p>
+          <p className="text-emerald-100 text-sm mb-1 flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Total de Execuções
+          </p>
           <p className="text-3xl font-bold">{totalExecucoes}</p>
         </div>
         
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-blue-100 text-sm mb-1">Cânticos Únicos</p>
+          <p className="text-blue-100 text-sm mb-1 flex items-center gap-2">
+            <Music className="w-4 h-4" />
+            Cânticos Únicos
+          </p>
           <p className="text-3xl font-bold">{totalCanticos}</p>
         </div>
         
         <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-indigo-100 text-sm mb-1">Total de Cultos</p>
+          <p className="text-indigo-100 text-sm mb-1 flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Total de Cultos
+          </p>
           <p className="text-3xl font-bold">{totalCultos}</p>
         </div>
         
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-purple-100 text-sm mb-1">Média/Culto</p>
+          <p className="text-purple-100 text-sm mb-1 flex items-center gap-2">
+            <Target className="w-4 h-4" />
+            Média/Culto
+          </p>
           <p className="text-3xl font-bold">{mediaPorCulto.toFixed(1)}</p>
         </div>
         
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-5 rounded-xl shadow-lg">
-          <p className="text-orange-100 text-sm mb-1">Mais Cantado</p>
+          <p className="text-orange-100 text-sm mb-1 flex items-center gap-2">
+            <Award className="w-4 h-4" />
+            Mais Cantado
+          </p>
           <p className="text-sm font-semibold truncate">{maisCantado || '-'}</p>
         </div>
       </div>
@@ -349,7 +384,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl p-6 shadow-lg mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-            <span className="text-2xl">🎵</span>
+            <Music className="w-6 h-6 text-emerald-600" />
             Cânticos das Últimas 4 Semanas
           </h2>
           <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-semibold">
@@ -392,7 +427,10 @@ export default function DashboardPage() {
           
           {/* Gráfico de Barras - Top 10 */}
           <div className="bg-white rounded-xl p-6 shadow-lg">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">🏆 Top 10 Cânticos Mais Cantados</h2>
+            <h2 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+              Top 10 Cânticos Mais Cantados
+            </h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={ranking.slice(0, 10)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -414,7 +452,10 @@ export default function DashboardPage() {
 
           {/* Gráfico de Pizza - Top 5 */}
           <div className="bg-white rounded-xl p-6 shadow-lg">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">🎯 Distribuição Top 5</h2>
+            <h2 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+              <Target className="w-5 h-5 text-blue-500" />
+              Distribuição Top 5
+            </h2>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -444,7 +485,10 @@ export default function DashboardPage() {
 
           {/* Gráfico de Linha - Evolução Mensal */}
           <div className="bg-white rounded-xl p-6 shadow-lg">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">📈 Evolução Mensal</h2>
+            <h2 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-500" />
+              Evolução Mensal
+            </h2>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={evolucaoMensal}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -473,7 +517,10 @@ export default function DashboardPage() {
 
           {/* Gráfico de Barras - Tons Mais Tocados */}
           <div className="bg-white rounded-xl p-6 shadow-lg">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">🎼 Tons Mais Tocados</h2>
+            <h2 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+              <Music className="w-5 h-5 text-purple-500" />
+              Tons Mais Tocados
+            </h2>
             {rankingTons.length === 0 ? (
               <div className="flex items-center justify-center h-[300px] text-slate-400">
                 Nenhum tom registrado
@@ -498,7 +545,10 @@ export default function DashboardPage() {
 
           {/* Tabela de Ranking Completo */}
           <div className="bg-white rounded-xl p-6 shadow-lg lg:col-span-2">
-            <h2 className="font-bold text-lg mb-4 text-slate-800">📋 Ranking Completo</h2>
+            <h2 className="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-slate-600" />
+              Ranking Completo
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -517,9 +567,11 @@ export default function DashboardPage() {
                     >
                       <td className="py-3 px-4">
                         {idx < 3 ? (
-                          <span className="text-xl">
-                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                          </span>
+                          <Trophy className={`w-5 h-5 ${
+                            idx === 0 ? 'text-yellow-500' : 
+                            idx === 1 ? 'text-gray-400' : 
+                            'text-amber-600'
+                          }`} />
                         ) : (
                           <span className="text-slate-500">{idx + 1}</span>
                         )}

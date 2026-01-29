@@ -1,7 +1,7 @@
 // lib/permissions.ts
 import { ADMIN_EMAILS } from './admin-config';
 
-export type CargoTipo = 'pastor' | 'seminarista' | 'presbitero' | 'staff' | 'musico' | 'admin';
+export type CargoTipo = 'membro' | 'pastor' | 'seminarista' | 'presbitero' | 'staff' | 'musico' | 'admin';
 
 export interface UsuarioPermitido {
   id: string;
@@ -15,6 +15,7 @@ export interface UsuarioPermitido {
 }
 
 // Cargos que podem acessar o painel administrativo
+// ⚠️ NOTA: 'membro' NÃO está nesta lista - membros são apenas cadastros sem acesso ao sistema
 export const CARGOS_ACESSO_ADMIN: CargoTipo[] = [
   'pastor',
   'presbitero',
@@ -106,6 +107,7 @@ export function podeGerenciarConteudo(cargo: CargoTipo | null): boolean {
  */
 export function getCargoLabel(cargo: CargoTipo): string {
   const labels: Record<CargoTipo, string> = {
+    membro: 'Membro',
     pastor: 'Pastor',
     seminarista: 'Seminarista',
     presbitero: 'Presbítero',
@@ -121,6 +123,7 @@ export function getCargoLabel(cargo: CargoTipo): string {
  */
 export function getCargoCor(cargo: CargoTipo): string {
   const cores: Record<CargoTipo, string> = {
+    membro: 'bg-slate-100 text-slate-700',
     pastor: 'bg-purple-100 text-purple-800',
     seminarista: 'bg-blue-100 text-blue-800',
     presbitero: 'bg-indigo-100 text-indigo-800',
@@ -136,6 +139,7 @@ export function getCargoCor(cargo: CargoTipo): string {
  */
 export function getCargoIcone(cargo: CargoTipo): string {
   const icones: Record<CargoTipo, string> = {
+    membro: '👤',
     pastor: '📖',
     seminarista: '📚',
     presbitero: '👔',
