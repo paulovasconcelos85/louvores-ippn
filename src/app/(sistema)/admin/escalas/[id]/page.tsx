@@ -66,6 +66,15 @@ interface Escala {
   status: 'rascunho' | 'publicada' | 'concluida';
   culto_id?: number;
   escalas_funcoes: EscalaFuncao[];
+  canticos?: Cantico[];
+}
+
+interface Cantico {
+  id: string;
+  nome: string;
+  tags: string[] | null;
+  youtube_url: string | null;
+  spotify_url: string | null;
 }
 
 // 🎵 APENAS CATEGORIAS MUSICAIS E TÉCNICAS

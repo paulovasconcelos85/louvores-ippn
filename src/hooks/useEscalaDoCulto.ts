@@ -20,11 +20,20 @@ interface Funcao {
   usuario: Usuario;
 }
 
+interface Cantico {
+  id: string;
+  nome: string;
+  tags: string[] | null;
+  youtube_url: string | null;
+  spotify_url: string | null;
+}
+
 interface Escala {
   id: string;
   titulo: string;
   status: string;
   funcoes: Funcao[];
+  canticos: Cantico[];  // 👈 NOVA PROPRIEDADE
 }
 
 export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true) {
@@ -40,10 +49,10 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
       try {
         setLoading(true);
 
-        // 1. Buscar escala para esta data
+        // 1. Buscar escala para esta data (incluindo culto_id agora)
         const { data: escalas, error: escalaError } = await supabase
           .from('escalas')
-          .select('id, titulo, status')
+          .select('id, titulo, status, culto_id')
           .eq('data', dataCulto)
           .maybeSingle();
 
@@ -71,36 +80,60 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
           return;
         }
 
-        if (!funcoes || funcoes.length === 0) {
-          setEscala({
-            id: escalas.id,
-            titulo: escalas.titulo,
-            status: escalas.status,
-            funcoes: []
-          });
-          return;
-        }
-
         // 3. Buscar tags das funções
-        const tagIds = funcoes.map(f => f.tag_id).filter(Boolean);
+        const tagIds = (funcoes || []).map(f => f.tag_id).filter(Boolean);
         const { data: tags } = await supabase
           .from('tags_funcoes')
           .select('id, nome, categoria, cor')
           .in('id', tagIds);
 
         // 4. Buscar pessoas escaladas
-        const pessoaIds = funcoes.map(f => f.pessoa_id).filter(Boolean);
+        const pessoaIds = (funcoes || []).map(f => f.pessoa_id).filter(Boolean);
         const { data: pessoas } = await supabase
           .from('pessoas')
           .select('id, nome, email')
           .in('id', pessoaIds);
 
-        // 5. Criar maps para lookup rápido
+        // 5. 🎵 BUSCAR CÂNTICOS DO CULTO
+        let canticos: Cantico[] = [];
+        
+        if (escalas.culto_id) {
+          // Buscar louvor_itens que têm cantico_id
+          const { data: louvorItens, error: louvorError } = await supabase
+            .from('louvor_itens')
+            .select('cantico_id')
+            .eq('culto_id', escalas.culto_id)
+            .not('cantico_id', 'is', null)
+            .order('ordem', { ascending: true });
+
+          if (!louvorError && louvorItens && louvorItens.length > 0) {
+            // Buscar os cânticos pelos IDs encontrados
+            const canticoIds = louvorItens
+              .map(item => item.cantico_id)
+              .filter(Boolean);
+
+            if (canticoIds.length > 0) {
+              const { data: canticosData } = await supabase
+                .from('canticos')
+                .select('id, nome, tags, youtube_url, spotify_url')
+                .in('id', canticoIds);
+
+              if (canticosData) {
+                // Manter a ordem dos cânticos conforme aparecem em louvor_itens
+                canticos = canticoIds
+                  .map(id => canticosData.find(c => c.id === id))
+                  .filter((c): c is Cantico => c !== undefined);
+              }
+            }
+          }
+        }
+
+        // 6. Criar maps para lookup rápido
         const tagsMap = new Map(tags?.map(t => [t.id, t]) || []);
         const pessoasMap = new Map(pessoas?.map(p => [p.id, p]) || []);
 
-        // 6. Montar funções completas
-        const funcoesFormatadas: Funcao[] = funcoes.map(f => {
+        // 7. Montar funções completas
+        const funcoesFormatadas: Funcao[] = (funcoes || []).map(f => {
           const tag = tagsMap.get(f.tag_id);
           const pessoa = pessoasMap.get(f.pessoa_id);
 
@@ -124,7 +157,8 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
           id: escalas.id,
           titulo: escalas.titulo,
           status: escalas.status,
-          funcoes: funcoesFormatadas
+          funcoes: funcoesFormatadas,
+          canticos  // 👈 INCLUINDO OS CÂNTICOS
         });
 
       } catch (error) {

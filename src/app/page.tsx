@@ -20,6 +20,7 @@ interface LouvorItem {
   ordem: number;
   tipo: string;
   tom: string | null;
+  descricao: string | null;
   canticos: {
     nome: string;
   } | null;
@@ -28,6 +29,7 @@ interface LouvorItem {
 interface Culto {
   'Culto nr.': number;
   Dia: string;
+  imagem_url: string | null;
   louvor_itens: LouvorItem[];
 }
 
@@ -70,6 +72,7 @@ export default function Home() {
         tipo: tipoExibicao,
         nome: item.canticos?.nome || '',
         tom: item.tom,
+        descricao: item.descricao,
       };
     });
   };
@@ -233,11 +236,13 @@ export default function Home() {
         .select(`
           "Culto nr.",
           Dia,
+          imagem_url,
           louvor_itens (
             id,
             ordem,
             tipo,
             tom,
+            descricao,
             canticos (
               nome
             )
@@ -405,6 +410,15 @@ export default function Home() {
                 </div>
 
                 <div className="p-6">
+                  {culto.imagem_url && (
+                    <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 flex justify-center">
+                      <img 
+                        src={culto.imagem_url} 
+                        alt={`Tema do Culto #${culto['Culto nr.']}`} 
+                        className="max-w-full h-auto max-h-[500px] object-contain"
+                      />
+                    </div>
+                  )}
                   <div className="grid sm:grid-cols-2 gap-3">
                     {getMusicas(culto).map((musica, idx) => (
                       <div
@@ -424,6 +438,11 @@ export default function Home() {
                           >
                             {musica.nome} {musica.tom && `(${musica.tom})`}
                           </p>
+                          {musica.descricao && musica.tipo === 'Pregação da Palavra' && (
+                            <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">
+                              {musica.descricao}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
