@@ -102,7 +102,12 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
   const [open, setOpen] = useState(false);
   useEffect(() => { setQuery(value?.nome || ''); }, [value]);
 
-  const filtrados = canticos.filter((c: any) => c.nome.toLowerCase().includes(query.toLowerCase()));
+  const filtrados = canticos.filter((c: any) => {
+    const termo = query.toLowerCase();
+    const nomeMatch = c.nome.toLowerCase().includes(termo);
+    const numeroMatch = c.numero && c.numero.includes(termo);
+    return nomeMatch || numeroMatch;
+  });
 
   return (
     <div className="relative w-full">
@@ -112,19 +117,29 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         className="w-full border-2 border-slate-100 rounded-xl p-3 text-sm focus:border-emerald-600 outline-none bg-white disabled:bg-slate-50 transition-all"
-        placeholder="Selecione o cântico..."
+        placeholder="Selecione o cântico (nome ou número)..."
       />
       {open && query && !disabled && (
         <div className="absolute z-50 bg-white border-2 border-slate-200 rounded-xl mt-1 w-full max-h-60 overflow-auto shadow-xl">
           {filtrados.map((c: any) => {
             const status = getStatusMusica(c.ultima_vez);
+            const ehHinario = c.tipo === 'hinario';
             return (
               <div 
                 key={c.id} 
                 className="px-4 py-3 hover:bg-emerald-50 cursor-pointer border-b border-slate-100 last:border-0" 
                 onClick={() => { onChange(c); setQuery(c.nome); setOpen(false); }}
               >
-                <div className="text-sm font-medium text-slate-800 mb-1">{c.nome}</div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-slate-800">{c.nome}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    ehHinario 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'bg-green-100 text-green-700'
+                  }`}>
+                    {ehHinario ? '📖' : '🎵'}
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded ${status.corFundo} ${status.cor} border`}>
                     {status.label}
@@ -353,40 +368,114 @@ function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCre
   );
 }
 
-// --- FUNÇÃO PARA GERAR PDF ---
+// --- FUNÇÃO PARA GERAR PDF OTIMIZADO ---
 const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) => {
   const doc = new jsPDF();
   
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 20;
-
-  const headerHeight = 35;
+  const margin = 15;
+  const headerHeight = 30;
   
-  doc.setFillColor(16, 60, 48);
-  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+  // FUNÇÃO AUXILIAR: Desenhar cabeçalho
+  const desenharCabecalho = (pageNum: number) => {
+    doc.setFillColor(16, 60, 48);
+    doc.rect(0, 0, pageWidth, headerHeight, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 12, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Uma igreja da família de Deus - Manaus/AM', pageWidth / 2, 20, { align: 'center' });
+    
+    // Número da página
+    if (pageNum > 0) {
+      doc.setFontSize(7);
+      doc.setTextColor(200, 200, 200);
+      doc.text(`Pág. ${pageNum}`, pageWidth - margin, 26, { align: 'right' });
+    }
+  };
+
+  // FUNÇÃO AUXILIAR: Calcular altura necessária para o conteúdo
+  const calcularAlturaConteudo = (fontSize: number) => {
+    let alturaTotal = 0;
+    const lineHeight = fontSize * 0.4;
+    
+    // Título + Data
+    alturaTotal += fontSize * 1.8 + fontSize * 1.4 + 8; // Liturgia + Data + espaço
+    
+    itens.forEach(item => {
+      // Tipo do item
+      alturaTotal += fontSize * 1.2 + 4;
+      
+      // Descrição
+      if (item.descricao && item.descricao.trim()) {
+        const linhas = item.descricao.split('\n').filter(l => l.trim());
+        alturaTotal += linhas.length * lineHeight * 1.3;
+      }
+      
+      // Músicas
+      const permiteMusica = item.tem_cantico || 
+                           item.tipo.toLowerCase().includes('cântico') || 
+                           item.tipo.toLowerCase().includes('prelúdio') ||
+                           item.tipo.toLowerCase().includes('poslúdio');
+      
+      if (permiteMusica && item.lista_musicas?.length > 0) {
+        const musicasValidas = item.lista_musicas.filter(m => m.cantico_id);
+        alturaTotal += musicasValidas.length * lineHeight * 1.2;
+      }
+      
+      alturaTotal += 4; // Espaço entre itens
+    });
+    
+    return alturaTotal;
+  };
+
+  // DETERMINAR LAYOUT E TAMANHO DE FONTE
+  const alturaDisponivel = pageHeight - headerHeight - margin * 2 - 15; // -15 para rodapé
   
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Uma igreja da família de Deus', pageWidth / 2, 22, { align: 'center' });
-  doc.setFontSize(9);
-  doc.text('Manaus - AM', pageWidth / 2, 29, { align: 'center' });
-
-  let yPos = headerHeight + 15;
-
+  // Testar diferentes configurações
+  let usarDuasColunas = false;
+  let fontSize = 10;
+  let alturaCalculada = calcularAlturaConteudo(fontSize);
+  
+  // Se não couber em uma página, tentar duas colunas
+  if (alturaCalculada > alturaDisponivel) {
+    usarDuasColunas = true;
+    alturaCalculada = calcularAlturaConteudo(fontSize) / 2; // Dividir em 2 colunas
+  }
+  
+  // Se ainda não couber, reduzir fonte progressivamente
+  while (alturaCalculada > alturaDisponivel * 2 && fontSize > 6) {
+    fontSize -= 0.5;
+    alturaCalculada = usarDuasColunas 
+      ? calcularAlturaConteudo(fontSize) / 2 
+      : calcularAlturaConteudo(fontSize);
+  }
+  
+  // CONFIGURAÇÕES FINAIS
+  const colunaWidth = usarDuasColunas ? (pageWidth - margin * 3) / 2 : pageWidth - margin * 2;
+  const coluna1X = margin;
+  const coluna2X = usarDuasColunas ? pageWidth / 2 + margin / 2 : margin;
+  
+  let yPos = headerHeight + 12;
+  let colunaAtual = 1;
+  let paginaAtual = 1;
+  let itemNumero = 1;
+  
+  // Desenhar primeira página
+  desenharCabecalho(paginaAtual);
   doc.setTextColor(0, 0, 0);
-
+  
+  // TÍTULO E DATA
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(fontSize * 1.8);
   doc.text('LITURGIA', pageWidth / 2, yPos, { align: 'center' });
+  yPos += fontSize * 1.2;
   
-  yPos += 10;
-  
-  doc.setFontSize(14);
+  doc.setFontSize(fontSize * 1.4);
   const dataFormatada = new Date(culto.Dia + 'T00:00:00')
     .toLocaleDateString('pt-BR', { 
       weekday: 'long',
@@ -396,132 +485,132 @@ const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) =>
     })
     .toUpperCase();
   doc.text(dataFormatada, pageWidth / 2, yPos, { align: 'center' });
+  yPos += fontSize * 1.2;
   
-  yPos += 12;
-
+  // Linha separadora
   doc.setDrawColor(16, 60, 48);
-  doc.setLineWidth(0.8);
+  doc.setLineWidth(0.5);
   doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 8;
   
-  yPos += 12;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-
-  let itemNumero = 1;
-
-  for (const item of itens) {
-    if (yPos > pageHeight - 40) {
+  // FUNÇÃO PARA MUDAR DE COLUNA/PÁGINA
+  const mudarColunaOuPagina = () => {
+    if (usarDuasColunas && colunaAtual === 1) {
+      colunaAtual = 2;
+      yPos = headerHeight + 12 + fontSize * 4.4 + 8; // Mesma altura do início do conteúdo
+      return coluna2X;
+    } else if (paginaAtual < 2) {
       doc.addPage();
-      
-      doc.setFillColor(16, 60, 48);
-      doc.rect(0, 0, pageWidth, headerHeight, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
-      
-      doc.setTextColor(0, 0, 0);
-      yPos = headerHeight + 15;
+      paginaAtual++;
+      colunaAtual = 1;
+      desenharCabecalho(paginaAtual);
+      yPos = headerHeight + 12;
+      return coluna1X;
     }
-
+    return colunaAtual === 1 ? coluna1X : coluna2X;
+  };
+  
+  // RENDERIZAR ITENS
+  let xPos = coluna1X;
+  const lineHeight = fontSize * 0.4;
+  
+  for (const item of itens) {
+    // Verificar espaço disponível (estimativa)
+    const espacoNecessario = fontSize * 1.2 + (item.descricao ? lineHeight * 3 : 0) + fontSize;
+    
+    if (yPos + espacoNecessario > pageHeight - 15) {
+      xPos = mudarColunaOuPagina();
+    }
+    
+    // TIPO DO ITEM
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(`${itemNumero}. ${item.tipo.toUpperCase()}`, margin, yPos);
-    yPos += 7;
-
+    doc.setFontSize(fontSize * 1.2);
+    const tipoTexto = `${itemNumero}. ${item.tipo.toUpperCase()}`;
+    const linhasTipo = doc.splitTextToSize(tipoTexto, colunaWidth);
+    
+    linhasTipo.forEach((linha: string) => {
+      if (yPos > pageHeight - 15) {
+        xPos = mudarColunaOuPagina();
+      }
+      doc.text(linha, xPos, yPos);
+      yPos += fontSize * 1.2;
+    });
+    
+    // DESCRIÇÃO
     if (item.descricao && item.descricao.trim()) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
+      doc.setFontSize(fontSize);
       const linhas = item.descricao.split('\n').filter(l => l.trim());
       
       for (const linha of linhas) {
-        if (yPos > pageHeight - 30) {
-          doc.addPage();
-          doc.setFillColor(16, 60, 48);
-          doc.rect(0, 0, pageWidth, headerHeight, 'F');
-          doc.setTextColor(255, 255, 255);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(14);
-          doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(10);
-          doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
-          doc.setTextColor(0, 0, 0);
-          yPos = headerHeight + 15;
+        if (yPos > pageHeight - 15) {
+          xPos = mudarColunaOuPagina();
         }
         
-        const linhaLimpa = linha.trim().replace(/^●\s*/, '- ').replace(/^%I\s*/, '- ');
-        const textoLinha = doc.splitTextToSize(linhaLimpa, pageWidth - 2 * margin - 10);
-        for (const pedaco of textoLinha) {
-          doc.text(`     ${pedaco}`, margin, yPos);
-          yPos += 5.5;
-        }
+        const linhaLimpa = linha.trim().replace(/^●\s*/, '• ').replace(/^%I\s*/, '• ');
+        const linhasQuebradas = doc.splitTextToSize(`   ${linhaLimpa}`, colunaWidth);
+        
+        linhasQuebradas.forEach((l: string) => {
+          if (yPos > pageHeight - 15) {
+            xPos = mudarColunaOuPagina();
+          }
+          doc.text(l, xPos, yPos);
+          yPos += lineHeight * 1.3;
+        });
       }
     }
-
+    
+    // MÚSICAS
     const permiteMusica = item.tem_cantico || 
                          item.tipo.toLowerCase().includes('cântico') || 
                          item.tipo.toLowerCase().includes('prelúdio') ||
                          item.tipo.toLowerCase().includes('poslúdio');
-
-    if (permiteMusica && item.lista_musicas && item.lista_musicas.length > 0) {
+    
+    if (permiteMusica && item.lista_musicas?.length > 0) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
+      doc.setFontSize(fontSize);
       
       for (const musica of item.lista_musicas) {
         if (musica.cantico_id) {
           const cantico = canticos.find(c => c.id === musica.cantico_id);
           if (cantico) {
-            if (yPos > pageHeight - 30) {
-              doc.addPage();
-              doc.setFillColor(16, 60, 48);
-              doc.rect(0, 0, pageWidth, headerHeight, 'F');
-              doc.setTextColor(255, 255, 255);
-              doc.setFont('helvetica', 'bold');
-              doc.setFontSize(14);
-              doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 14, { align: 'center' });
-              doc.setFont('helvetica', 'normal');
-              doc.setFontSize(10);
-              doc.text('Uma igreja da familia de Deus', pageWidth / 2, 22, { align: 'center' });
-              doc.setTextColor(0, 0, 0);
-              yPos = headerHeight + 15;
+            if (yPos > pageHeight - 15) {
+              xPos = mudarColunaOuPagina();
             }
             
-            const textoMusica = `     - ${cantico.nome}${musica.tom ? ` (${musica.tom})` : ''}`;
-            const linhasMusica = doc.splitTextToSize(textoMusica, pageWidth - 2 * margin - 10);
+            const textoMusica = `   • ${cantico.nome}${musica.tom ? ` (${musica.tom})` : ''}`;
+            const linhasMusica = doc.splitTextToSize(textoMusica, colunaWidth);
             
-            for (const linha of linhasMusica) {
-              doc.text(linha, margin, yPos);
-              yPos += 5.5;
-            }
+            linhasMusica.forEach((l: string) => {
+              if (yPos > pageHeight - 15) {
+                xPos = mudarColunaOuPagina();
+              }
+              doc.text(l, xPos, yPos);
+              yPos += lineHeight * 1.2;
+            });
           }
         }
       }
     }
-
-    yPos += 8;
+    
+    yPos += 4;
     itemNumero++;
   }
-
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
+  
+  // RODAPÉ EM TODAS AS PÁGINAS
+  for (let i = 1; i <= paginaAtual; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setTextColor(120, 120, 120);
     doc.setFont('helvetica', 'italic');
-    doc.text(
-      `Página ${i} de ${totalPages}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' }
-    );
+    
+    const rodapeTexto = usarDuasColunas 
+      ? `Liturgia • ${new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR')} • Página ${i}/${paginaAtual}`
+      : `Página ${i}/${paginaAtual}`;
+    
+    doc.text(rodapeTexto, pageWidth / 2, pageHeight - 8, { align: 'center' });
   }
-
+  
   const dataArquivo = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR').replace(/\//g, '.');
   const nomeArquivo = `LITURGIA_${dataArquivo}.pdf`;
   doc.save(nomeArquivo);
@@ -733,26 +822,27 @@ export default function CultosPage() {
     }
   };
 
-  const carregarDados = async () => {
-    const { data: todosCanticos } = await supabase
-      .from('canticos')
-      .select('id, nome')
-      .order('nome');
-    
-    if (todosCanticos) {
-      setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
-    }
+const carregarDados = async () => {
+  // Buscar cânticos da VIEW unificada (inclui hinos + cânticos)
+  const { data: todosCanticos } = await supabase
+    .from('canticos_unificados')
+    .select('id, nome, tipo, numero')
+    .order('numero', { ascending: true, nullsFirst: false });
+  
+  if (todosCanticos) {
+    setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
+  }
 
-    const { data: cu } = await supabase
-      .from('Louvores IPPN')
-      .select('*')
-      .order('Dia', { ascending: false });
-    if (cu) setCultos(cu || []);
+  const { data: cu } = await supabase
+    .from('Louvores IPPN')
+    .select('*')
+    .order('Dia', { ascending: false });
+  if (cu) setCultos(cu || []);
 
-    if (todosCanticos) {
-      buscarUltimasDatas(todosCanticos);
-    }
-  };
+  if (todosCanticos) {
+    buscarUltimasDatas(todosCanticos);
+  }
+};
 
   const buscarUltimasDatas = async (canticosBase: any[]) => {
     const { data: todosItens } = await supabase

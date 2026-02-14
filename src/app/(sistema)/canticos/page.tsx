@@ -16,23 +16,30 @@ import {
   Youtube,
   ChevronDown,
   ChevronUp,
-  BookOpen
+  BookOpen,
+  Filter
 } from 'lucide-react';
 
-interface Cantico {
+interface CanticoUnificado {
+  tipo: 'hinario' | 'cantico';
   id: string;
+  numero: string | null;
   nome: string;
   letra: string | null;
-  referencia: string | null;
   tags: string[] | null;
+  referencia: string | null;
+  autor_letra: string | null;
+  compositor: string | null;
+  audio_url: string | null;
   youtube_url: string | null;
   spotify_url: string | null;
+  created_at: string;
 }
 
 const TAGS_LITURGICAS = [
   'Prelúdio', 'Poslúdio', 'Oferta', 'Ceia', 'Comunhão', 'Hino', 'Salmo',
   'Adoração', 'Confissão', 'Arrependimento', 'Edificação', 'Instrução',
-  'Consagração', 'Doxologia', 'Bençãos', 'Gratidão'
+  'Consagração', 'Doxologia', 'Bênçãos', 'Gratidão'
 ];
 
 const TAGS_ESTILO = [
@@ -49,8 +56,10 @@ const SpotifyIcon = ({ size = 18 }: { size?: number }) => (
 
 export default function CanticosPage() {
   const router = useRouter();
-  const [canticos, setCanticos] = useState<Cantico[]>([]);
+  const [canticos, setCanticos] = useState<CanticoUnificado[]>([]);
   const [busca, setBusca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | 'hinario' | 'cantico'>('todos');
+  const [filtroTags, setFiltroTags] = useState<string[]>([]);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [editando, setEditando] = useState<string | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
@@ -71,15 +80,38 @@ export default function CanticosPage() {
   });
   
   const [avisoSimilaridade, setAvisoSimilaridade] = useState<string[]>([]);
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   const fetchCanticos = useCallback(async () => {
-    const { data } = await supabase
-      .from('canticos')
-      .select('id, nome, letra, referencia, tags, youtube_url, spotify_url')
-      .order('nome');
+    let query = supabase
+      .from('canticos_unificados')
+      .select('*');
+
+    // Filtro de tipo
+    if (filtroTipo !== 'todos') {
+      query = query.eq('tipo', filtroTipo);
+    }
+
+    // Filtro de busca
+    if (busca.trim()) {
+      const termo = busca.trim();
+      // Busca por número exato (para hinos)
+      if (/^\d+$/.test(termo)) {
+        query = query.or(`numero.eq.${termo.padStart(3, '0')},nome.ilike.%${termo}%,letra.ilike.%${termo}%`);
+      } else {
+        query = query.or(`nome.ilike.%${termo}%,letra.ilike.%${termo}%`);
+      }
+    }
+
+    // Filtro de tags
+    if (filtroTags.length > 0) {
+      query = query.contains('tags', filtroTags);
+    }
+
+    const { data } = await query.order('numero', { ascending: true, nullsFirst: false });
 
     if (data) setCanticos(data);
-  }, []);
+  }, [busca, filtroTipo, filtroTags]);
 
   const calcularSimilaridade = useCallback((str1: string, str2: string): number => {
     const s1 = str1.toLowerCase().trim();
@@ -107,6 +139,7 @@ export default function CanticosPage() {
   useEffect(() => {
     if (criandoNovo && form.nome.length > 2) {
       const similares = canticos
+        .filter(c => c.tipo === 'cantico') // Só verifica similaridade em cânticos (não hinos)
         .filter(c => calcularSimilaridade(c.nome, form.nome) > 0.6)
         .map(c => c.nome);
       setAvisoSimilaridade(similares);
@@ -116,11 +149,17 @@ export default function CanticosPage() {
   }, [form.nome, criandoNovo, canticos, calcularSimilaridade]);
 
   const toggleExpandir = (id: string) => {
-    if (editando) return; // Não expande se estiver editando
+    if (editando) return;
     setExpandido(expandido === id ? null : id);
   };
 
-  const iniciarEdicao = (c: Cantico) => {
+  const iniciarEdicao = (c: CanticoUnificado) => {
+    // Só permite editar cânticos (não hinos do hinário)
+    if (c.tipo === 'hinario') {
+      alert('❌ Hinos do Hinário Novo Cântico não podem ser editados aqui.');
+      return;
+    }
+
     setCriandoNovo(false);
     setExpandido(null);
     setEditando(c.id);
@@ -183,7 +222,12 @@ export default function CanticosPage() {
     } else alert('❌ Erro ao criar.');
   };
 
-  const deletar = async (id: string, nome: string) => {
+  const deletar = async (id: string, nome: string, tipo: string) => {
+    if (tipo === 'hinario') {
+      alert('❌ Hinos do Hinário Novo Cântico não podem ser deletados.');
+      return;
+    }
+
     if (!confirm(`Tem certeza que deseja deletar "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
       return;
     }
@@ -213,17 +257,13 @@ export default function CanticosPage() {
     }));
   };
 
-  const filtrados = canticos.filter(c => {
-    const termo = busca.toLowerCase().trim();
-    if (!termo) return true;
-
-    const noNome = c.nome.toLowerCase().includes(termo);
-    const naReferencia = c.referencia?.toLowerCase().includes(termo);
-    const naLetra = c.letra?.toLowerCase().substring(0, 300).includes(termo);
-    const nasTags = c.tags?.some(tag => tag.toLowerCase().includes(termo));
-
-    return noNome || naReferencia || naLetra || nasTags;
-  });
+  const toggleFiltroTag = (tag: string) => {
+    setFiltroTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
 
   const renderTagSelector = (tags: string[], label: string) => (
     <div className="space-y-2">
@@ -357,8 +397,11 @@ export default function CanticosPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <Music className="text-emerald-700" size={32} />
-            Cânticos
+            Cânticos e Hinário
           </h1>
+          <p className="text-slate-600 mt-2">
+            {canticos.length} {canticos.length === 1 ? 'cântico' : 'cânticos'} disponíveis
+          </p>
         </div>
 
         <button 
@@ -379,22 +422,102 @@ export default function CanticosPage() {
           </div>
         )}
 
-        <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar por nome, tags, referência ou letra..."
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            className="w-full border-2 border-slate-300 pl-12 pr-4 py-4 rounded-xl text-base focus:border-emerald-600 outline-none shadow-sm"
-          />
+        {/* BUSCA E FILTROS */}
+        <div className="space-y-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Buscar por nome, número do hino, letra ou tags..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              className="w-full border-2 border-slate-300 pl-12 pr-4 py-4 rounded-xl text-base focus:border-emerald-600 outline-none shadow-sm"
+            />
+          </div>
+
+          {/* Botão para mostrar/ocultar filtros */}
+          <button
+            onClick={() => setMostrarFiltros(!mostrarFiltros)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-slate-600" />
+              <span className="font-semibold text-slate-700">Filtros Avançados</span>
+              {(filtroTipo !== 'todos' || filtroTags.length > 0) && (
+                <span className="bg-emerald-600 text-white text-xs px-2 py-1 rounded-full">
+                  {(filtroTipo !== 'todos' ? 1 : 0) + filtroTags.length}
+                </span>
+              )}
+            </div>
+            {mostrarFiltros ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
+
+          {/* Painel de filtros */}
+          {mostrarFiltros && (
+            <div className="bg-white border-2 border-slate-200 rounded-xl p-4 space-y-4">
+              {/* Filtro por tipo */}
+              <div>
+                <label className="font-bold text-sm text-slate-700 mb-2 block">Tipo</label>
+                <div className="flex gap-2">
+                  {(['todos', 'hinario', 'cantico'] as const).map(tipo => (
+                    <button
+                      key={tipo}
+                      onClick={() => setFiltroTipo(tipo)}
+                      className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                        filtroTipo === tipo
+                          ? 'bg-emerald-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {tipo === 'todos' ? 'Todos' : tipo === 'hinario' ? '📖 Hinário NC' : '🎵 Cânticos'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filtro por tags */}
+              <div>
+                <label className="font-bold text-sm text-slate-700 mb-2 block">Tags Litúrgicas</label>
+                <div className="flex flex-wrap gap-2">
+                  {TAGS_LITURGICAS.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleFiltroTag(tag)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                        filtroTags.includes(tag)
+                          ? 'bg-emerald-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botão limpar filtros */}
+              {(filtroTipo !== 'todos' || filtroTags.length > 0) && (
+                <button
+                  onClick={() => {
+                    setFiltroTipo('todos');
+                    setFiltroTags([]);
+                  }}
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
+        {/* LISTA DE CÂNTICOS */}
         <div className="space-y-3">
-          {filtrados.map(c => {
+          {canticos.map(c => {
             const youtubeId = extrairYoutubeId(c.youtube_url || '');
             const estaExpandido = expandido === c.id;
             const estaEditando = editando === c.id;
+            const ehHinario = c.tipo === 'hinario';
             
             return (
               <div key={c.id} className="bg-white border-2 border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
@@ -412,13 +535,30 @@ export default function CanticosPage() {
                           className="flex-1 cursor-pointer" 
                           onClick={() => toggleExpandir(c.id)}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 mb-2">
                             <h3 className="font-bold text-lg text-emerald-800">{c.nome}</h3>
+                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${
+                              ehHinario 
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                : 'bg-green-100 text-green-700 border border-green-200'
+                            }`}>
+                              {ehHinario ? '📖 Hinário' : '🎵 Cântico'}
+                            </span>
                             {estaExpandido ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
                           </div>
                           
+                          {/* Autor/Compositor (só para hinos) */}
+                          {ehHinario && (c.autor_letra || c.compositor) && (
+                            <div className="text-xs text-slate-600 mb-2">
+                              {c.autor_letra && <span>✍️ {c.autor_letra}</span>}
+                              {c.compositor && c.compositor !== c.autor_letra && (
+                                <span className="ml-3">🎼 {c.compositor}</span>
+                              )}
+                            </div>
+                          )}
+
                           {/* Botões YouTube e Spotify */}
-                          {(c.youtube_url || c.spotify_url) && (
+                          {(c.youtube_url || c.spotify_url || c.audio_url) && (
                             <div className="flex gap-3 mt-2">
                               {c.youtube_url && (
                                 <a 
@@ -444,6 +584,17 @@ export default function CanticosPage() {
                                   Spotify
                                 </a>
                               )}
+                              {c.audio_url && (
+                                <a 
+                                  href={c.audio_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-1.5 text-slate-600 hover:text-slate-700 text-sm font-medium hover:underline"
+                                >
+                                  🎵 Áudio
+                                </a>
+                              )}
                             </div>
                           )}
 
@@ -464,26 +615,35 @@ export default function CanticosPage() {
                         
                         {/* Botões de ação */}
                         <div className="flex gap-2 flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              iniciarEdicao(c);
-                            }}
-                            className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <Edit2 size={20} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deletar(c.id, c.nome);
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Deletar"
-                          >
-                            <Trash2 size={20} />
-                          </button>
+                          {!ehHinario && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  iniciarEdicao(c);
+                                }}
+                                className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit2 size={20} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deletar(c.id, c.nome, c.tipo);
+                                }}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Deletar"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </>
+                          )}
+                          {ehHinario && (
+                            <div className="p-2 text-slate-400" title="Hinos do hinário não podem ser editados">
+                              🔒
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -546,10 +706,11 @@ export default function CanticosPage() {
           })}
         </div>
 
-        {filtrados.length === 0 && (
+        {canticos.length === 0 && (
           <div className="text-center py-12 text-slate-500">
             <Music size={48} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">Nenhum cântico encontrado</p>
+            <p className="text-sm mt-2">Tente ajustar os filtros ou a busca</p>
           </div>
         )}
       </main>
