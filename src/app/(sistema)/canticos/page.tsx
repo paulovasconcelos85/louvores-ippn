@@ -140,29 +140,40 @@ export default function CanticosPage() {
   };
 
   const fetchHistoricoCanticos = useCallback(async () => {
+    // Primeiro, busca todos os louvor_itens com cantico_id
     const { data: louvoresItens, error: erroItens } = await supabase
       .from('louvor_itens')
       .select('cantico_id, culto_id')
       .not('cantico_id', 'is', null);
 
-    if (erroItens || !louvoresItens || louvoresItens.length === 0) return;
+    if (erroItens) {
+      console.error('Erro ao buscar louvor_itens:', erroItens);
+      return;
+    }
 
-    const cultosIds = [...new Set(louvoresItens.map(item => item.culto_id))];
+    if (!louvoresItens || louvoresItens.length === 0) return;
 
-    const { data: cultos } = await supabase
+    // Busca TODOS os cultos (sem filtro)
+    const { data: cultos, error: erroCultos } = await supabase
       .from('Louvores IPPN')
-      .select('Culto nr., Dia')
-      .in('Culto nr.', cultosIds);
+      .select('*');
+
+    if (erroCultos) {
+      console.error('Erro ao buscar cultos:', erroCultos);
+      return;
+    }
 
     if (!cultos) return;
 
+    // Cria um mapa de culto_id -> data
     const cultosMap = new Map<number, string>();
     cultos.forEach((culto: any) => {
-      if (culto.Dia) {
+      if (culto.Dia && culto['Culto nr.']) {
         cultosMap.set(culto['Culto nr.'], culto.Dia);
       }
     });
 
+    // Mapeia cantico_id -> [datas]
     const mapa = new Map<string, string[]>();
 
     louvoresItens.forEach((item: any) => {
@@ -181,6 +192,7 @@ export default function CanticosPage() {
       }
     });
 
+    // Ordena as datas em ordem decrescente e limita a 3 mais recentes
     mapa.forEach((datas, id) => {
       const datasOrdenadas = datas.sort((a, b) => {
         return new Date(b).getTime() - new Date(a).getTime();
@@ -277,14 +289,11 @@ export default function CanticosPage() {
 
     const slides = textoParaSlides(holyForm.letraParaSlides);
 
-    // Se for tipo 'hinario', não pode salvar
-    if (modalHolyrics.tipo === 'hinario') {
-      alert('❌ Não é possível salvar configuração Holyrics para hinos do hinário.');
-      return;
-    }
+    // Define qual tabela usar baseado no tipo
+    const tabela = modalHolyrics.tipo === 'hinario' ? 'hinario_novo_cantico' : 'canticos';
 
     const { error } = await supabase
-      .from('canticos')
+      .from(tabela)
       .update({
         holyrics_paragraphs: slides,
         holyrics_artist: holyForm.artist,
@@ -294,7 +303,21 @@ export default function CanticosPage() {
       .eq('id', modalHolyrics.id);
 
     if (!error) {
+      // Recarrega os cânticos
       await fetchCanticos();
+      
+      // Atualiza o modal com os dados salvos
+      const canticoAtualizado = canticos.find(c => c.id === modalHolyrics.id);
+      if (canticoAtualizado) {
+        setModalHolyrics({
+          ...canticoAtualizado,
+          holyrics_paragraphs: slides,
+          holyrics_artist: holyForm.artist,
+          holyrics_key: holyForm.key,
+          holyrics_bpm: holyForm.bpm || null
+        });
+      }
+      
       alert('✅ Configuração Holyrics salva!');
     } else {
       console.error('Erro ao salvar:', error);
