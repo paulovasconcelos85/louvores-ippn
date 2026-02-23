@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
+import FamiliaView from '@/components/FamiliaView';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
   MessageSquare, Search, Filter, Cake, Church, UserX,
@@ -40,6 +41,7 @@ export default function PastorarMembrosPage() {
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
   const [mensagem, setMensagem] = useState('');
+  const [visaoFamilia, setVisaoFamilia] = useState(false);
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -87,7 +89,6 @@ export default function PastorarMembrosPage() {
     }
   };
 
-  // Funções de utilidade
   const calcularIdade = (dataNascimento: string | null): number | null => {
     if (!dataNascimento) return null;
     const hoje = new Date();
@@ -121,9 +122,7 @@ export default function PastorarMembrosPage() {
     const nascimento = new Date(dataNascimento);
     const proximos7Dias = new Date();
     proximos7Dias.setDate(proximos7Dias.getDate() + 7);
-
     const aniversarioEsteAno = new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate());
-    
     return aniversarioEsteAno >= hoje && aniversarioEsteAno <= proximos7Dias;
   };
 
@@ -154,7 +153,6 @@ export default function PastorarMembrosPage() {
     return cores[status] || 'bg-slate-100 text-slate-800 border-slate-300';
   };
 
-  // Filtros
   const membrosFiltrados = membros.filter(m => {
     if (!mostrarInativos && !m.ativo) return false;
     if (filtroStatus !== 'todos' && m.status_membro !== filtroStatus) return false;
@@ -182,8 +180,8 @@ export default function PastorarMembrosPage() {
       return;
     }
     const numeroLimpo = telefone.replace(/\D/g, '');
-    const mensagem = `Olá ${nome}! Que a paz do Senhor esteja contigo!`;
-    window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(mensagem)}`, '_blank');
+    const msg = `Olá ${nome}! Que a paz do Senhor esteja contigo!`;
+    window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const ligarPara = (telefone: string | null) => {
@@ -212,6 +210,7 @@ export default function PastorarMembrosPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -344,79 +343,111 @@ export default function PastorarMembrosPage() {
           </div>
         </div>
 
-        {/* Filtros */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-          <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <Filter className="w-5 h-5 text-slate-600" />
-            Filtros
-          </h3>
-          
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nome, email, telefone ou endereço..."
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="grid sm:grid-cols-3 gap-3">
-              <select
-                value={filtroAniversario}
-                onChange={(e) => setFiltroAniversario(e.target.value as FiltroAniversario)}
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="todos">Todos os Aniversários</option>
-                <option value="hoje">Hoje</option>
-                <option value="proximos7dias">Próximos 7 dias</option>
-                <option value="mes">Este mês</option>
-              </select>
-
-              <select
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)}
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="todos">Todos os Status</option>
-                <option value="ativo">Ativos</option>
-                <option value="visitante">Visitantes</option>
-                <option value="congregado">Congregados</option>
-                <option value="afastado">Afastados</option>
-                <option value="falecido">Falecidos</option>
-              </select>
-
-              <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+        {/* Filtros — oculta na visão família */}
+        {!visaoFamilia && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+              <Filter className="w-5 h-5 text-slate-600" />
+              Filtros
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
-                  type="checkbox"
-                  checked={mostrarInativos}
-                  onChange={(e) => setMostrarInativos(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  type="text"
+                  placeholder="Buscar por nome, email, telefone ou endereço..."
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <span className="text-sm text-slate-700 font-medium whitespace-nowrap">
-                  Mostrar inativos
-                </span>
-              </label>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-3">
+                <select
+                  value={filtroAniversario}
+                  onChange={(e) => setFiltroAniversario(e.target.value as FiltroAniversario)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="todos">Todos os Aniversários</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="proximos7dias">Próximos 7 dias</option>
+                  <option value="mes">Este mês</option>
+                </select>
+
+                <select
+                  value={filtroStatus}
+                  onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="todos">Todos os Status</option>
+                  <option value="ativo">Ativos</option>
+                  <option value="visitante">Visitantes</option>
+                  <option value="congregado">Congregados</option>
+                  <option value="afastado">Afastados</option>
+                  <option value="falecido">Falecidos</option>
+                </select>
+
+                <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={mostrarInativos}
+                    onChange={(e) => setMostrarInativos(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">
+                    Mostrar inativos
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Lista de Membros */}
+        {/* Lista de Membros / Famílias */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+
+          {/* Header com toggle */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 flex items-center justify-between">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Users className="w-6 h-6" />
-              Membros
-              <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">
-                {membrosFiltrados.length}
-              </span>
+              {visaoFamilia ? 'Famílias' : 'Membros'}
+              {!visaoFamilia && (
+                <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">
+                  {membrosFiltrados.length}
+                </span>
+              )}
             </h3>
+
+            <div className="flex items-center bg-white/20 rounded-lg p-1 gap-1">
+              <button
+                onClick={() => setVisaoFamilia(false)}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                  !visaoFamilia
+                    ? 'bg-white text-blue-700'
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                Lista
+              </button>
+              <button
+                onClick={() => setVisaoFamilia(true)}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  visaoFamilia
+                    ? 'bg-white text-blue-700'
+                    : 'text-white hover:bg-white/10'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Famílias
+              </button>
+            </div>
           </div>
 
           <div className="p-6">
-            {loading ? (
+            {visaoFamilia ? (
+              <FamiliaView />
+            ) : loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
                 <p className="mt-2 text-slate-600">Carregando membros...</p>
@@ -575,6 +606,7 @@ export default function PastorarMembrosPage() {
             )}
           </div>
         </div>
+
       </main>
     </div>
   );

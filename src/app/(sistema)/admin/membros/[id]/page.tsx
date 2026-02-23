@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
+import RelacionamentosCard from '@/components/RelacionamentosCard';
 import { 
   ArrowLeft, Save, Phone, Mail, MapPin, Calendar, Heart, 
   AlertCircle, MessageSquare, Plus, Edit2, Trash2, User,
@@ -807,6 +808,16 @@ export default function MembroDetalhesPage() {
                 </div>
               </div>
             </div>
+                <RelacionamentosCard
+                  membroId={membroId}
+                  membroNome={membro.nome}
+                  autorId={usuarioPermitido?.id}
+                  podeEditar={
+                    permissoes.isSuperAdmin ||
+                    ['admin', 'pastor', 'presbitero'].includes(usuarioPermitido?.cargo || '')
+                  }
+                  onNavegar={(id) => router.push(`/admin/membros/${id}`)}
+                />
           </div>
         </div>
       </main>
