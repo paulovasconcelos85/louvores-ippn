@@ -222,12 +222,21 @@ export default function PastorarMembrosPage() {
               Acompanhamento e cuidado pastoral da igreja
             </p>
           </div>
-          <button
-            onClick={() => router.push('/admin')}
-            className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors font-medium"
-          >
-            ← Voltar
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/admin/membros/novo')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm"
+            >
+              <span className="text-lg leading-none">+</span>
+              Adicionar
+            </button>
+            <button
+              onClick={() => router.push('/admin')}
+              className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors font-medium"
+            >
+              ← Voltar
+            </button>
+          </div>
         </div>
 
         {/* Mensagem */}
