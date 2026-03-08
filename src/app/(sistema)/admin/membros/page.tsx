@@ -10,8 +10,7 @@ import { supabase } from '@/lib/supabase';
 import FamiliaView from '@/components/FamiliaView';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
-  MessageSquare, Search, Filter, Cake, Church, UserX,
-  Mail
+  Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen, User
 } from 'lucide-react';
 
 interface Membro {
@@ -20,6 +19,7 @@ interface Membro {
   cargo: string;
   email: string | null;
   telefone: string | null;
+  foto_url: string | null;
   data_nascimento: string | null;
   data_casamento: string | null;
   data_batismo: string | null;
@@ -28,10 +28,47 @@ interface Membro {
   status_membro: 'ativo' | 'afastado' | 'falecido' | 'visitante' | 'congregado';
   ativo: boolean;
   observacoes: string | null;
+  sexo: 'M' | 'F' | null;
+  estado_civil: string | null;
+  profissao: string | null;
+  escolaridade: string | null;
+  logradouro: string | null;
+  bairro: string | null;
+  cep: string | null;
+  cidade: string | null;
+  uf: string | null;
+  batizado: boolean | null;
+  data_profissao_fe: string | null;
+  grupo_familiar_nome: string | null;
+  grupo_familiar_lider: string | null;
+  cursos_discipulado: string[] | null;
+  naturalidade_cidade: string | null;
+  naturalidade_uf: string | null;
 }
 
 type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
 type FiltroStatus = 'todos' | 'ativo' | 'afastado' | 'visitante' | 'congregado' | 'falecido';
+type FiltroBatismo = 'todos' | 'batizado' | 'nao_batizado';
+type FiltroGrupo = string;
+
+// ─── Avatar do membro ─────────────────────────────────────────────────────────
+function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: string | null; size?: 'sm' | 'md' }) {
+  const [error, setError] = useState(false);
+  const sz = size === 'sm' ? 'w-9 h-9 text-xs' : 'w-12 h-12 text-sm';
+  const initials = nome.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+
+  if (fotoUrl && !error) {
+    return (
+      <img src={fotoUrl} alt={nome} onError={() => setError(true)}
+        className={`${sz} rounded-full object-cover border-2 border-slate-200 flex-shrink-0`} />
+    );
+  }
+  return (
+    <div className={`${sz} rounded-full bg-gradient-to-br from-blue-100 to-blue-200 border-2 border-blue-200 flex items-center justify-center flex-shrink-0`}>
+      <span className="font-bold text-blue-600">{initials}</span>
+    </div>
+  );
+}
 
 export default function PastorarMembrosPage() {
   const router = useRouter();
@@ -42,33 +79,28 @@ export default function PastorarMembrosPage() {
   const [loading, setLoading] = useState(true);
   const [mensagem, setMensagem] = useState('');
   const [visaoFamilia, setVisaoFamilia] = useState(false);
+  const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
   const [filtroAniversario, setFiltroAniversario] = useState<FiltroAniversario>('todos');
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('ativo');
   const [mostrarInativos, setMostrarInativos] = useState(false);
+  const [filtroBatismo, setFiltroBatismo] = useState<FiltroBatismo>('todos');
+  const [filtroGrupo, setFiltroGrupo] = useState<FiltroGrupo>('todos');
+  const [filtroProfissao, setFiltroProfissao] = useState('');
 
   const totalLoading = authLoading || permLoading;
-
-  const podeAcessar = permissoes.isSuperAdmin || 
+  const podeAcessar = permissoes.isSuperAdmin ||
     ['admin', 'pastor', 'presbitero', 'seminarista'].includes(usuarioPermitido?.cargo || '');
 
   useEffect(() => {
-    if (!totalLoading && !user) {
-      router.push('/login');
-      return;
-    }
-
-    if (!totalLoading && user && !podeAcessar) {
-      router.push('/admin');
-    }
+    if (!totalLoading && !user) { router.push('/login'); return; }
+    if (!totalLoading && user && !podeAcessar) router.push('/admin');
   }, [user, totalLoading, podeAcessar, router]);
 
   useEffect(() => {
-    if (user && podeAcessar) {
-      carregarMembros();
-    }
+    if (user && podeAcessar) carregarMembros();
   }, [user, podeAcessar]);
 
   const carregarMembros = async () => {
@@ -76,9 +108,16 @@ export default function PastorarMembrosPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('pessoas')
-        .select('*')
+        .select(`
+          id, nome, cargo, email, telefone, foto_url,
+          data_nascimento, data_casamento, data_batismo,
+          situacao_saude, endereco_completo, status_membro, ativo,
+          observacoes, sexo, estado_civil, profissao, escolaridade,
+          logradouro, bairro, cep, cidade, uf, batizado, data_profissao_fe,
+          grupo_familiar_nome, grupo_familiar_lider, cursos_discipulado,
+          naturalidade_cidade, naturalidade_uf
+        `)
         .order('nome');
-
       if (error) throw error;
       setMembros(data || []);
     } catch (error) {
@@ -89,69 +128,51 @@ export default function PastorarMembrosPage() {
     }
   };
 
-  const calcularIdade = (dataNascimento: string | null): number | null => {
+  // ── Helpers de data ──
+  const calcularIdade = (dataNascimento: string | null) => {
     if (!dataNascimento) return null;
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
+    const hoje = new Date(); const nascimento = new Date(dataNascimento);
     let idade = hoje.getFullYear() - nascimento.getFullYear();
     const mes = hoje.getMonth() - nascimento.getMonth();
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
-      idade--;
-    }
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) idade--;
     return idade;
   };
 
-  const ehAniversarioHoje = (dataNascimento: string | null): boolean => {
-    if (!dataNascimento) return false;
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
-    return hoje.getMonth() === nascimento.getMonth() && 
-           hoje.getDate() === nascimento.getDate();
+  const ehAniversarioHoje = (data: string | null) => {
+    if (!data) return false;
+    const hoje = new Date(); const d = new Date(data);
+    return hoje.getMonth() === d.getMonth() && hoje.getDate() === d.getDate();
   };
 
-  const ehAniversarioNesteMes = (dataNascimento: string | null): boolean => {
-    if (!dataNascimento) return false;
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
-    return hoje.getMonth() === nascimento.getMonth();
+  const ehAniversarioNesteMes = (data: string | null) =>
+    data ? new Date().getMonth() === new Date(data).getMonth() : false;
+
+  const ehAniversarioProximos7Dias = (data: string | null) => {
+    if (!data) return false;
+    const hoje = new Date(); const d = new Date(data);
+    const prox = new Date(); prox.setDate(prox.getDate() + 7);
+    const aniv = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
+    return aniv >= hoje && aniv <= prox;
   };
 
-  const ehAniversarioProximos7Dias = (dataNascimento: string | null): boolean => {
-    if (!dataNascimento) return false;
-    const hoje = new Date();
-    const nascimento = new Date(dataNascimento);
-    const proximos7Dias = new Date();
-    proximos7Dias.setDate(proximos7Dias.getDate() + 7);
-    const aniversarioEsteAno = new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate());
-    return aniversarioEsteAno >= hoje && aniversarioEsteAno <= proximos7Dias;
+  const formatarData = (data: string | null) =>
+    data ? new Date(data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+
+  const getStatusLabel = (status: string) =>
+    ({ ativo: 'Ativo', afastado: 'Afastado', falecido: 'Falecido', visitante: 'Visitante', congregado: 'Congregado' }[status] || status);
+
+  const getStatusCor = (status: string) =>
+    ({ ativo: 'bg-green-100 text-green-800 border-green-300', afastado: 'bg-yellow-100 text-yellow-800 border-yellow-300', falecido: 'bg-gray-100 text-gray-800 border-gray-300', visitante: 'bg-blue-100 text-blue-800 border-blue-300', congregado: 'bg-purple-100 text-purple-800 border-purple-300' }[status] || 'bg-slate-100 text-slate-800 border-slate-300');
+
+  const enderecoResumido = (m: Membro) => {
+    if (m.bairro && m.cidade) return `${m.bairro}, ${m.cidade}/${m.uf || ''}`;
+    if (m.endereco_completo) return m.endereco_completo;
+    return null;
   };
 
-  const formatarData = (data: string | null): string => {
-    if (!data) return '-';
-    return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
-  };
-
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      ativo: 'Ativo',
-      afastado: 'Afastado',
-      falecido: 'Falecido',
-      visitante: 'Visitante',
-      congregado: 'Congregado'
-    };
-    return labels[status] || status;
-  };
-
-  const getStatusCor = (status: string): string => {
-    const cores: Record<string, string> = {
-      ativo: 'bg-green-100 text-green-800 border-green-300',
-      afastado: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      falecido: 'bg-gray-100 text-gray-800 border-gray-300',
-      visitante: 'bg-blue-100 text-blue-800 border-blue-300',
-      congregado: 'bg-purple-100 text-purple-800 border-purple-300'
-    };
-    return cores[status] || 'bg-slate-100 text-slate-800 border-slate-300';
-  };
+  const gruposUnicos = Array.from(
+    new Set(membros.map(m => m.grupo_familiar_nome).filter(Boolean))
+  ) as string[];
 
   const membrosFiltrados = membros.filter(m => {
     if (!mostrarInativos && !m.ativo) return false;
@@ -159,36 +180,36 @@ export default function PastorarMembrosPage() {
     if (filtroAniversario === 'hoje' && !ehAniversarioHoje(m.data_nascimento)) return false;
     if (filtroAniversario === 'mes' && !ehAniversarioNesteMes(m.data_nascimento)) return false;
     if (filtroAniversario === 'proximos7dias' && !ehAniversarioProximos7Dias(m.data_nascimento)) return false;
-
-    if (filtroTexto === '') return true;
+    if (filtroBatismo === 'batizado' && !m.batizado) return false;
+    if (filtroBatismo === 'nao_batizado' && m.batizado) return false;
+    if (filtroGrupo !== 'todos' && m.grupo_familiar_nome !== filtroGrupo) return false;
+    if (filtroProfissao && !(m.profissao || '').toLowerCase().includes(filtroProfissao.toLowerCase())) return false;
+    if (!filtroTexto) return true;
     const busca = filtroTexto.toLowerCase();
     return (
       m.nome.toLowerCase().includes(busca) ||
       (m.email && m.email.toLowerCase().includes(busca)) ||
       (m.telefone && formatPhoneNumber(m.telefone).includes(busca)) ||
+      (m.bairro && m.bairro.toLowerCase().includes(busca)) ||
+      (m.cidade && m.cidade.toLowerCase().includes(busca)) ||
+      (m.profissao && m.profissao.toLowerCase().includes(busca)) ||
+      (m.grupo_familiar_nome && m.grupo_familiar_nome.toLowerCase().includes(busca)) ||
       (m.endereco_completo && m.endereco_completo.toLowerCase().includes(busca))
     );
   });
 
-  const aniversariantesHoje = membros.filter(m => 
+  const aniversariantesHoje = membros.filter(m =>
     m.ativo && m.status_membro === 'ativo' && ehAniversarioHoje(m.data_nascimento)
   );
 
   const abrirWhatsApp = (telefone: string | null, nome: string) => {
-    if (!telefone) {
-      setMensagem('Este membro não possui telefone cadastrado');
-      return;
-    }
-    const numeroLimpo = telefone.replace(/\D/g, '');
-    const msg = `Olá ${nome}! Que a paz do Senhor esteja contigo!`;
-    window.open(`https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+    if (!telefone) { setMensagem('Este membro não possui telefone cadastrado'); return; }
+    const num = telefone.replace(/\D/g, '');
+    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(`Olá ${nome}! Que a paz do Senhor esteja contigo!`)}`, '_blank');
   };
 
   const ligarPara = (telefone: string | null) => {
-    if (!telefone) {
-      setMensagem('Este membro não possui telefone cadastrado');
-      return;
-    }
+    if (!telefone) { setMensagem('Este membro não possui telefone cadastrado'); return; }
     window.location.href = `tel:${telefone}`;
   };
 
@@ -196,16 +217,14 @@ export default function PastorarMembrosPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto" />
           <p className="mt-4 text-slate-600">Verificando permissões...</p>
         </div>
       </div>
     );
   }
 
-  if (!user || !podeAcessar) {
-    return null;
-  }
+  if (!user || !podeAcessar) return null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -215,25 +234,16 @@ export default function PastorarMembrosPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Users className="w-8 h-8 text-blue-600" />
-              Pastorear Membros
+              <Users className="w-8 h-8 text-blue-600" /> Pastorear Membros
             </h1>
-            <p className="text-slate-600 mt-1">
-              Acompanhamento e cuidado pastoral da igreja
-            </p>
+            <p className="text-slate-600 mt-1">Acompanhamento e cuidado pastoral da igreja</p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/admin/membros/novo')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm"
-            >
-              <span className="text-lg leading-none">+</span>
-              Adicionar
+            <button onClick={() => router.push('/admin/membros/novo')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm">
+              <span className="text-lg leading-none">+</span> Adicionar
             </button>
-            <button
-              onClick={() => router.push('/admin')}
-              className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors font-medium"
-            >
+            <button onClick={() => router.push('/admin')} className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors font-medium">
               ← Voltar
             </button>
           </div>
@@ -241,18 +251,10 @@ export default function PastorarMembrosPage() {
 
         {/* Mensagem */}
         {mensagem && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            mensagem.includes('sucesso') ? 'bg-green-50 text-green-800 border border-green-200' :
-            'bg-red-50 text-red-800 border border-red-200'
-          }`}>
+          <div className={`mb-6 p-4 rounded-lg ${mensagem.includes('sucesso') ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
             <div className="flex items-center justify-between">
               <span className="text-sm">{mensagem}</span>
-              <button
-                onClick={() => setMensagem('')}
-                className="text-current opacity-50 hover:opacity-100"
-              >
-                ✕
-              </button>
+              <button onClick={() => setMensagem('')} className="text-current opacity-50 hover:opacity-100">✕</button>
             </div>
           </div>
         )}
@@ -263,50 +265,34 @@ export default function PastorarMembrosPage() {
             <div className="flex items-center gap-3 mb-4">
               <Cake className="w-8 h-8 text-pink-600" />
               <div>
-                <h3 className="text-xl font-bold text-pink-900">
-                  Aniversariantes de Hoje
-                </h3>
-                <p className="text-sm text-pink-700">
-                  Não esqueça de parabenizar
-                </p>
+                <h3 className="text-xl font-bold text-pink-900">Aniversariantes de Hoje</h3>
+                <p className="text-sm text-pink-700">Não esqueça de parabenizar</p>
               </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {aniversariantesHoje.map(membro => (
-                <div
-                  key={membro.id}
+                <div key={membro.id}
                   className="bg-white rounded-lg p-4 border-2 border-pink-200 hover:border-pink-400 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/admin/membros/${membro.id}`)}
-                >
+                  onClick={() => router.push(`/admin/membros/${membro.id}`)}>
                   <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-bold text-slate-900">{membro.nome}</p>
-                      <p className="text-sm text-slate-600">
-                        {calcularIdade(membro.data_nascimento)} anos
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <MembroAvatar nome={membro.nome} fotoUrl={membro.foto_url} />
+                      <div>
+                        <p className="font-bold text-slate-900">{membro.nome}</p>
+                        <p className="text-sm text-slate-600">{calcularIdade(membro.data_nascimento)} anos</p>
+                        {membro.profissao && <p className="text-xs text-slate-500">{membro.profissao}</p>}
+                      </div>
                     </div>
-                    <Cake className="w-6 h-6 text-pink-500" />
+                    <Cake className="w-6 h-6 text-pink-500 flex-shrink-0" />
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        abrirWhatsApp(membro.telefone, membro.nome);
-                      }}
-                      className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                      </svg>
+                    <button onClick={e => { e.stopPropagation(); abrirWhatsApp(membro.telefone, membro.nome); }}
+                      className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm font-medium flex items-center justify-center gap-1">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
                       WhatsApp
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ligarPara(membro.telefone);
-                      }}
-                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
+                    <button onClick={e => { e.stopPropagation(); ligarPara(membro.telefone); }}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                       <Phone className="w-4 h-4" />
                     </button>
                   </div>
@@ -317,78 +303,43 @@ export default function PastorarMembrosPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <p className="text-sm text-slate-600 flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Total
-            </p>
-            <p className="text-2xl font-bold text-slate-900">{membros.length}</p>
-          </div>
-          <div className="bg-green-50 rounded-lg border border-green-200 p-4">
-            <p className="text-sm text-green-600 flex items-center gap-2">
-              <Church className="w-4 h-4" />
-              Ativos
-            </p>
-            <p className="text-2xl font-bold text-green-900">
-              {membros.filter(m => m.status_membro === 'ativo').length}
-            </p>
-          </div>
-          <div className="bg-pink-50 rounded-lg border border-pink-200 p-4">
-            <p className="text-sm text-pink-600 flex items-center gap-2">
-              <Cake className="w-4 h-4" />
-              Aniver. Hoje
-            </p>
-            <p className="text-2xl font-bold text-pink-900">{aniversariantesHoje.length}</p>
-          </div>
-          <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
-            <p className="text-sm text-blue-600 flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Este Mês
-            </p>
-            <p className="text-2xl font-bold text-blue-900">
-              {membros.filter(m => ehAniversarioNesteMes(m.data_nascimento)).length}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+          {[
+            { label: 'Total', val: membros.length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
+            { label: 'Ativos', val: membros.filter(m => m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: 'Aniv. Hoje', val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
+            { label: 'Este Mês', val: membros.filter(m => ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
+            { label: 'Batizados', val: membros.filter(m => m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: 'Grupos', val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
+          ].map(stat => (
+            <div key={stat.label} className={`rounded-lg border p-4 ${stat.cor}`}>
+              <p className={`text-xs flex items-center gap-1 mb-1 ${stat.sub}`}>{stat.icone}{stat.label}</p>
+              <p className={`text-2xl font-bold ${stat.text}`}>{stat.val}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Filtros — oculta na visão família */}
+        {/* Filtros */}
         {!visaoFamilia && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-            <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <Filter className="w-5 h-5 text-slate-600" />
-              Filtros
-            </h3>
-            
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                <Filter className="w-5 h-5 text-slate-600" /> Filtros
+              </h3>
+              <button onClick={() => setFiltrosExpandidos(!filtrosExpandidos)} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                {filtrosExpandidos ? 'Menos filtros ▲' : 'Mais filtros ▼'}
+              </button>
+            </div>
             <div className="space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nome, email, telefone ou endereço..."
-                  value={filtroTexto}
-                  onChange={(e) => setFiltroTexto(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <input type="text" placeholder="Buscar por nome, email, telefone, bairro, profissão, grupo familiar..."
+                  value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
-
               <div className="grid sm:grid-cols-3 gap-3">
-                <select
-                  value={filtroAniversario}
-                  onChange={(e) => setFiltroAniversario(e.target.value as FiltroAniversario)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="todos">Todos os Aniversários</option>
-                  <option value="hoje">Hoje</option>
-                  <option value="proximos7dias">Próximos 7 dias</option>
-                  <option value="mes">Este mês</option>
-                </select>
-
-                <select
-                  value={filtroStatus}
-                  onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
+                <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value as FiltroStatus)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="todos">Todos os Status</option>
                   <option value="ativo">Ativos</option>
                   <option value="visitante">Visitantes</option>
@@ -396,59 +347,60 @@ export default function PastorarMembrosPage() {
                   <option value="afastado">Afastados</option>
                   <option value="falecido">Falecidos</option>
                 </select>
-
-                <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={mostrarInativos}
-                    onChange={(e) => setMostrarInativos(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">
-                    Mostrar inativos
-                  </span>
+                <select value={filtroAniversario} onChange={e => setFiltroAniversario(e.target.value as FiltroAniversario)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <option value="todos">Todos os Aniversários</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="proximos7dias">Próximos 7 dias</option>
+                  <option value="mes">Este mês</option>
+                </select>
+                <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100">
+                  <input type="checkbox" checked={mostrarInativos} onChange={e => setMostrarInativos(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">Mostrar inativos</span>
                 </label>
               </div>
+              {filtrosExpandidos && (
+                <div className="grid sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+                  <select value={filtroBatismo} onChange={e => setFiltroBatismo(e.target.value as FiltroBatismo)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">Batismo: Todos</option>
+                    <option value="batizado">Batizados</option>
+                    <option value="nao_batizado">Não batizados</option>
+                  </select>
+                  <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">Todos os grupos</option>
+                    {gruposUnicos.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input type="text" placeholder="Filtrar por profissão..." value={filtroProfissao}
+                      onChange={e => setFiltroProfissao(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Lista de Membros / Famílias */}
+        {/* Lista / Famílias */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-
-          {/* Header com toggle */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 flex items-center justify-between">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Users className="w-6 h-6" />
               {visaoFamilia ? 'Famílias' : 'Membros'}
               {!visaoFamilia && (
-                <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">
-                  {membrosFiltrados.length}
-                </span>
+                <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">{membrosFiltrados.length}</span>
               )}
             </h3>
-
             <div className="flex items-center bg-white/20 rounded-lg p-1 gap-1">
-              <button
-                onClick={() => setVisaoFamilia(false)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                  !visaoFamilia
-                    ? 'bg-white text-blue-700'
-                    : 'text-white hover:bg-white/10'
-                }`}
-              >
-                Lista
-              </button>
-              <button
-                onClick={() => setVisaoFamilia(true)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  visaoFamilia
-                    ? 'bg-white text-blue-700'
-                    : 'text-white hover:bg-white/10'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Famílias
+              <button onClick={() => setVisaoFamilia(false)}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${!visaoFamilia ? 'bg-white text-blue-700' : 'text-white hover:bg-white/10'}`}>Lista</button>
+              <button onClick={() => setVisaoFamilia(true)}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 ${visaoFamilia ? 'bg-white text-blue-700' : 'text-white hover:bg-white/10'}`}>
+                <Users className="w-4 h-4" /> Famílias
               </button>
             </div>
           </div>
@@ -458,7 +410,7 @@ export default function PastorarMembrosPage() {
               <FamiliaView />
             ) : loading ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto" />
                 <p className="mt-2 text-slate-600">Carregando membros...</p>
               </div>
             ) : membrosFiltrados.length === 0 ? (
@@ -470,12 +422,12 @@ export default function PastorarMembrosPage() {
               <div className="space-y-4">
                 {membrosFiltrados.map(membro => {
                   const idade = calcularIdade(membro.data_nascimento);
-                  const ehMembro = membro.cargo === 'membro';
+                  const ehMembroCargo = membro.cargo === 'membro';
                   const temAlerta = membro.situacao_saude || membro.observacoes || ehAniversarioProximos7Dias(membro.data_nascimento);
+                  const endereco = enderecoResumido(membro);
 
                   return (
-                    <div
-                      key={membro.id}
+                    <div key={membro.id}
                       onClick={() => router.push(`/admin/membros/${membro.id}`)}
                       className={`border-2 rounded-lg p-4 transition-all hover:shadow-md cursor-pointer ${
                         !membro.ativo ? 'opacity-60' :
@@ -485,126 +437,123 @@ export default function PastorarMembrosPage() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          {/* Nome e Status */}
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <h4 className="text-lg font-bold text-slate-900">{membro.nome}</h4>
-                            
-                            {ehAniversarioHoje(membro.data_nascimento) && (
-                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-pink-100 text-pink-800 border border-pink-300 flex items-center gap-1">
-                                <Cake className="w-3 h-3" />
-                                Aniversário
-                              </span>
-                            )}
-                            
-                            {!ehMembro && (
-                              <span className={`px-2 py-1 rounded text-xs font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>
-                                {getCargoLabel(membro.cargo as CargoTipo)}
-                              </span>
-                            )}
-                            
-                            <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusCor(membro.status_membro)}`}>
-                              {getStatusLabel(membro.status_membro)}
-                            </span>
-                          </div>
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {/* Avatar */}
+                          <MembroAvatar nome={membro.nome} fotoUrl={membro.foto_url} />
 
-                          {/* Alertas Prioritários */}
-                          {temAlerta && (
-                            <div className="mb-3 space-y-2">
-                              {ehAniversarioProximos7Dias(membro.data_nascimento) && !ehAniversarioHoje(membro.data_nascimento) && (
-                                <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2">
-                                  <Cake className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                  <span className="text-sm text-blue-800">
-                                    Aniversário próximo: {formatarData(membro.data_nascimento)}
-                                  </span>
+                          <div className="flex-1 min-w-0">
+                            {/* Nome e badges */}
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <h4 className="text-lg font-bold text-slate-900">{membro.nome}</h4>
+                              {membro.sexo && <span className="text-xs text-slate-500">{membro.sexo === 'M' ? '♂' : '♀'}</span>}
+                              {ehAniversarioHoje(membro.data_nascimento) && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-pink-100 text-pink-800 border border-pink-300 flex items-center gap-1">
+                                  <Cake className="w-3 h-3" /> Aniversário
+                                </span>
+                              )}
+                              {!ehMembroCargo && (
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>
+                                  {getCargoLabel(membro.cargo as CargoTipo)}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusCor(membro.status_membro)}`}>
+                                {getStatusLabel(membro.status_membro)}
+                              </span>
+                              {membro.batizado && (
+                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">Batizado</span>
+                              )}
+                            </div>
+
+                            {/* Alertas */}
+                            {temAlerta && (
+                              <div className="mb-2 space-y-1.5">
+                                {ehAniversarioProximos7Dias(membro.data_nascimento) && !ehAniversarioHoje(membro.data_nascimento) && (
+                                  <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5">
+                                    <Cake className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                    <span className="text-xs text-blue-800">Aniversário próximo: {formatarData(membro.data_nascimento)}</span>
+                                  </div>
+                                )}
+                                {membro.situacao_saude && (
+                                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                                    <Heart className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-red-800 line-clamp-1"><strong>Saúde:</strong> {membro.situacao_saude}</p>
+                                  </div>
+                                )}
+                                {membro.observacoes && (
+                                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-amber-800 line-clamp-1"><strong>Obs:</strong> {membro.observacoes}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Informações enriquecidas */}
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-sm text-slate-600">
+                              {membro.data_nascimento && (
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span>{formatarData(membro.data_nascimento)} ({idade} anos)</span>
                                 </div>
                               )}
-                              
-                              {membro.situacao_saude && (
-                                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-2">
-                                  <Heart className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-red-900">Saúde:</p>
-                                    <p className="text-sm text-red-800 line-clamp-2">{membro.situacao_saude}</p>
-                                  </div>
+                              {membro.telefone && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span>{formatPhoneNumber(membro.telefone)}</span>
                                 </div>
                               )}
-                              
-                              {membro.observacoes && (
-                                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                                  <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-amber-900">Observações:</p>
-                                    <p className="text-sm text-amber-800 line-clamp-2">{membro.observacoes}</p>
-                                  </div>
+                              {membro.email && (
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span className="truncate">{membro.email}</span>
+                                </div>
+                              )}
+                              {membro.profissao && (
+                                <div className="flex items-center gap-1.5">
+                                  <Briefcase className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span>{membro.profissao}</span>
+                                </div>
+                              )}
+                              {membro.grupo_familiar_nome && (
+                                <div className="flex items-center gap-1.5">
+                                  <Home className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span className="truncate">Grupo: {membro.grupo_familiar_nome}</span>
+                                </div>
+                              )}
+                              {endereco && (
+                                <div className="flex items-center gap-1.5 sm:col-span-2">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <span className="truncate">{endereco}</span>
                                 </div>
                               )}
                             </div>
-                          )}
 
-                          {/* Informações Básicas */}
-                          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm text-slate-600">
-                            {membro.data_nascimento && (
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-slate-400" />
-                                <span>{formatarData(membro.data_nascimento)} ({idade} anos)</span>
-                              </div>
-                            )}
-                            {membro.telefone && (
-                              <div className="flex items-center gap-2">
-                                <Phone className="w-4 h-4 text-slate-400" />
-                                <span>{formatPhoneNumber(membro.telefone)}</span>
-                              </div>
-                            )}
-                            {membro.email && (
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-4 h-4 text-slate-400" />
-                                <span className="truncate">{membro.email}</span>
-                              </div>
-                            )}
-                            {membro.endereco_completo && (
-                              <div className="flex items-center gap-2 sm:col-span-2">
-                                <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                                <span className="truncate">{membro.endereco_completo}</span>
+                            {/* Cursos de discipulado */}
+                            {membro.cursos_discipulado && membro.cursos_discipulado.length > 0 && (
+                              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                                {membro.cursos_discipulado.map(c => (
+                                  <span key={c} className="px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200">{c}</span>
+                                ))}
                               </div>
                             )}
                           </div>
                         </div>
 
                         {/* Ações */}
-                        <div className="flex flex-col gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              abrirWhatsApp(membro.telefone, membro.nome);
-                            }}
-                            disabled={!membro.telefone}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap flex items-center gap-2 justify-center"
-                          >
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                            </svg>
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                          <button onClick={e => { e.stopPropagation(); abrirWhatsApp(membro.telefone, membro.nome); }} disabled={!membro.telefone}
+                            className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1.5 justify-center">
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
                             WhatsApp
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              ligarPara(membro.telefone);
-                            }}
-                            disabled={!membro.telefone}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2 justify-center"
-                          >
-                            <Phone className="w-4 h-4" />
-                            Ligar
+                          <button onClick={e => { e.stopPropagation(); ligarPara(membro.telefone); }} disabled={!membro.telefone}
+                            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1.5 justify-center">
+                            <Phone className="w-3.5 h-3.5" /> Ligar
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/admin/membros/${membro.id}`);
-                            }}
-                            className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
-                          >
-                            Ver Detalhes
+                          <button onClick={e => { e.stopPropagation(); router.push(`/admin/membros/${membro.id}`); }}
+                            className="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-xs font-medium">
+                            Detalhes
                           </button>
                         </div>
                       </div>
@@ -615,7 +564,6 @@ export default function PastorarMembrosPage() {
             )}
           </div>
         </div>
-
       </main>
     </div>
   );
