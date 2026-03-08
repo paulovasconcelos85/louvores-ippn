@@ -288,7 +288,16 @@ export default function CadastroPublicoPage() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">📱 Telefone / WhatsApp <span className="text-red-500">*</span></label>
-                <input type="tel" value={telefone} onChange={e => setTelefone(formatPhoneNumber(e.target.value))} placeholder="(92) 99999-9999" className={inputCls} />
+                <input 
+                  type="tel" 
+                  value={telefone} 
+                  onChange={e => {
+                    const formatado = formatPhoneNumber(e.target.value);
+                    if (formatado.length <= 15) setTelefone(formatado);
+                  }} 
+                  placeholder="(92) 99999-9999" 
+                  className={inputCls} 
+                />
                 <p className="mt-1.5 text-xs text-slate-400">Usado para contato pela liderança. Não compartilhamos com terceiros.</p>
               </div>
               <div>

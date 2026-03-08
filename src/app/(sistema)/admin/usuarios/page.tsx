@@ -229,7 +229,7 @@ export default function GerenciarPessoas() {
     try {
       const resultado = await criarPessoa({
         nome: novoNome.trim(),
-        cargo: apenasMembro ? 'membro' : novoCargo, // Define "membro" automaticamente
+        cargo: apenasMembro ? 'ativo' : novoCargo, // Define "membro" automaticamente
         email: apenasMembro ? undefined : novoEmail.toLowerCase().trim(),
         telefone: novoTelefone ? unformatPhoneNumber(novoTelefone.trim()) : undefined
       });
