@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Building2, 
-  Eye, 
-  Music, 
-  Church, 
-  Calendar,
-  ChevronLeft,
-  ChevronRight
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Music } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { EscalaIntegrada } from '@/components/EscalaIntegrada';
@@ -20,16 +12,16 @@ interface LouvorItem {
   ordem: number;
   tipo: string;
   tom: string | null;
-  descricao: string | null;
-  canticos: {
-    nome: string;
-  } | null;
+  conteudo_publico: string | null;
+  canticos: { nome: string } | null;
 }
 
 interface Culto {
   'Culto nr.': number;
   Dia: string;
   imagem_url: string | null;
+  palavra_pastoral: string | null;
+  palavra_pastoral_autor: string | null;
   louvor_itens: LouvorItem[];
 }
 
@@ -40,196 +32,94 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
 
-  const handleLogout = async () => {
-    await signOut();
-    window.location.reload();
-  };
-
   const formatDate = (dateString: string) => {
     const [year, month, day] = dateString.split('T')[0].split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString('pt-BR', {
+      weekday: 'long',
       day: '2-digit',
       month: 'long',
       year: 'numeric',
     });
   };
 
-  const getMusicas = (culto: Culto) => {
+  const getItensOrdenados = (culto: Culto): LouvorItem[] => {
     if (!culto.louvor_itens) return [];
-
-    const itensOrdenados = culto.louvor_itens.sort((a, b) => a.ordem - b.ordem);
-    
-    return itensOrdenados.map(item => {
-      let tipoExibicao = item.tipo;
-      
-      // Se for "Cântico", mostrar com a posição real (ordem)
-      if (item.tipo === 'Cântico') {
-        tipoExibicao = `Cântico ${item.ordem}`;
-      }
-      
-      return {
-        tipo: tipoExibicao,
-        nome: item.canticos?.nome || '',
-        tom: item.tom,
-        descricao: item.descricao,
-      };
-    });
+    return [...culto.louvor_itens].sort((a, b) => a.ordem - b.ordem);
   };
 
-  // Formata data curta para WhatsApp (dd/mm/yyyy) - CORRIGIDO para timezone
-  const formatDateShort = (dateString: string) => {
-    if (!dateString) return '';
-    const [year, month, day] = dateString.split('T')[0].split('-');
-    return `${day}/${month}/${year}`;
-  };
+  const agruparItens = (itens: LouvorItem[]) => {
+    const agrupados: {
+      tipo: string;
+      conteudo_publico: string | null;
+      canticos: { nome: string; tom: string | null }[];
+    }[] = [];
 
-  // Gera mensagem para WhatsApp com LITURGIA COMPLETA e ESCALA integrada (SE logado)
-  const gerarMensagemWhatsApp = async (culto: Culto) => {
-    const musicas = getMusicas(culto);
-    const data = formatDateShort(culto.Dia);
-    
-    // 🎯 Buscar escala do culto (SOMENTE SE LOGADO)
-    let escalaTexto = '';
-    if (user) {
-      try {
-        const dataCulto = culto.Dia.split('T')[0];
-        
-        const { data: escalas } = await supabase
-          .from('escalas')
-          .select('id')
-          .eq('data', dataCulto)
-          .eq('tipo_culto', 'dominical_manha')
-          .single();
-
-        if (escalas) {
-          const { data: funcoes } = await supabase
-            .from('escalas_funcoes')
-            .select(`
-              ordem,
-              tags_funcoes (nome),
-              pessoas (nome)
-            `)
-            .eq('escala_id', escalas.id)
-            .order('ordem', { ascending: true });
-
-          if (funcoes && funcoes.length > 0) {
-            escalaTexto = '\n━━━━━━━━━━━━━━━\n\n*ESCALA DO CULTO*\n';
-            funcoes.forEach((f: any) => {
-              escalaTexto += `• ${f.tags_funcoes?.nome}: ${f.pessoas?.nome}\n`;
-            });
-          }
+    for (const it of itens) {
+      const ultimo = agrupados[agrupados.length - 1];
+      if (ultimo && ultimo.tipo === it.tipo && ultimo.conteudo_publico === it.conteudo_publico) {
+        if (it.canticos?.nome) {
+          ultimo.canticos.push({ nome: it.canticos.nome, tom: it.tom });
         }
-      } catch (error) {
-        console.error('Erro ao buscar escala:', error);
+      } else {
+        agrupados.push({
+          tipo: it.tipo,
+          conteudo_publico: it.conteudo_publico,
+          canticos: it.canticos?.nome ? [{ nome: it.canticos.nome, tom: it.tom }] : [],
+        });
       }
-    }  
-    
-    let mensagem = `*LITURGIA DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
-    
-    // PARTE 1: TÍTULOS DA LITURGIA
-    mensagem += `🎹 *PRELÚDIO*\n`;
-    mensagem += `👋 *SAUDAÇÃO E ACOLHIDA À IGREJA*\n`;
-    mensagem += `🎤 *CÂNTICOS CONGREGACIONAIS*\n`;
-    mensagem += `🙏 *CONFISSÃO DE PECADOS*\n`;
-    mensagem += `💰 *DÍZIMOS E OFERTAS*\n`;
-    mensagem += `🎤 *CÂNTICOS OFERTA*\n`;
-    mensagem += `📖 *PREGAÇÃO DA PALAVRA*\n`;
-    mensagem += `🎤 *CÂNTICO FINAL - POSLÚDIO*\n`;
-    mensagem += `✋ *ORAÇÃO - BÊNÇÃO APOSTÓLICA*\n`;
-    mensagem += `📢 *LEMBRETES - LITURGO*\n`;
-    
-    // PARTE 2: LISTA DE CÂNTICOS NUMERADOS
-    mensagem += `\n━━━━━━━━━━━━━━━\n\n*CÂNTICOS DO CULTO:*\n`;
-    
-    let numeroSequencial = 1;
-    
-    // Prelúdio
-    const preludio = musicas.find(m => m.tipo === 'Prelúdio');
-    if (preludio) {
-      mensagem += `${numeroSequencial}. ${preludio.nome}${preludio.tom ? ` (${preludio.tom})` : ''}\n`;
-      numeroSequencial++;
     }
-    
-    // Cânticos Congregacionais
-    const canticos = musicas.filter(m => m.tipo.startsWith('Cântico'));
-    canticos.forEach(c => {
-      mensagem += `${numeroSequencial}. ${c.nome}${c.tom ? ` (${c.tom})` : ''}\n`;
-      numeroSequencial++;
-    });
-    
-    // Oferta
-    const oferta = musicas.find(m => m.tipo === 'Oferta');
-    if (oferta) {
-      mensagem += `${numeroSequencial}. ${oferta.nome}${oferta.tom ? ` (${oferta.tom})` : ''}\n`;
-      numeroSequencial++;
-    }
-    
-    // Pósludio (Cântico Final)
-    const posludio = musicas.find(m => m.tipo === 'Pósludio');
-    if (posludio) {
-      mensagem += `${numeroSequencial}. ${posludio.nome}${posludio.tom ? ` (${posludio.tom})` : ''}\n`;
-      numeroSequencial++;
-    }
-    
-    // Ceia (se houver)
-    const ceia = musicas.find(m => m.tipo === 'Ceia');
-    if (ceia) {
-      mensagem += `${numeroSequencial}. ${ceia.nome}${ceia.tom ? ` (${ceia.tom})` : ''}\n`;
-    }
-    
-    // PARTE 3: ESCALA
-    mensagem += escalaTexto;
-    
-    return mensagem;
+    return agrupados;
   };
 
   const compartilharWhatsApp = async (culto: Culto) => {
-    const mensagem = await gerarMensagemWhatsApp(culto);
-    const mensagemEncoded = encodeURIComponent(mensagem.normalize('NFC'));
-    window.open(`https://api.whatsapp.com/send?text=${mensagemEncoded}`, '_blank');
+    const itens = agruparItens(getItensOrdenados(culto));
+    const data = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
+    let texto = `*LITURGIA DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
+
+    if (culto.palavra_pastoral) {
+      texto += `✝️ *PALAVRA PASTORAL*\n_"${culto.palavra_pastoral}"_\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
+    }
+
+    itens.forEach((it, idx) => {
+      texto += `*${idx + 1}. ${it.tipo.toUpperCase()}*\n`;
+      if (it.conteudo_publico) texto += `${it.conteudo_publico}\n`;
+      it.canticos.forEach(c => {
+        texto += `🎵 _${c.nome}${c.tom ? ` (${c.tom})` : ''}_\n`;
+      });
+      texto += '\n';
+    });
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
   useEffect(() => {
-    // ✅ CORREÇÃO: Espera o auth carregar antes de buscar cultos
     if (authLoading) return;
-    
+
     async function fetchCultos() {
       setLoading(true);
-
       const from = page * 10;
       const to = from + 9;
 
-      // 🔒 REGRA DE VISIBILIDADE TEMPORAL
       const agora = new Date();
       const diaSemana = agora.getDay();
       const horaAtual = agora.getHours();
-
       let dataDeCorteFuturos: Date;
 
       if (user) {
-        // Usuário Logado: Vê tudo (14 dias à frente)
         dataDeCorteFuturos = new Date();
         dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
+      } else if (diaSemana === 6 && horaAtual >= 14) {
+        dataDeCorteFuturos = new Date();
+        dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 1);
+        dataDeCorteFuturos.setHours(23, 59, 59);
+      } else if (diaSemana === 0) {
+        dataDeCorteFuturos = new Date();
+        dataDeCorteFuturos.setHours(23, 59, 59);
       } else {
-        // Público Geral:
-        if (diaSemana === 6 && horaAtual >= 14) {
-          // Se for Sábado após as 14h: Vê o culto de AMANHÃ (+1 dia)
-          dataDeCorteFuturos = new Date();
-          dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 1);
-          dataDeCorteFuturos.setHours(23, 59, 59); // Garante que pegue o dia seguinte inteiro
-        } else if (diaSemana === 0) {
-          // Se for Domingo: Vê o culto de HOJE
-          dataDeCorteFuturos = new Date();
-          dataDeCorteFuturos.setHours(23, 59, 59);
-        } else {
-          // Dias de semana (Seg-Sex): Só vê o que já passou (Ontem)
-          dataDeCorteFuturos = new Date();
-          dataDeCorteFuturos.setHours(0, 0, 0, 0);
-        }
+        dataDeCorteFuturos = new Date();
+        dataDeCorteFuturos.setHours(0, 0, 0, 0);
       }
-
-      const dataCorteISO = dataDeCorteFuturos.toISOString();
 
       const { data, error } = await supabase
         .from('Louvores IPPN')
@@ -237,266 +127,253 @@ export default function Home() {
           "Culto nr.",
           Dia,
           imagem_url,
+          palavra_pastoral,
+          palavra_pastoral_autor,
           louvor_itens (
             id,
             ordem,
             tipo,
             tom,
-            descricao,
-            canticos (
-              nome
-            )
+            conteudo_publico,
+            canticos ( nome )
           )
         `)
-        .lte('Dia', dataCorteISO)
+        .lte('Dia', dataDeCorteFuturos.toISOString())
         .order('"Culto nr."', { ascending: false })
         .range(from, to);
 
-      if (error) {
-        console.error('Erro ao buscar cultos:', error);
-      } else {
-        setCultos((data as any[]) || []);
-      }
-
+      if (!error) setCultos((data as any[]) || []);
       setLoading(false);
     }
 
     fetchCultos();
-  }, [page, user, authLoading]); // ✅ CORREÇÃO: user completo + authLoading
+  }, [page, user, authLoading]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-slate-50">
+
       {/* Header */}
-      <header className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-900 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/20">
-                <Building2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold">
-                  Liturgias - IPPN
-                </h1>
-                <p className="text-emerald-100 text-sm mt-1">
-                  Igreja Presbiteriana Ponta Negra
-                </p>
-              </div>
-            </div>
+      <header className="bg-emerald-900 text-white shadow-lg">
+        <div className="max-w-4xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between">
+          <div>
+            <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-0.5">
+              Igreja Presbiteriana Ponta Negra
+            </p>
+            <h1 className="text-xl font-bold text-white">
+              Liturgias dos Cultos
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
             {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-emerald-100 text-sm hidden sm:block">
-                  {user.email}
-                </span>
+              <>
                 <button
                   onClick={() => router.push('/admin')}
-                  className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 rounded-lg transition-all font-medium"
+                  className="text-sm font-medium text-emerald-200 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
-                  Meu Painel
+                  Painel
                 </button>
                 <button
-                  onClick={handleLogout}
-                  className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 rounded-lg transition-all font-medium"
+                  onClick={async () => { await signOut(); window.location.reload(); }}
+                  className="text-sm font-medium text-emerald-300/70 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
                   Sair
                 </button>
-              </div>
+              </>
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 rounded-lg transition-all font-medium"
+                className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl transition-colors"
               >
                 Entrar
               </button>
             )}
           </div>
         </div>
-        <div className="h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Aviso para usuários logados */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* Aviso logado */}
         {user && (
-          <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
-            <div className="flex items-start gap-3">
-              <Eye className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-blue-900">
-                  Você está logado e pode ver cultos futuros
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  A congregação só verá os próximos cultos a partir de sábado às 14h
-                </p>
-              </div>
-            </div>
+          <div className="mb-6 flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
+            <p className="text-sm text-blue-700">
+              Logado — visualizando cultos futuros (até 14 dias à frente).
+            </p>
           </div>
         )}
 
-        <section className="mb-16">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-slate-900 mb-2">
-              Liturgia dos Cultos
-            </h2>
-            <p className="text-slate-600">
-              Confira a liturgia completa dos cultos realizados na IPPN.
-            </p>
+        {/* Loading */}
+        {loading && (
+          <div className="flex flex-col items-center py-24 gap-3">
+            <div className="w-8 h-8 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm">Carregando cultos...</p>
           </div>
+        )}
 
-          {loading && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700 mx-auto"></div>
-              <p className="mt-4 text-slate-600">Carregando cultos...</p>
-            </div>
-          )}
+        {/* Sem cultos */}
+        {!loading && cultos.length === 0 && (
+          <div className="flex flex-col items-center py-24 gap-3 bg-white rounded-2xl border border-slate-200">
+            <Music className="w-10 h-10 text-slate-300" />
+            <p className="text-slate-400">Nenhum culto cadastrado ainda.</p>
+          </div>
+        )}
 
-          {!loading && cultos.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-slate-200">
-              <Music className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-600">Nenhum culto cadastrado ainda</p>
-            </div>
-          )}
+        {/* Lista de cultos */}
+        {!loading && cultos.length > 0 && (
+          <div className="space-y-5">
+            {cultos.map((culto) => {
+              const itens = agruparItens(getItensOrdenados(culto));
+              const isFuturo = new Date(culto.Dia + 'T00:00:00') >= new Date();
 
-          <div className="grid gap-6">
-            {cultos.map((culto, index) => (
-              <div
-                key={culto['Culto nr.']}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-all"
-                style={{
-                  animation: `fadeIn 0.5s ease-out ${index * 0.1}s both`,
-                }}
-              >
-                <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">
-                        Culto #{culto['Culto nr.']}
-                      </h3>
-                      <p className="text-emerald-100 text-sm mt-1">
-                        {formatDate(culto.Dia)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {user && new Date(culto.Dia) > new Date() && (
-                        <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-300/30 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-amber-100" />
-                          <span className="text-xs font-semibold text-amber-100">
+              return (
+                <article
+                  key={culto['Culto nr.']}
+                  className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                >
+                  {/* Cabeçalho verde */}
+                  <div className="bg-emerald-900 px-6 py-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-1">
+                          Culto #{culto['Culto nr.']}
+                        </p>
+                        <h3 className="text-lg font-bold text-white capitalize">
+                          {formatDate(culto.Dia)}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                        {isFuturo && user && (
+                          <span className="text-xs font-bold text-amber-300 bg-amber-400/10 border border-amber-300/20 px-3 py-1 rounded-full">
                             Próximo
                           </span>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => compartilharWhatsApp(culto)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-all font-medium shadow-lg"
-                        title="Compartilhar no WhatsApp"
-                      >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                        </svg>
-                        <span className="hidden sm:inline">WhatsApp</span>
-                      </button>
-                      <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                        <Church className="w-6 h-6 text-white" />
+                        )}
+                        <button
+                          onClick={() => compartilharWhatsApp(culto)}
+                          className="flex items-center gap-2 bg-green-500 hover:bg-green-400 active:bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                          </svg>
+                          <span className="hidden sm:inline">Compartilhar</span>
+                        </button>
                       </div>
                     </div>
+
+                    {/* Escala (só logado) */}
+                    {user && (
+                      <div className="mt-4">
+                        <EscalaIntegrada
+                          dataCulto={culto.Dia.split('T')[0]}
+                          cultoConcluido={!isFuturo}
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {user && (
-                    <EscalaIntegrada 
-                      dataCulto={culto.Dia.split('T')[0]} 
-                      cultoConcluido={new Date(culto.Dia) < new Date()}
-                    />
-                  )}
-                </div>
+                  {/* Corpo */}
+                  <div className="p-6">
 
-                <div className="p-6">
-                  {culto.imagem_url && (
-                    <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 flex justify-center">
-                      <img 
-                        src={culto.imagem_url} 
-                        alt={`Tema do Culto #${culto['Culto nr.']}`} 
-                        className="max-w-full h-auto max-h-[500px] object-contain"
-                      />
-                    </div>
-                  )}
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {getMusicas(culto).map((musica, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
-                      >
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-700 text-white font-bold text-sm flex items-center justify-center">
-                          {idx + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-emerald-700 uppercase mb-1">
-                            {musica.tipo}
+                    {/* Imagem */}
+                    {culto.imagem_url && (
+                      <div className="mb-6 rounded-xl overflow-hidden bg-slate-100">
+                        <img
+                          src={culto.imagem_url}
+                          alt={`Tema do culto ${culto['Culto nr.']}`}
+                          className="w-full object-contain max-h-72"
+                        />
+                      </div>
+                    )}
+
+                    {/* Palavra Pastoral */}
+                    {culto.palavra_pastoral && (
+                      <div className="mb-6 bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4">
+                        <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">
+                          ✝️ Palavra Pastoral
+                        </p>
+                        <p className="text-slate-700 text-sm leading-relaxed italic">
+                          "{culto.palavra_pastoral}"
+                        </p>
+                        {culto.palavra_pastoral_autor && (
+                          <p className="text-slate-400 text-xs mt-2 text-right">
+                            — {culto.palavra_pastoral_autor}
                           </p>
-                          <p
-                            className="text-slate-900 font-medium cursor-pointer text-emerald-800 hover:underline"
-                            onClick={() => router.push(`/letra/${encodeURIComponent(musica.nome)}`)}
-                          >
-                            {musica.nome} {musica.tom && `(${musica.tom})`}
-                          </p>
-                          {musica.descricao && musica.tipo === 'Pregação da Palavra' && (
-                            <p className="text-xs text-slate-600 mt-2 whitespace-pre-line">
-                              {musica.descricao}
+                        )}
+                      </div>
+                    )}
+
+                    {/* Itens da liturgia */}
+                    <div className="divide-y divide-slate-50">
+                      {itens.map((it, idx) => (
+                        <div key={idx} className="py-3 flex items-start gap-3">
+                          <span className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800">
+                              {it.tipo}
                             </p>
-                          )}
+                            {it.conteudo_publico && (
+                              <p className="text-sm text-slate-500 mt-1 whitespace-pre-line leading-relaxed">
+                                {it.conteudo_publico}
+                              </p>
+                            )}
+                            {it.canticos.length > 0 && (
+                              <div className="mt-1.5 space-y-0.5">
+                                {it.canticos.map((c, cidx) => (
+                                  <p
+                                    key={cidx}
+                                    onClick={() => router.push(`/letra/${encodeURIComponent(c.nome)}`)}
+                                    className="text-sm text-emerald-700 font-medium italic cursor-pointer hover:text-emerald-900 hover:underline transition-colors"
+                                  >
+                                    🎵 {c.nome}{c.tom ? ` (${c.tom})` : ''}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                      ))}
+                    </div>
 
-          <div className="flex justify-center gap-4 mt-8">
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Paginação */}
+        {!loading && (
+          <div className="flex items-center justify-center gap-3 mt-10">
             <button
               onClick={() => setPage(p => Math.max(p - 1, 0))}
-              className="flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={page === 0}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              <ChevronLeft className="w-4 h-4" />
-              Anteriores
+              <ChevronLeft className="w-4 h-4" /> Anteriores
             </button>
+            <span className="text-xs text-slate-400 font-medium">pág. {page + 1}</span>
             <button
               onClick={() => setPage(p => p + 1)}
-              className="flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-all font-medium shadow-sm"
+              disabled={cultos.length < 10}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              Próximos
-              <ChevronRight className="w-4 h-4" />
+              Próximos <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        </section>
+        )}
+
       </main>
 
-      <footer className="bg-emerald-900 text-white mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <p className="text-emerald-100 text-sm">
-              OIKOS Hub - Igreja Presbiteriana Ponta Negra
-            </p>
-            <p className="text-emerald-200/60 text-xs mt-2">
-              Manaus, Amazonas
-            </p>
-          </div>
+      <footer className="border-t border-slate-100 mt-16 bg-white">
+        <div className="max-w-4xl mx-auto px-5 py-6 text-center">
+          <p className="text-xs text-slate-400 uppercase tracking-widest font-medium">
+            OIKOS Hub · Igreja Presbiteriana Ponta Negra · Manaus/AM
+          </p>
         </div>
       </footer>
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
     </div>
   );
 }

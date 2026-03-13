@@ -8,12 +8,19 @@ import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
+<<<<<<< Updated upstream
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
+=======
+>>>>>>> Stashed changes
 import {
   ArrowLeft, Save, Phone, Mail, MapPin, Calendar, Heart,
   AlertCircle, MessageSquare, Plus, Edit2, Trash2, User,
   Cake, Church, Clock, Briefcase, GraduationCap, Home,
+<<<<<<< Updated upstream
   Users, BookOpen, Globe, Flag, ChevronDown, ChevronUp, Camera,
+=======
+  Users, BookOpen, Globe, Flag, ChevronDown, ChevronUp
+>>>>>>> Stashed changes
 } from 'lucide-react';
 
 interface Membro {
@@ -31,6 +38,10 @@ interface Membro {
   ativo: boolean;
   observacoes: string | null;
   foto_url: string | null;
+<<<<<<< Updated upstream
+=======
+  // Novos campos
+>>>>>>> Stashed changes
   sexo: 'M' | 'F' | null;
   estado_civil: string | null;
   conjuge_nome: string | null;
@@ -72,6 +83,7 @@ interface NotaPastoral {
 
 type TipoNota = 'nota' | 'visita' | 'ligacao' | 'oracao' | 'aconselhamento' | 'urgente';
 
+<<<<<<< Updated upstream
 // ─── Mini Mapa ────────────────────────────────────────────────────────────────
 function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string }) {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY;
@@ -120,6 +132,19 @@ function SecaoColapsavel({
   titulo, icone, children, defaultAberta = true,
 }: {
   titulo: string; icone: React.ReactNode; children: React.ReactNode; defaultAberta?: boolean;
+=======
+// ─── Componente de Seção Colapsável ──────────────────────────────────────────
+function SecaoColapsavel({
+  titulo,
+  icone,
+  children,
+  defaultAberta = true,
+}: {
+  titulo: string;
+  icone: React.ReactNode;
+  children: React.ReactNode;
+  defaultAberta?: boolean;
+>>>>>>> Stashed changes
 }) {
   const [aberta, setAberta] = useState(defaultAberta);
   return (
@@ -129,10 +154,22 @@ function SecaoColapsavel({
         onClick={() => setAberta(!aberta)}
         className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
       >
+<<<<<<< Updated upstream
         <h3 className="font-semibold text-slate-900 flex items-center gap-2">{icone}{titulo}</h3>
         {aberta
           ? <ChevronUp className="w-4 h-4 text-slate-400" />
           : <ChevronDown className="w-4 h-4 text-slate-400" />}
+=======
+        <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+          {icone}
+          {titulo}
+        </h3>
+        {aberta ? (
+          <ChevronUp className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        )}
+>>>>>>> Stashed changes
       </button>
       {aberta && <div className="px-6 pb-6">{children}</div>}
     </div>
@@ -141,9 +178,21 @@ function SecaoColapsavel({
 
 // ─── Campo de Info ────────────────────────────────────────────────────────────
 function CampoInfo({
+<<<<<<< Updated upstream
   icone, label, valor, span2 = false,
 }: {
   icone: React.ReactNode; label: string; valor: React.ReactNode; span2?: boolean;
+=======
+  icone,
+  label,
+  valor,
+  span2 = false,
+}: {
+  icone: React.ReactNode;
+  label: string;
+  valor: React.ReactNode;
+  span2?: boolean;
+>>>>>>> Stashed changes
 }) {
   if (!valor || valor === '-') return null;
   return (
@@ -157,7 +206,10 @@ function CampoInfo({
   );
 }
 
+<<<<<<< Updated upstream
 // ─── Page ─────────────────────────────────────────────────────────────────────
+=======
+>>>>>>> Stashed changes
 export default function MembroDetalhesPage() {
   const router = useRouter();
   const params = useParams();
@@ -173,7 +225,11 @@ export default function MembroDetalhesPage() {
   const [modoEdicao, setModoEdicao] = useState(false);
   const [fotoError, setFotoError] = useState(false);
 
+<<<<<<< Updated upstream
   // ── Form states ──────────────────────────────────────────────────────────────
+=======
+  // ── Form states ──
+>>>>>>> Stashed changes
   const [nome, setNome] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -184,6 +240,10 @@ export default function MembroDetalhesPage() {
   const [situacaoSaude, setSituacaoSaude] = useState('');
   const [statusMembro, setStatusMembro] = useState<string>('ativo');
   const [observacoes, setObservacoes] = useState('');
+<<<<<<< Updated upstream
+=======
+  // Novos campos
+>>>>>>> Stashed changes
   const [sexo, setSexo] = useState<string>('');
   const [estadoCivil, setEstadoCivil] = useState('');
   const [conjugeNome, setConjugeNome] = useState('');
@@ -195,6 +255,7 @@ export default function MembroDetalhesPage() {
   const [nacionalidade, setNacionalidade] = useState('Brasileira');
   const [escolaridade, setEscolaridade] = useState('');
   const [profissao, setProfissao] = useState('');
+<<<<<<< Updated upstream
 
   // Endereço
   const [logradouro, setLogradouro] = useState('');
@@ -217,6 +278,22 @@ export default function MembroDetalhesPage() {
   const [grupoFamiliarLider, setGrupoFamiliarLider] = useState('');
 
   // ── Notas ────────────────────────────────────────────────────────────────────
+=======
+  const [logradouro, setLogradouro] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cep, setCep] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
+  const [batizado, setBatizado] = useState(false);
+  const [dataProfissaoFe, setDataProfissaoFe] = useState('');
+  const [transferidoIpb, setTransferidoIpb] = useState(false);
+  const [transferidoOutra, setTransferidoOutra] = useState('');
+  const [cursosDiscipulado, setCursosDiscipulado] = useState('');
+  const [grupoFamiliarNome, setGrupoFamiliarNome] = useState('');
+  const [grupoFamiliarLider, setGrupoFamiliarLider] = useState('');
+
+  // ── Notas ──
+>>>>>>> Stashed changes
   const [modalNotaAberto, setModalNotaAberto] = useState(false);
   const [tipoNota, setTipoNota] = useState<TipoNota>('nota');
   const [tituloNota, setTituloNota] = useState('');
@@ -243,8 +320,14 @@ export default function MembroDetalhesPage() {
         .eq('id', membroId)
         .single();
       if (error) throw error;
+<<<<<<< Updated upstream
       setMembro(data);
       setFotoError(false);
+=======
+
+      setMembro(data);
+      // Preencher form
+>>>>>>> Stashed changes
       setNome(data.nome);
       setFotoUrl(data.foto_url || '');
       setTelefone(data.telefone ? formatPhoneNumber(data.telefone) : '');
@@ -271,12 +354,17 @@ export default function MembroDetalhesPage() {
       setCep(data.cep || '');
       setCidade(data.cidade || '');
       setUf(data.uf || '');
+<<<<<<< Updated upstream
       setLatitude(data.latitude ?? null);
       setLongitude(data.longitude ?? null);
       setGooglePlaceId(data.google_place_id ?? null);
       setEnderecoCompletoEdit(data.endereco_completo || '');
       setComplemento('');
       setBatizado(data.batizado ?? false);
+=======
+      setBatizado(data.batizado ?? false);
+      setDataProfissaoFe(data.data_profissao_fe || '');
+>>>>>>> Stashed changes
       setTransferidoIpb(data.transferido_ipb ?? false);
       setTransferidoOutra(data.transferido_outra_denominacao || '');
       setCursosDiscipulado((data.cursos_discipulado || []).join(', '));
@@ -294,6 +382,7 @@ export default function MembroDetalhesPage() {
     try {
       const { data, error } = await supabase
         .from('notas_pastorais')
+<<<<<<< Updated upstream
         .select('*, autor:autor_id (nome, cargo)')
         .eq('membro_id', membroId)
         .order('criado_em', { ascending: false });
@@ -313,6 +402,23 @@ export default function MembroDetalhesPage() {
           },
         }))
       );
+=======
+        .select(`*, autor:autor_id (nome, cargo)`)
+        .eq('membro_id', membroId)
+        .order('criado_em', { ascending: false });
+      if (error) return;
+      const notasFormatadas = (data || []).map((nota: any) => ({
+        id: nota.id,
+        tipo: nota.tipo,
+        titulo: nota.titulo,
+        conteudo: nota.conteudo,
+        privado: nota.privado,
+        criado_em: nota.criado_em,
+        atualizado_em: nota.atualizado_em,
+        autor: { nome: nota.autor?.nome || 'Desconhecido', cargo: nota.autor?.cargo || 'membro' },
+      }));
+      setNotas(notasFormatadas);
+>>>>>>> Stashed changes
     } catch (error) {
       console.error('Erro ao carregar notas:', error);
     }
@@ -327,6 +433,10 @@ export default function MembroDetalhesPage() {
         .split(',')
         .map((c) => c.trim())
         .filter(Boolean);
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
       const { error } = await supabase
         .from('pessoas')
         .update({
@@ -356,11 +466,16 @@ export default function MembroDetalhesPage() {
           cep: cep.replace(/\D/g, '') || null,
           cidade: cidade.trim() || null,
           uf: uf || null,
+<<<<<<< Updated upstream
           latitude,
           longitude,
           google_place_id: googlePlaceId,
           endereco_completo: enderecoCompletoEdit || null,
           batizado,
+=======
+          batizado,
+          data_profissao_fe: dataProfissaoFe || null,
+>>>>>>> Stashed changes
           transferido_ipb: transferidoIpb,
           transferido_outra_denominacao: transferidoOutra.trim() || null,
           cursos_discipulado: cursosArray.length > 0 ? cursosArray : null,
@@ -401,7 +516,11 @@ export default function MembroDetalhesPage() {
       setTipoNota('nota');
       setNotaPrivada(false);
       carregarNotas();
+<<<<<<< Updated upstream
     } catch {
+=======
+    } catch (error) {
+>>>>>>> Stashed changes
       setMensagem('Erro ao adicionar nota');
     }
   };
@@ -409,10 +528,14 @@ export default function MembroDetalhesPage() {
   const deletarNota = async (notaId: string) => {
     if (!confirm('Tem certeza que deseja excluir esta nota?')) return;
     try {
+<<<<<<< Updated upstream
       const { error } = await supabase
         .from('notas_pastorais')
         .delete()
         .eq('id', notaId);
+=======
+      const { error } = await supabase.from('notas_pastorais').delete().eq('id', notaId);
+>>>>>>> Stashed changes
       if (error) throw error;
       setMensagem('Nota excluída com sucesso');
       carregarNotas();
@@ -421,6 +544,7 @@ export default function MembroDetalhesPage() {
     }
   };
 
+<<<<<<< Updated upstream
   const calcularIdade = (dataNasc: string | null) => {
     if (!dataNasc) return null;
     const hoje = new Date();
@@ -438,12 +562,33 @@ export default function MembroDetalhesPage() {
     new Date(data).toLocaleString('pt-BR', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
+=======
+  const calcularIdade = (dataNascimento: string | null) => {
+    if (!dataNascimento) return null;
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento);
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const mes = hoje.getMonth() - nascimento.getMonth();
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) idade--;
+    return idade;
+  };
+
+  const formatarData = (data: string | null) => {
+    if (!data) return '-';
+    return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+  };
+
+  const formatarDataHora = (data: string) =>
+    new Date(data).toLocaleString('pt-BR', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+>>>>>>> Stashed changes
     });
 
   const getTipoNotaLabel = (tipo: string) =>
     ({ nota: 'Nota', visita: 'Visita', ligacao: 'Ligação', oracao: 'Oração', aconselhamento: 'Aconselhamento', urgente: 'Urgente' }[tipo] || tipo);
 
   const getTipoNotaCor = (tipo: string) =>
+<<<<<<< Updated upstream
     ({
       nota: 'bg-slate-100 text-slate-800',
       visita: 'bg-blue-100 text-blue-800',
@@ -452,6 +597,9 @@ export default function MembroDetalhesPage() {
       aconselhamento: 'bg-yellow-100 text-yellow-800',
       urgente: 'bg-red-100 text-red-800',
     }[tipo] || 'bg-slate-100 text-slate-800');
+=======
+    ({ nota: 'bg-slate-100 text-slate-800', visita: 'bg-blue-100 text-blue-800', ligacao: 'bg-green-100 text-green-800', oracao: 'bg-purple-100 text-purple-800', aconselhamento: 'bg-yellow-100 text-yellow-800', urgente: 'bg-red-100 text-red-800' }[tipo] || 'bg-slate-100 text-slate-800');
+>>>>>>> Stashed changes
 
   const abrirWhatsApp = () => {
     if (!membro?.telefone) { setMensagem('Membro não possui telefone cadastrado'); return; }
@@ -464,7 +612,11 @@ export default function MembroDetalhesPage() {
     window.location.href = `tel:${membro.telefone}`;
   };
 
+<<<<<<< Updated upstream
   const inputCls = 'w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+=======
+  const enderecoCompleto = [membro?.logradouro, membro?.bairro, membro?.cidade, membro?.uf].filter(Boolean).join(', ');
+>>>>>>> Stashed changes
 
   if (loading) {
     return (
@@ -483,11 +635,16 @@ export default function MembroDetalhesPage() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <p className="text-xl font-bold text-slate-900 mb-2">Membro não encontrado</p>
+<<<<<<< Updated upstream
           <button
             onClick={() => router.push('/admin/membros')}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             Voltar para lista
+=======
+          <button onClick={() => router.push('/admin/membros')} className="text-blue-600 hover:text-blue-800 font-medium">
+            Voltar para lista de membros
+>>>>>>> Stashed changes
           </button>
         </div>
       </div>
@@ -499,6 +656,7 @@ export default function MembroDetalhesPage() {
     .filter(Boolean)
     .join(', ');
 
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -506,12 +664,10 @@ export default function MembroDetalhesPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/admin/membros')}
-              className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-            >
+            <button onClick={() => router.push('/admin/membros')} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
               <ArrowLeft className="w-6 h-6 text-slate-600" />
             </button>
+<<<<<<< Updated upstream
             <div className="flex items-center gap-4">
               <div className="relative">
                 {membro.foto_url && !fotoError ? (
@@ -547,6 +703,18 @@ export default function MembroDetalhesPage() {
               onClick={() => setModoEdicao(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
+=======
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                <User className="w-8 h-8 text-blue-600" />
+                {membro.nome}
+              </h1>
+              <p className="text-slate-600 mt-1">Informações completas e acompanhamento pastoral</p>
+            </div>
+          </div>
+          {!modoEdicao && (
+            <button onClick={() => setModoEdicao(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+>>>>>>> Stashed changes
               <Edit2 className="w-4 h-4" /> Editar
             </button>
           )}
@@ -571,6 +739,7 @@ export default function MembroDetalhesPage() {
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="font-semibold text-slate-900 mb-4">Ações Rápidas</h3>
                 <div className="grid sm:grid-cols-3 gap-3">
+<<<<<<< Updated upstream
                   <button
                     onClick={abrirWhatsApp}
                     disabled={!membro.telefone}
@@ -592,13 +761,27 @@ export default function MembroDetalhesPage() {
                     onClick={() => setModalNotaAberto(true)}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                   >
+=======
+                  <button onClick={abrirWhatsApp} disabled={!membro.telefone} className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                    WhatsApp
+                  </button>
+                  <button onClick={ligarPara} disabled={!membro.telefone} className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+                    <Phone className="w-5 h-5" /> Ligar
+                  </button>
+                  <button onClick={() => setModalNotaAberto(true)} className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+>>>>>>> Stashed changes
                     <Plus className="w-5 h-5" /> Nova Nota
                   </button>
                 </div>
               </div>
             )}
 
+<<<<<<< Updated upstream
             {/* ══ MODO EDIÇÃO ══ */}
+=======
+            {/* ── MODO EDIÇÃO ── */}
+>>>>>>> Stashed changes
             {modoEdicao ? (
               <form onSubmit={salvarAlteracoes} className="space-y-6">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -609,6 +792,7 @@ export default function MembroDetalhesPage() {
 
                 {/* Dados Básicos */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+<<<<<<< Updated upstream
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
                     <User className="w-4 h-4" /> Dados Básicos
                   </h3>
@@ -652,12 +836,28 @@ export default function MembroDetalhesPage() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Sexo</label>
                       <select value={sexo} onChange={(e) => setSexo(e.target.value)} className={inputCls}>
+=======
+                  <h3 className="font-semibold text-slate-900 border-b pb-3">Dados Básicos</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo *</label>
+                      <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+                      <input type="tel" value={telefone} onChange={(e) => setTelefone(formatPhoneNumber(e.target.value))} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Sexo</label>
+                      <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+>>>>>>> Stashed changes
                         <option value="">Não informado</option>
                         <option value="M">Masculino</option>
                         <option value="F">Feminino</option>
                       </select>
                     </div>
                     <div>
+<<<<<<< Updated upstream
                       <label className="block text-sm font-medium text-slate-700 mb-1">Status do Membro</label>
                       <select value={statusMembro} onChange={(e) => setStatusMembro(e.target.value)} className={inputCls}>
                         <option value="ativo">Ativo</option>
@@ -674,6 +874,14 @@ export default function MembroDetalhesPage() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Estado Civil</label>
                       <select value={estadoCivil} onChange={(e) => setEstadoCivil(e.target.value)} className={inputCls}>
+=======
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Nascimento</label>
+                      <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Estado Civil</label>
+                      <select value={estadoCivil} onChange={(e) => setEstadoCivil(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+>>>>>>> Stashed changes
                         <option value="">Não informado</option>
                         <option value="solteiro">Solteiro(a)</option>
                         <option value="casado">Casado(a)</option>
@@ -684,6 +892,7 @@ export default function MembroDetalhesPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Data de Casamento</label>
+<<<<<<< Updated upstream
                       <input type="date" value={dataCasamento} onChange={(e) => setDataCasamento(e.target.value)} className={inputCls} />
                     </div>
                     <div>
@@ -701,11 +910,31 @@ export default function MembroDetalhesPage() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Mãe</label>
                       <input type="text" value={nomeMae} onChange={(e) => setNomeMae(e.target.value)} className={inputCls} />
+=======
+                      <input type="date" value={dataCasamento} onChange={(e) => setDataCasamento(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Cônjuge</label>
+                      <input type="text" value={conjugeNome} onChange={(e) => setConjugeNome(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Religião do Cônjuge</label>
+                      <input type="text" value={conjugeReligiao} onChange={(e) => setConjugeReligiao(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Pai</label>
+                      <input type="text" value={nomePai} onChange={(e) => setNomePai(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Mãe</label>
+                      <input type="text" value={nomeMae} onChange={(e) => setNomeMae(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+>>>>>>> Stashed changes
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Naturalidade (Cidade)</label>
+<<<<<<< Updated upstream
                       <input type="text" value={naturalidadeCidade} onChange={(e) => setNaturalidadeCidade(e.target.value)} className={inputCls} />
                     </div>
                     <div>
@@ -736,10 +965,80 @@ export default function MembroDetalhesPage() {
                         <option value="mestrado">Mestrado</option>
                         <option value="doutorado">Doutorado</option>
                       </select>
+=======
+                      <input type="text" value={naturalidadeCidade} onChange={(e) => setNaturalidadeCidade(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">UF Naturalidade</label>
+                      <input type="text" maxLength={2} value={naturalidadeUf} onChange={(e) => setNaturalidadeUf(e.target.value.toUpperCase())} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="AM" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Nacionalidade</label>
+                      <input type="text" value={nacionalidade} onChange={(e) => setNacionalidade(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Profissão</label>
+                      <input type="text" value={profissao} onChange={(e) => setProfissao(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Escolaridade</label>
+                      <select value={escolaridade} onChange={(e) => setEscolaridade(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">Não informada</option>
+                        <option value="fundamental_incompleto">Fund. Incompleto</option>
+                        <option value="fundamental_completo">Fund. Completo</option>
+                        <option value="medio_incompleto">Médio Incompleto</option>
+                        <option value="medio_completo">Médio Completo</option>
+                        <option value="superior_incompleto">Superior Incompleto</option>
+                        <option value="superior_completo">Superior Completo</option>
+                        <option value="pos_graduacao">Pós-Graduação</option>
+                        <option value="mestrado">Mestrado</option>
+                        <option value="doutorado">Doutorado</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Status do Membro</label>
+                    <select value={statusMembro} onChange={(e) => setStatusMembro(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="ativo">Ativo</option>
+                      <option value="visitante">Visitante</option>
+                      <option value="congregado">Congregado</option>
+                      <option value="afastado">Afastado</option>
+                      <option value="falecido">Falecido</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Endereço */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                  <h3 className="font-semibold text-slate-900 border-b pb-3">Endereço</h3>
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Logradouro</label>
+                      <input type="text" value={logradouro} onChange={(e) => setLogradouro(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Rua, Av., número..." />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Bairro</label>
+                      <input type="text" value={bairro} onChange={(e) => setBairro(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">CEP</label>
+                      <input type="text" value={cep} onChange={(e) => setCep(e.target.value)} maxLength={9} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="00000-000" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Cidade</label>
+                      <input type="text" value={cidade} onChange={(e) => setCidade(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">UF</label>
+                      <input type="text" maxLength={2} value={uf} onChange={(e) => setUf(e.target.value.toUpperCase())} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="AM" />
+>>>>>>> Stashed changes
                     </div>
                   </div>
                 </div>
 
+<<<<<<< Updated upstream
                 {/* Endereço */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
@@ -820,11 +1119,36 @@ export default function MembroDetalhesPage() {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Líder do Grupo Familiar</label>
                       <input type="text" value={grupoFamiliarLider} onChange={(e) => setGrupoFamiliarLider(e.target.value)} className={inputCls} />
+=======
+                {/* Vida Eclesiástica */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                  <h3 className="font-semibold text-slate-900 border-b pb-3">Vida Eclesiástica</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Batismo</label>
+                      <input type="date" value={dataBatismo} onChange={(e) => setDataBatismo(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Profissão de Fé</label>
+                      <input type="date" value={dataProfissaoFe} onChange={(e) => setDataProfissaoFe(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Familiar</label>
+                      <input type="text" value={grupoFamiliarNome} onChange={(e) => setGrupoFamiliarNome(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Líder do Grupo Familiar</label>
+                      <input type="text" value={grupoFamiliarLider} onChange={(e) => setGrupoFamiliarLider(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+>>>>>>> Stashed changes
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Cursos de Discipulado (separados por vírgula)</label>
+<<<<<<< Updated upstream
                     <input type="text" value={cursosDiscipulado} onChange={(e) => setCursosDiscipulado(e.target.value)} className={inputCls} placeholder="apostila_01, apostila_02, apostila_03" />
+=======
+                    <input type="text" value={cursosDiscipulado} onChange={(e) => setCursosDiscipulado(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Curso 1, Curso 2, Curso 3" />
+>>>>>>> Stashed changes
                   </div>
                   <div className="flex flex-wrap gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -839,7 +1163,11 @@ export default function MembroDetalhesPage() {
                   {!transferidoIpb && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Transferido de outra denominação</label>
+<<<<<<< Updated upstream
                       <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder="Nome da denominação anterior" />
+=======
+                      <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nome da denominação anterior" />
+>>>>>>> Stashed changes
                     </div>
                   )}
                 </div>
@@ -849,15 +1177,24 @@ export default function MembroDetalhesPage() {
                   <h3 className="font-semibold text-slate-900 border-b pb-3">Saúde & Observações</h3>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Situação de Saúde</label>
+<<<<<<< Updated upstream
                     <textarea value={situacaoSaude} onChange={(e) => setSituacaoSaude(e.target.value)} rows={3} className={inputCls} placeholder="Informações relevantes sobre saúde..." />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Observações Gerais</label>
                     <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} className={inputCls} placeholder="Informações importantes sobre o membro..." />
+=======
+                    <textarea value={situacaoSaude} onChange={(e) => setSituacaoSaude(e.target.value)} rows={3} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Informações relevantes sobre saúde..." />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Observações Gerais</label>
+                    <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Informações importantes sobre o membro..." />
+>>>>>>> Stashed changes
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
+<<<<<<< Updated upstream
                   <button
                     type="submit"
                     disabled={salvando}
@@ -871,20 +1208,34 @@ export default function MembroDetalhesPage() {
                     onClick={() => { setModoEdicao(false); carregarMembro(); }}
                     className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
                   >
+=======
+                  <button type="submit" disabled={salvando} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium">
+                    <Save className="w-4 h-4" />
+                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                  <button type="button" onClick={() => { setModoEdicao(false); carregarMembro(); }} className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium">
+>>>>>>> Stashed changes
                     Cancelar
                   </button>
                 </div>
               </form>
 
             ) : (
+<<<<<<< Updated upstream
               /* ══ MODO VISUALIZAÇÃO ══ */
               <>
+=======
+              /* ── MODO VISUALIZAÇÃO ── */
+              <>
+                {/* Dados Pessoais */}
+>>>>>>> Stashed changes
                 <SecaoColapsavel titulo="Dados Pessoais" icone={<User className="w-5 h-5 text-slate-600" />}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <CampoInfo icone={<Mail className="w-5 h-5" />} label="Email" valor={membro.email} />
                     <CampoInfo icone={<Phone className="w-5 h-5" />} label="Telefone" valor={membro.telefone ? formatPhoneNumber(membro.telefone) : null} />
                     <CampoInfo icone={<User className="w-5 h-5" />} label="Sexo" valor={membro.sexo === 'M' ? 'Masculino' : membro.sexo === 'F' ? 'Feminino' : null} />
                     <CampoInfo icone={<Cake className="w-5 h-5" />} label="Nascimento" valor={membro.data_nascimento ? `${formatarData(membro.data_nascimento)} (${idade} anos)` : null} />
+<<<<<<< Updated upstream
                     <CampoInfo
                       icone={<Heart className="w-5 h-5" />}
                       label="Estado Civil"
@@ -892,6 +1243,9 @@ export default function MembroDetalhesPage() {
                         ? ({ solteiro: 'Solteiro(a)', casado: 'Casado(a)', divorciado: 'Divorciado(a)', viuvo: 'Viúvo(a)', uniao_estavel: 'União Estável' }[membro.estado_civil] || membro.estado_civil)
                         : null}
                     />
+=======
+                    <CampoInfo icone={<Heart className="w-5 h-5" />} label="Estado Civil" valor={membro.estado_civil ? ({ solteiro: 'Solteiro(a)', casado: 'Casado(a)', divorciado: 'Divorciado(a)', viuvo: 'Viúvo(a)', uniao_estavel: 'União Estável' }[membro.estado_civil] || membro.estado_civil) : null} />
+>>>>>>> Stashed changes
                     <CampoInfo icone={<Heart className="w-5 h-5" />} label="Casamento" valor={formatarData(membro.data_casamento)} />
                     <CampoInfo icone={<Users className="w-5 h-5" />} label="Cônjuge" valor={membro.conjuge_nome} />
                     <CampoInfo icone={<Globe className="w-5 h-5" />} label="Religião do Cônjuge" valor={membro.conjuge_religiao} />
@@ -900,6 +1254,7 @@ export default function MembroDetalhesPage() {
                     <CampoInfo icone={<Flag className="w-5 h-5" />} label="Naturalidade" valor={[membro.naturalidade_cidade, membro.naturalidade_uf].filter(Boolean).join(' - ') || null} />
                     <CampoInfo icone={<Globe className="w-5 h-5" />} label="Nacionalidade" valor={membro.nacionalidade} />
                     <CampoInfo icone={<Briefcase className="w-5 h-5" />} label="Profissão" valor={membro.profissao} />
+<<<<<<< Updated upstream
                     <CampoInfo
                       icone={<GraduationCap className="w-5 h-5" />}
                       label="Escolaridade"
@@ -926,12 +1281,40 @@ export default function MembroDetalhesPage() {
                             lng={membro.longitude}
                             nome={membro.nome}
                           />
+=======
+                    <CampoInfo icone={<GraduationCap className="w-5 h-5" />} label="Escolaridade" valor={membro.escolaridade ? ({ fundamental_incompleto: 'Fund. Incompleto', fundamental_completo: 'Fund. Completo', medio_incompleto: 'Médio Incompleto', medio_completo: 'Médio Completo', superior_incompleto: 'Superior Incompleto', superior_completo: 'Superior Completo', pos_graduacao: 'Pós-Graduação', mestrado: 'Mestrado', doutorado: 'Doutorado' }[membro.escolaridade] || membro.escolaridade) : null} />
+                  </div>
+                  {enderecoCompleto && (
+                    <div className="mt-4 flex items-start gap-3">
+                      <MapPin className="w-5 h-5 text-slate-400 mt-0.5" />
+                      <div>
+                        <p className="text-xs text-slate-500 mb-0.5">Endereço</p>
+                        <p className="text-sm text-slate-900 font-medium">
+                          {membro.logradouro}{membro.bairro && `, ${membro.bairro}`}
+                          {membro.cep && ` - CEP ${membro.cep}`}
+                          <br />
+                          {membro.cidade}{membro.uf && ` / ${membro.uf}`}
+                        </p>
+                        {membro.latitude && membro.longitude && (
+                          <a
+                            href={`https://maps.google.com/?q=${membro.latitude},${membro.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline mt-1 block"
+                          >
+                            Ver no Google Maps
+                          </a>
+>>>>>>> Stashed changes
                         )}
                       </div>
                     </div>
                   )}
                 </SecaoColapsavel>
 
+<<<<<<< Updated upstream
+=======
+                {/* Vida Eclesiástica */}
+>>>>>>> Stashed changes
                 <SecaoColapsavel titulo="Vida Eclesiástica" icone={<Church className="w-5 h-5 text-slate-600" />}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <CampoInfo icone={<Church className="w-5 h-5" />} label="Batismo" valor={formatarData(membro.data_batismo)} />
@@ -940,8 +1323,17 @@ export default function MembroDetalhesPage() {
                     <CampoInfo icone={<User className="w-5 h-5" />} label="Líder do Grupo" valor={membro.grupo_familiar_lider} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
+<<<<<<< Updated upstream
                     {membro.batizado && <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ Batizado</span>}
                     {membro.transferido_ipb && <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ Transferido IPB</span>}
+=======
+                    {membro.batizado && (
+                      <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ Batizado</span>
+                    )}
+                    {membro.transferido_ipb && (
+                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ Transferido IPB</span>
+                    )}
+>>>>>>> Stashed changes
                     {membro.transferido_outra_denominacao && (
                       <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
                         Transferido de: {membro.transferido_outra_denominacao}
@@ -955,13 +1347,23 @@ export default function MembroDetalhesPage() {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {membro.cursos_discipulado.map((curso) => (
+<<<<<<< Updated upstream
                           <span key={curso} className="px-3 py-1 rounded-full bg-purple-50 text-purple-800 text-xs font-medium border border-purple-200">{curso}</span>
+=======
+                          <span key={curso} className="px-3 py-1 rounded-full bg-purple-50 text-purple-800 text-xs font-medium border border-purple-200">
+                            {curso}
+                          </span>
+>>>>>>> Stashed changes
                         ))}
                       </div>
                     </div>
                   )}
                 </SecaoColapsavel>
 
+<<<<<<< Updated upstream
+=======
+                {/* Alertas de saúde e observações */}
+>>>>>>> Stashed changes
                 {(membro.situacao_saude || membro.observacoes) && (
                   <SecaoColapsavel titulo="Saúde & Observações" icone={<AlertCircle className="w-5 h-5 text-slate-600" />}>
                     {membro.situacao_saude && (
@@ -997,10 +1399,14 @@ export default function MembroDetalhesPage() {
                 <h3 className="font-semibold text-slate-900 flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-slate-600" /> Histórico de Acompanhamento
                 </h3>
+<<<<<<< Updated upstream
                 <button
                   onClick={() => setModalNotaAberto(true)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                 >
+=======
+                <button onClick={() => setModalNotaAberto(true)} className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+>>>>>>> Stashed changes
                   <Plus className="w-4 h-4" /> Nova Nota
                 </button>
               </div>
@@ -1039,14 +1445,16 @@ export default function MembroDetalhesPage() {
 
           {/* ── Sidebar ── */}
           <div className="space-y-6">
+<<<<<<< Updated upstream
+=======
+            {/* Card Status */}
+>>>>>>> Stashed changes
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 className="font-semibold text-slate-900 mb-4">Status</h3>
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Tipo</p>
-                  <span className={`px-3 py-1 rounded text-sm font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>
-                    {getCargoLabel(membro.cargo as CargoTipo)}
-                  </span>
+                  <span className={`px-3 py-1 rounded text-sm font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>{getCargoLabel(membro.cargo as CargoTipo)}</span>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Situação</p>
@@ -1069,10 +1477,19 @@ export default function MembroDetalhesPage() {
               </div>
             </div>
 
+<<<<<<< Updated upstream
             {(membro.grupo_familiar_nome || membro.grupo_familiar_lider) && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
                   <Home className="w-5 h-5 text-slate-600" /> Grupo Familiar
+=======
+            {/* Card Grupo Familiar (sidebar) */}
+            {(membro.grupo_familiar_nome || membro.grupo_familiar_lider) && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <Home className="w-5 h-5 text-slate-600" />
+                  Grupo Familiar
+>>>>>>> Stashed changes
                 </h3>
                 {membro.grupo_familiar_nome && (
                   <div className="mb-2">
@@ -1089,6 +1506,7 @@ export default function MembroDetalhesPage() {
               </div>
             )}
 
+<<<<<<< Updated upstream
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 className="font-semibold text-slate-900 mb-4">Estatísticas</h3>
               <div className="space-y-3">
@@ -1103,6 +1521,28 @@ export default function MembroDetalhesPage() {
                     <span className={`text-lg font-bold ${stat.cor}`}>{stat.val}</span>
                   </div>
                 ))}
+=======
+            {/* Card Estatísticas */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h3 className="font-semibold text-slate-900 mb-4">Estatísticas</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Total de Notas</span>
+                  <span className="text-lg font-bold text-slate-900">{notas.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Visitas</span>
+                  <span className="text-lg font-bold text-blue-600">{notas.filter(n => n.tipo === 'visita').length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Ligações</span>
+                  <span className="text-lg font-bold text-green-600">{notas.filter(n => n.tipo === 'ligacao').length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Urgentes</span>
+                  <span className="text-lg font-bold text-red-600">{notas.filter(n => n.tipo === 'urgente').length}</span>
+                </div>
+>>>>>>> Stashed changes
               </div>
             </div>
 
@@ -1123,10 +1563,14 @@ export default function MembroDetalhesPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-slate-900">Nova Nota de Acompanhamento</h3>
+<<<<<<< Updated upstream
               <button
                 onClick={() => { setModalNotaAberto(false); setTituloNota(''); setConteudoNota(''); setTipoNota('nota'); setNotaPrivada(false); }}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
               >
+=======
+              <button onClick={() => { setModalNotaAberto(false); setTituloNota(''); setConteudoNota(''); setTipoNota('nota'); setNotaPrivada(false); }} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+>>>>>>> Stashed changes
                 <span className="text-slate-500">✕</span>
               </button>
             </div>
@@ -1134,11 +1578,15 @@ export default function MembroDetalhesPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de Nota *</label>
+<<<<<<< Updated upstream
                   <select
                     value={tipoNota}
                     onChange={(e) => setTipoNota(e.target.value as TipoNota)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
+=======
+                  <select value={tipoNota} onChange={(e) => setTipoNota(e.target.value as TipoNota)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+>>>>>>> Stashed changes
                     <option value="nota">Nota Geral</option>
                     <option value="visita">Visita Domiciliar</option>
                     <option value="ligacao">Ligação Telefônica</option>
@@ -1149,6 +1597,7 @@ export default function MembroDetalhesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Título (opcional)</label>
+<<<<<<< Updated upstream
                   <input
                     type="text"
                     value={tituloNota}
@@ -1156,10 +1605,14 @@ export default function MembroDetalhesPage() {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="Ex: Visita de acompanhamento"
                   />
+=======
+                  <input type="text" value={tituloNota} onChange={(e) => setTituloNota(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="Ex: Visita de acompanhamento" />
+>>>>>>> Stashed changes
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Conteúdo da Nota *</label>
+<<<<<<< Updated upstream
                 <textarea
                   value={conteudoNota}
                   onChange={(e) => setConteudoNota(e.target.value)}
@@ -1189,6 +1642,17 @@ export default function MembroDetalhesPage() {
                 >
                   Cancelar
                 </button>
+=======
+                <textarea value={conteudoNota} onChange={(e) => setConteudoNota(e.target.value)} required rows={6} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="Descreva o acompanhamento, observações, pedidos de oração..." />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={notaPrivada} onChange={(e) => setNotaPrivada(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
+                <span className="text-sm text-slate-700">Nota privada (apenas pastor e liderança)</span>
+              </label>
+              <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
+                <button type="submit" className="flex-1 bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-all font-medium">Salvar Nota</button>
+                <button type="button" onClick={() => { setModalNotaAberto(false); setTituloNota(''); setConteudoNota(''); setTipoNota('nota'); setNotaPrivada(false); }} className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancelar</button>
+>>>>>>> Stashed changes
               </div>
             </form>
           </div>

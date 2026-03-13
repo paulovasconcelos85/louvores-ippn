@@ -1,671 +1,754 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { jsPDF } from 'jspdf';
 
-// --- CONFIGURAÇÕES DE ACESSO ---
+// --- CONFIGURAÇÕES ---
 const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin'];
 const CARGOS_MUSICA = ['musico'];
-const TIPOS_LITURGIA_OPCOES = [
-  'Prelúdio', 'Leitura Inicial', 'Saudação e Acolhida à Igreja', 'Cânticos Congregacionais',
-  'Confissão de Pecados', 'Dízimos e Ofertas', 'Cântico para as Ofertas',
-  'Oração pelas Crianças', 'Pregação da Palavra', 'Cântico Final', 'Lembretes', 
-  'Oração', 'Poslúdio', 'Amém Tríplice'
+
+const TIPOS_LITURGICOS = [
+  'Prelúdio',
+  'Saudação e Acolhida à Igreja',
+  'Cânticos Congregacionais',
+  'Confissão de Pecados',
+  'Dízimos e Ofertas',
+  'Cântico para as Ofertas e Dízimos',
+  'Oração pelas Crianças',
+  'Pregação da Palavra',
+  'Santa Ceia',
+  'Cântico Final',
+  'Oração Final e Bênção Apostólica',
+  'Lembretes',
 ];
 
-interface Cantico { 
-  id: string; 
+// --- TIPOS ---
+interface Cantico {
+  id: string;
   nome: string;
+  tipo?: string;
   ultima_vez?: string | null;
 }
-interface MusicasNoBloco { cantico_id: string | null; tom: string | null; }
-interface LouvorItem {
-  id?: string; tipo: string; ordem: number; descricao: string | null;
-  tem_cantico?: boolean; lista_musicas: MusicasNoBloco[];
+
+interface CanticoNoItem {
+  cantico_id: string | null;
+  tom: string | null;
 }
-interface Culto { 
-  'Culto nr.': number; 
+
+interface LouvorItem {
+  id?: string;
+  tipo: string;
+  ordem: number;
+  conteudo_publico: string | null;
+  descricao: string | null;
+  horario: string | null;
+  canticos_lista: CanticoNoItem[];
+}
+
+interface Culto {
+  'Culto nr.': number;
   Dia: string;
   imagem_url?: string | null;
+  palavra_pastoral?: string | null;
+  palavra_pastoral_autor?: string | null;
 }
 
-// --- FUNÇÃO PARA CALCULAR STATUS DA MÚSICA ---
-function getStatusMusica(dataStr: string | null | undefined): {
-  label: string;
-  cor: string;
-  corFundo: string;
-  dias: number;
-  dataFormatada: string;
-} {
-  if (!dataStr) {
-    return {
-      label: 'PRIMEIRA VEZ',
-      cor: 'text-blue-700',
-      corFundo: 'bg-blue-100 border-blue-200',
-      dias: -1,
-      dataFormatada: 'Nunca tocada'
-    };
+// --- HELPERS ---
+function isPrimeirosDomingo(data: Date): boolean {
+  const d = new Date(data);
+  return d.getDay() === 0 && d.getDate() <= 7;
+}
+
+function calcularProximoDomingo(base: Date): Date {
+  const d = new Date(base);
+  const diasAte = (7 - d.getDay()) % 7 || 7;
+  d.setDate(d.getDate() + diasAte);
+  return d;
+}
+
+function modeloPadrao(dia: string): LouvorItem[] {
+  const data = new Date(dia + 'T00:00:00');
+  const primeiroDomingo = isPrimeirosDomingo(data);
+
+  const itens: LouvorItem[] = [
+    { tipo: 'Prelúdio', ordem: 1, conteudo_publico: null, descricao: null, horario: '9h-9h05', canticos_lista: [] },
+    { tipo: 'Saudação e Acolhida à Igreja', ordem: 2, conteudo_publico: null, descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)', horario: '9h05-9h10', canticos_lista: [] },
+    { tipo: 'Cânticos Congregacionais', ordem: 3, conteudo_publico: null, descricao: null, horario: '9h10-9h25', canticos_lista: [{ cantico_id: null, tom: null }, { cantico_id: null, tom: null }, { cantico_id: null, tom: null }] },
+    { tipo: 'Confissão de Pecados', ordem: 4, conteudo_publico: null, descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.', horario: '9h25-9h30', canticos_lista: [] },
+    { tipo: 'Dízimos e Ofertas', ordem: 5, conteudo_publico: null, descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.', horario: '9h30-9h35', canticos_lista: [] },
+    { tipo: 'Cântico para as Ofertas e Dízimos', ordem: 6, conteudo_publico: null, descricao: 'Oração pelas ofertas e dízimo.', horario: '9h35-9h40', canticos_lista: [{ cantico_id: null, tom: null }] },
+    { tipo: 'Oração pelas Crianças', ordem: 7, conteudo_publico: null, descricao: 'Chamar irmão (_______)', horario: '9h40-9h45', canticos_lista: [] },
+    { tipo: 'Pregação da Palavra', ordem: 8, conteudo_publico: null, descricao: null, horario: '9h45-10h25', canticos_lista: [] },
+  ];
+
+  if (primeiroDomingo) {
+    itens.push({ tipo: 'Santa Ceia', ordem: 9, conteudo_publico: null, descricao: null, horario: '10h25', canticos_lista: [] });
   }
 
+  itens.push(
+    { tipo: 'Cântico Final', ordem: itens.length + 1, conteudo_publico: null, descricao: 'Poslúdio', horario: '10h25', canticos_lista: [{ cantico_id: null, tom: null }] },
+    { tipo: 'Oração Final e Bênção Apostólica', ordem: itens.length + 2, conteudo_publico: null, descricao: 'Amém tríplice', horario: '10h30', canticos_lista: [] },
+    { tipo: 'Lembretes', ordem: itens.length + 3, conteudo_publico: null, descricao: 'Apresentação dos convidados\nAniversariantes / Casamento', horario: '10h35', canticos_lista: [] },
+  );
+
+  return itens.map((it, i) => ({ ...it, ordem: i + 1 }));
+}
+
+function getStatusMusica(dataStr: string | null | undefined) {
+  if (!dataStr) return { label: 'PRIMEIRA VEZ', cor: 'text-blue-600', bg: 'bg-blue-50', dias: -1, dataFormatada: 'Nunca tocada' };
   const data = new Date(dataStr + 'T00:00:00');
-  const hoje = new Date();
-  const diffTime = hoje.getTime() - data.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
-  const dataFormatada = data.toLocaleDateString('pt-BR', { 
-    day: '2-digit', 
-    month: 'short', 
-    year: 'numeric' 
-  });
-
-  if (diffDays < 30) {
-    return {
-      label: 'RECENTE',
-      cor: 'text-emerald-700',
-      corFundo: 'bg-emerald-100 border-emerald-200',
-      dias: diffDays,
-      dataFormatada
-    };
-  } else if (diffDays < 90) {
-    return {
-      label: 'MODERADO',
-      cor: 'text-amber-700',
-      corFundo: 'bg-amber-100 border-amber-200',
-      dias: diffDays,
-      dataFormatada
-    };
-  } else if (diffDays < 180) {
-    return {
-      label: 'HÁ TEMPO',
-      cor: 'text-orange-700',
-      corFundo: 'bg-orange-100 border-orange-200',
-      dias: diffDays,
-      dataFormatada
-    };
-  } else {
-    return {
-      label: 'HÁ MUITO TEMPO',
-      cor: 'text-red-700',
-      corFundo: 'bg-red-100 border-red-200',
-      dias: diffDays,
-      dataFormatada
-    };
-  }
+  const dias = Math.floor((Date.now() - data.getTime()) / 86400000);
+  const fmt = data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (dias < 30) return { label: 'RECENTE', cor: 'text-emerald-600', bg: 'bg-emerald-50', dias, dataFormatada: fmt };
+  if (dias < 90) return { label: 'MODERADO', cor: 'text-amber-600', bg: 'bg-amber-50', dias, dataFormatada: fmt };
+  if (dias < 180) return { label: 'HÁ TEMPO', cor: 'text-orange-600', bg: 'bg-orange-50', dias, dataFormatada: fmt };
+  return { label: 'HÁ MUITO', cor: 'text-red-600', bg: 'bg-red-50', dias, dataFormatada: fmt };
 }
 
-// --- COMPONENTE AUTOCOMPLETE ---
-function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: any) {
+// --- AUTOCOMPLETE DE CÂNTICO ---
+function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: {
+  value: Cantico | null;
+  onChange: (c: Cantico | null) => void;
+  canticos: Cantico[];
+  onCreate: (nome: string) => Promise<Cantico>;
+  disabled?: boolean;
+}) {
   const [query, setQuery] = useState(value?.nome || '');
   const [open, setOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => { setQuery(value?.nome || ''); }, [value]);
 
-  const filtrados = canticos.filter((c: any) => {
-    const termo = query.toLowerCase();
-    const nomeMatch = c.nome.toLowerCase().includes(termo);
-    const numeroMatch = c.numero && c.numero.includes(termo);
-    return nomeMatch || numeroMatch;
-  });
+  const filtrados = canticos.filter(c =>
+    c.nome.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, 8);
 
-  return (
-    <div className="relative w-full">
-      <input
-        value={query} disabled={disabled}
-        onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(null); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        className="w-full border-2 border-slate-100 rounded-xl p-3 text-sm focus:border-emerald-600 outline-none bg-white disabled:bg-slate-50 transition-all"
-        placeholder="Selecione o cântico (nome ou número)..."
-      />
-      {open && query && !disabled && (
-        <div className="absolute z-50 bg-white border-2 border-slate-200 rounded-xl mt-1 w-full max-h-60 overflow-auto shadow-xl">
-          {filtrados.map((c: any) => {
-            const status = getStatusMusica(c.ultima_vez);
-            const ehHinario = c.tipo === 'hinario';
-            return (
-              <div 
-                key={c.id} 
-                className="px-4 py-3 hover:bg-emerald-50 cursor-pointer border-b border-slate-100 last:border-0" 
-                onClick={() => { onChange(c); setQuery(c.nome); setOpen(false); }}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-slate-800">{c.nome}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                    ehHinario 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-green-100 text-green-700'
-                  }`}>
-                    {ehHinario ? '📖' : '🎵'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded ${status.corFundo} ${status.cor} border`}>
-                    {status.label}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {status.dataFormatada}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          {!canticos.some((c: any) => c.nome.toLowerCase() === query.toLowerCase()) && (
-            <div className="px-4 py-3 text-emerald-700 font-bold hover:bg-emerald-50 cursor-pointer border-t-2 text-sm" onClick={async () => { const n = await onCreate(query); onChange(n); setQuery(n.nome); setOpen(false); }}>
-              + Cadastrar "{query}"
-            </div>
-          )}
+  const abrirDropdown = () => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const dropdownHeight = Math.min(256, filtrados.length * 60 + 56);
+    const showAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
+
+    setDropdownStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: Math.max(rect.width, 300),
+      zIndex: 9999,
+      ...(showAbove
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+    });
+    setOpen(true);
+  };
+
+  const dropdown = open && query && !disabled ? (
+    <div
+      style={dropdownStyle}
+      className="bg-white border border-slate-200 rounded-2xl max-h-64 overflow-auto shadow-2xl"
+    >
+      {filtrados.map(c => {
+        const st = getStatusMusica(c.ultima_vez);
+        return (
+          <div
+            key={c.id}
+            className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 active:bg-slate-100"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => { onChange(c); setQuery(c.nome); setOpen(false); }}
+          >
+            <div className="text-base font-semibold text-slate-800">{c.nome}</div>
+            <div className={`text-xs font-bold mt-0.5 ${st.cor}`}>{st.label} · {st.dataFormatada}</div>
+          </div>
+        );
+      })}
+      {!canticos.some(c => c.nome.toLowerCase() === query.toLowerCase()) && (
+        <div
+          className="px-4 py-3 text-emerald-700 font-bold text-base hover:bg-emerald-50 cursor-pointer border-t border-emerald-100 active:bg-emerald-100"
+          onMouseDown={e => e.preventDefault()}
+          onClick={async () => { const n = await onCreate(query); onChange(n); setQuery(n.nome); setOpen(false); }}
+        >
+          + Cadastrar "{query}"
         </div>
       )}
     </div>
-  );
-}
-
-// --- COMPONENTE SELETOR DE TIPO LITÚRGICO ---
-function TipoLiturgiaSelector({ value, onChange, disabled }: any) {
-  const [query, setQuery] = useState(value || '');
-  const [open, setOpen] = useState(false);
-  
-  useEffect(() => { setQuery(value || ''); }, [value]);
-
-  const filtrados = TIPOS_LITURGIA_OPCOES.filter(t => 
-    t.toLowerCase().includes(query.toLowerCase())
-  );
+  ) : null;
 
   return (
-    <div className="relative w-full">
+    <div className="relative flex-1 min-w-0">
       <input
+        ref={inputRef}
         value={query}
         disabled={disabled}
-        onChange={e => { 
-          const novoValor = e.target.value;
-          setQuery(novoValor); 
-          setOpen(true); 
-          onChange(novoValor);
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        className="w-full border-2 border-slate-100 rounded-xl p-3 font-black text-slate-800 text-lg uppercase tracking-tighter outline-none focus:border-emerald-500 bg-white disabled:bg-slate-50 transition-all"
-        placeholder="Tipo da liturgia..."
+        onChange={e => { setQuery(e.target.value); abrirDropdown(); if (!e.target.value) onChange(null); }}
+        onFocus={abrirDropdown}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Buscar cântico..."
+        className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-emerald-500 bg-emerald-50/50 disabled:bg-slate-50 disabled:cursor-default"
       />
-      
-      {open && query && !disabled && (
-        <div className="absolute z-50 bg-white border-2 border-slate-200 rounded-xl mt-1 w-full max-h-60 overflow-auto shadow-xl">
-          {filtrados.map((tipo, idx) => (
-            <div 
-              key={idx}
-              className="px-4 py-3 hover:bg-emerald-50 cursor-pointer border-b border-slate-100 last:border-0 font-bold text-slate-700"
-              onClick={() => { 
-                onChange(tipo); 
-                setQuery(tipo); 
-                setOpen(false); 
-              }}
-            >
-              {tipo}
-            </div>
+      {typeof window !== 'undefined' && createPortal(dropdown, document.body)}
+    </div>
+  );
+}
+
+// --- LINHA DE CÂNTICO ---
+function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreate, canEditarMusica }: any) {
+  const cantico = canticos.find((c: Cantico) => c.id === musica.cantico_id) || null;
+
+  return (
+    <div className="flex items-center gap-2 mt-3 pl-3 border-l-2 border-emerald-300">
+      <span className="text-emerald-500 text-base flex-shrink-0">🎵</span>
+      <CanticoAutocomplete
+        value={cantico}
+        onChange={c => onChange({ ...musica, cantico_id: c?.id || null })}
+        canticos={canticos}
+        onCreate={onCreate}
+        disabled={!canEditarMusica}
+      />
+      {podVerTom && (
+        <select
+          value={musica.tom || ''}
+          onChange={e => onChange({ ...musica, tom: e.target.value })}
+          disabled={!canEditarMusica}
+          className="border border-slate-200 rounded-xl px-2 py-3 text-base bg-white w-24 focus:outline-none focus:border-emerald-500 disabled:bg-slate-50 flex-shrink-0"
+        >
+          <option value="">Tom</option>
+          {['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb', 'Am', 'Em', 'Dm'].map(t => (
+            <option key={t} value={t}>{t}</option>
           ))}
-          
-          {query && !TIPOS_LITURGIA_OPCOES.some(t => t.toLowerCase() === query.toLowerCase()) && (
-            <div 
-              className="px-4 py-3 text-emerald-700 font-bold hover:bg-emerald-50 cursor-pointer border-t-2 border-emerald-200"
-              onClick={() => { 
-                onChange(query); 
-                setOpen(false); 
-              }}
-            >
-              ✨ Usar "{query}"
-            </div>
-          )}
-        </div>
+        </select>
+      )}
+      {canEditarMusica && (
+        <button onClick={onRemove} className="text-slate-300 hover:text-red-400 active:text-red-500 transition-colors text-2xl leading-none w-10 h-10 flex items-center justify-center flex-shrink-0">×</button>
       )}
     </div>
   );
 }
 
-// --- ITEM DA LITURGIA ---
-function ItemLiturgia({ item, index, canticos, onUpdate, onRemove, onMove, onCreate, userRole }: any) {
-  const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
-  const isMusico = userRole ? CARGOS_MUSICA.includes(userRole) : false;
+// --- ITEM DA LITURGIA (linha) ---
+function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onMove, isLideranca, podVerTom, canEditarMusica }: any) {
+  const [expandido, setExpandido] = useState(true);
 
-  const permiteMusica = item.tem_cantico === true || item.tipo.toLowerCase().includes('cântico') || item.tipo.toLowerCase().includes('prelúdio') || item.tipo.toLowerCase().includes('poslúdio');
-
-  const adicionarMusica = () => {
-    const novaLista = [...item.lista_musicas, { cantico_id: null, tom: null }];
-    onUpdate({ ...item, lista_musicas: novaLista });
+  const adicionarCantico = () => {
+    onUpdate({ ...item, canticos_lista: [...item.canticos_lista, { cantico_id: null, tom: null }] });
   };
 
-  const removerMusica = (mIdx: number) => {
-    if (item.lista_musicas.length <= 1) return;
-    const novaLista = item.lista_musicas.filter((_: any, i: number) => i !== mIdx);
-    onUpdate({ ...item, lista_musicas: novaLista });
+  const atualizarCantico = (idx: number, nova: CanticoNoItem) => {
+    const lista = [...item.canticos_lista];
+    lista[idx] = nova;
+    onUpdate({ ...item, canticos_lista: lista });
+  };
+
+  const removerCantico = (idx: number) => {
+    onUpdate({ ...item, canticos_lista: item.canticos_lista.filter((_: any, i: number) => i !== idx) });
   };
 
   return (
-    <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 mb-4 shadow-sm print:border-none print:shadow-none print:p-0">
-      <div className="flex justify-between items-center mb-4 print:hidden">
-        <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">Item {index + 1}</span>
+    <div className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-all">
+      {/* Cabeçalho do item */}
+      <div className="flex items-center gap-3 px-4 py-4 bg-slate-50/80">
+        <span className="text-sm font-black text-slate-400 w-6 text-center flex-shrink-0">{index + 1}</span>
+
+        {/* Tipo litúrgico */}
+        {isLideranca ? (
+          <select
+            value={item.tipo}
+            onChange={e => onUpdate({ ...item, tipo: e.target.value })}
+            className="flex-1 font-bold text-slate-800 text-base bg-transparent border-none focus:outline-none cursor-pointer min-w-0"
+          >
+            {TIPOS_LITURGICOS.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        ) : (
+          <span className="flex-1 font-bold text-slate-800 text-base min-w-0">{item.tipo}</span>
+        )}
+
+        {/* Horário (interno) */}
         {isLideranca && (
-          <div className="flex gap-2">
-            <button onClick={() => onMove('cima')} className="p-2 hover:bg-slate-100 rounded-lg">⬆️</button>
-            <button onClick={() => onMove('baixo')} className="p-2 hover:bg-slate-100 rounded-lg">⬇️</button>
-            <button onClick={onRemove} className="p-2 hover:bg-red-50 text-red-500 rounded-lg">🗑️</button>
+          <input
+            value={item.horario || ''}
+            onChange={e => onUpdate({ ...item, horario: e.target.value })}
+            placeholder="horário"
+            className="w-24 text-sm text-slate-500 border border-slate-200 rounded-xl px-2 py-2.5 bg-white focus:outline-none focus:border-slate-400 text-center flex-shrink-0"
+          />
+        )}
+
+        {/* Ações */}
+        {isLideranca && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <button onClick={() => onMove('cima')} className="w-9 h-9 hover:bg-slate-200 rounded-xl text-slate-400 text-base flex items-center justify-center active:bg-slate-300">↑</button>
+            <button onClick={() => onMove('baixo')} className="w-9 h-9 hover:bg-slate-200 rounded-xl text-slate-400 text-base flex items-center justify-center active:bg-slate-300">↓</button>
+            <button onClick={onRemove} className="w-9 h-9 hover:bg-red-50 rounded-xl text-slate-300 hover:text-red-400 text-base flex items-center justify-center active:bg-red-100">🗑</button>
           </div>
         )}
+
+        <button onClick={() => setExpandido(!expandido)} className="text-slate-400 hover:text-slate-600 w-9 h-9 flex items-center justify-center rounded-xl flex-shrink-0 active:bg-slate-100">
+          {expandido ? '▲' : '▼'}
+        </button>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <div className="print:flex print:gap-2 print:items-baseline">
-            <span className="hidden print:inline font-bold">{index + 1}.</span>
-            {isLideranca ? (
-              <div className="print:hidden mb-2">
-                <TipoLiturgiaSelector
-                  value={item.tipo}
-                  onChange={(novoTipo: string) => onUpdate({...item, tipo: novoTipo})}
-                  disabled={false}
-                />
-              </div>
-            ) : null}
-            <h3 className={`font-black text-slate-800 text-xl uppercase tracking-tighter mb-1 ${isLideranca ? 'print:block hidden' : 'block'}`}>
-              {item.tipo}
-            </h3>
+      {expandido && (
+        <div className="px-4 py-4 space-y-4">
+          {/* Campo público */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
+              <span>📢</span> Público
+            </label>
+            <textarea
+              value={item.conteudo_publico || ''}
+              onChange={e => onUpdate({ ...item, conteudo_publico: e.target.value })}
+              disabled={!isLideranca}
+              placeholder="Visível para todos..."
+              rows={2}
+              className="w-full text-base text-slate-700 border border-emerald-100 rounded-xl px-4 py-3 bg-emerald-50/30 focus:outline-none focus:border-emerald-300 resize-none disabled:cursor-default disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:py-0 placeholder:text-slate-300"
+            />
           </div>
-          
-          <textarea
-            value={item.descricao || ''}
-            onChange={e => onUpdate({ ...item, descricao: e.target.value })}
-            disabled={!isLideranca}
-            className="w-full border-2 border-slate-50 rounded-2xl p-4 text-sm text-slate-600 bg-slate-50/30 focus:bg-white focus:border-emerald-500 outline-none resize-none disabled:cursor-default transition-all print:border-none print:bg-transparent print:p-0 print:ml-6"
-            rows={2}
-          />
-        </div>
 
-        {permiteMusica && (
-          <div className="space-y-3 pt-2 print:ml-6">
-            {item.lista_musicas.map((m: MusicasNoBloco, mIdx: number) => {
-              const canticoSelecionado = canticos.find((c: any) => c.id === m.cantico_id);
-              const nomeCantico = canticoSelecionado?.nome;
-              const status = getStatusMusica(canticoSelecionado?.ultima_vez);
-              
-              return (
-                <div key={mIdx} className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100 relative group print:p-0 print:bg-transparent print:border-none">
-                  {(isLideranca || isMusico) && item.lista_musicas.length > 1 && (
-                    <button
-                      onClick={() => removerMusica(mIdx)}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg print:hidden"
-                      title="Remover música"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:block">
-                    <div className="md:col-span-2 space-y-2">
-                      <div className="print:hidden">
-                        <CanticoAutocomplete 
-                          value={canticoSelecionado} 
-                          onChange={(c: any) => {
-                            const novaLista = [...item.lista_musicas];
-                            novaLista[mIdx] = { ...novaLista[mIdx], cantico_id: c?.id || null };
-                            onUpdate({ ...item, lista_musicas: novaLista });
-                          }}
-                          canticos={canticos} onCreate={onCreate} disabled={!(isLideranca || isMusico)}
-                        />
-                        {canticoSelecionado && (
-                          <div className={`inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg border-2 ${status.corFundo}`}>
-                            <span className={`text-[10px] font-black ${status.cor} uppercase tracking-wider`}>
-                              {status.label}
-                            </span>
-                            <span className="text-xs text-slate-600 font-medium">
-                              📅 {status.dataFormatada}
-                            </span>
-                            {status.dias >= 0 && (
-                              <span className="text-[10px] text-slate-500">
-                                ({status.dias} dias)
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <span className="hidden print:inline font-bold text-slate-700">
-                        🎵 {nomeCantico || "Música não definida"} {m.tom ? `(${m.tom})` : ''}
-                      </span>
-                    </div>
-                    <div className="print:hidden">
-                      <select 
-                        value={m.tom || ''} 
-                        onChange={e => {
-                          const novaLista = [...item.lista_musicas];
-                          novaLista[mIdx] = { ...novaLista[mIdx], tom: e.target.value };
-                          onUpdate({ ...item, lista_musicas: novaLista });
-                        }}
-                        disabled={!(isLideranca || isMusico)}
-                        className="w-full border-2 border-emerald-100 rounded-xl p-3 bg-white text-sm outline-none focus:border-emerald-500 disabled:bg-slate-50"
-                      >
-                        <option value="">Tom</option>
-                        {['C','G','D','A','E','B','F','Bb','Eb','Am','Em','Dm'].map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            
-            {(isLideranca || isMusico) && (
+          {/* Campo interno */}
+          {isLideranca && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                <span>🔒</span> Interno
+              </label>
+              <textarea
+                value={item.descricao || ''}
+                onChange={e => onUpdate({ ...item, descricao: e.target.value })}
+                placeholder="Observações internas (só liderança vê)..."
+                rows={2}
+                className="w-full text-base text-slate-600 border border-slate-100 rounded-xl px-4 py-3 bg-slate-50/50 focus:outline-none focus:border-slate-300 resize-none placeholder:text-slate-300"
+              />
+            </div>
+          )}
+
+          {/* Cânticos */}
+          <div>
+            {item.canticos_lista.map((m: CanticoNoItem, idx: number) => (
+              <LinhaCantico
+                key={idx}
+                musica={m}
+                canticos={canticos}
+                onChange={(nova: CanticoNoItem) => atualizarCantico(idx, nova)}
+                onRemove={() => removerCantico(idx)}
+                podVerTom={podVerTom}
+                onCreate={onCreate}
+                canEditarMusica={canEditarMusica}
+              />
+            ))}
+            {canEditarMusica && (
               <button
-                onClick={adicionarMusica}
-                className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-600 hover:bg-emerald-50 hover:border-emerald-400 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
+                onClick={adicionarCantico}
+                className="mt-3 ml-2 text-emerald-600 hover:text-emerald-800 text-base font-bold flex items-center gap-2 hover:bg-emerald-50 px-3 py-2.5 rounded-xl transition-colors active:bg-emerald-100"
               >
-                <span className="text-xl group-hover:scale-110 transition-transform">🎵</span>
-                <span>Adicionar cântico</span>
+                <span>🎵</span> Adicionar cântico
               </button>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// --- FUNÇÃO PARA GERAR PDF OTIMIZADO ---
-const gerarPDF = async (culto: any, itens: LouvorItem[], canticos: Cantico[]) => {
-  const doc = new jsPDF();
-  
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const headerHeight = 30;
-  
-  // FUNÇÃO AUXILIAR: Desenhar cabeçalho
-  const desenharCabecalho = (pageNum: number) => {
-    doc.setFillColor(16, 60, 48);
-    doc.rect(0, 0, pageWidth, headerHeight, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pageWidth / 2, 12, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('Uma igreja da família de Deus - Manaus/AM', pageWidth / 2, 20, { align: 'center' });
-    
-    // Número da página
-    if (pageNum > 0) {
-      doc.setFontSize(7);
-      doc.setTextColor(200, 200, 200);
-      doc.text(`Pág. ${pageNum}`, pageWidth - margin, 26, { align: 'right' });
-    }
-  };
+// --- EDITOR DE LITURGIA ---
+function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, userRole }: any) {
+  const [dia, setDia] = useState<string>(culto?.Dia || '');
+  const [itens, setItens] = useState<LouvorItem[]>([]);
+  const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
+  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(culto?.palavra_pastoral_autor || 'Rev. Rosther Guimarães Lopes');
+  const [imagemUpload, setImagemUpload] = useState<File | null>(null);
+  const [imagemPreview, setImagemPreview] = useState<string | null>(culto?.imagem_url || null);
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [importando, setImportando] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // FUNÇÃO AUXILIAR: Calcular altura necessária para o conteúdo
-  const calcularAlturaConteudo = (fontSize: number) => {
-    let alturaTotal = 0;
-    const lineHeight = fontSize * 0.4;
-    
-    // Título + Data
-    alturaTotal += fontSize * 1.8 + fontSize * 1.4 + 8; // Liturgia + Data + espaço
-    
-    itens.forEach(item => {
-      // Tipo do item
-      alturaTotal += fontSize * 1.2 + 4;
-      
-      // Descrição
-      if (item.descricao && item.descricao.trim()) {
-        const linhas = item.descricao.split('\n').filter(l => l.trim());
-        alturaTotal += linhas.length * lineHeight * 1.3;
-      }
-      
-      // Músicas
-      const permiteMusica = item.tem_cantico || 
-                           item.tipo.toLowerCase().includes('cântico') || 
-                           item.tipo.toLowerCase().includes('prelúdio') ||
-                           item.tipo.toLowerCase().includes('poslúdio');
-      
-      if (permiteMusica && item.lista_musicas?.length > 0) {
-        const musicasValidas = item.lista_musicas.filter(m => m.cantico_id);
-        alturaTotal += musicasValidas.length * lineHeight * 1.2;
-      }
-      
-      alturaTotal += 4; // Espaço entre itens
-    });
-    
-    return alturaTotal;
-  };
+  const isLideranca = CARGOS_LIDERANCA.includes(userRole);
+  const isMusico = CARGOS_MUSICA.includes(userRole);
+  const podVerTom = isLideranca || isMusico;
+  const canEditarMusica = isLideranca || isMusico;
 
-  // DETERMINAR LAYOUT E TAMANHO DE FONTE
-  const alturaDisponivel = pageHeight - headerHeight - margin * 2 - 15; // -15 para rodapé
-  
-  // Testar diferentes configurações
-  let usarDuasColunas = false;
-  let fontSize = 10;
-  let alturaCalculada = calcularAlturaConteudo(fontSize);
-  
-  // Se não couber em uma página, tentar duas colunas
-  if (alturaCalculada > alturaDisponivel) {
-    usarDuasColunas = true;
-    alturaCalculada = calcularAlturaConteudo(fontSize) / 2; // Dividir em 2 colunas
-  }
-  
-  // Se ainda não couber, reduzir fonte progressivamente
-  while (alturaCalculada > alturaDisponivel * 2 && fontSize > 6) {
-    fontSize -= 0.5;
-    alturaCalculada = usarDuasColunas 
-      ? calcularAlturaConteudo(fontSize) / 2 
-      : calcularAlturaConteudo(fontSize);
-  }
-  
-  // CONFIGURAÇÕES FINAIS
-  const colunaWidth = usarDuasColunas ? (pageWidth - margin * 3) / 2 : pageWidth - margin * 2;
-  const coluna1X = margin;
-  const coluna2X = usarDuasColunas ? pageWidth / 2 + margin / 2 : margin;
-  
-  let yPos = headerHeight + 12;
-  let colunaAtual = 1;
-  let paginaAtual = 1;
-  let itemNumero = 1;
-  
-  // Desenhar primeira página
-  desenharCabecalho(paginaAtual);
-  doc.setTextColor(0, 0, 0);
-  
-  // TÍTULO E DATA
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(fontSize * 1.8);
-  doc.text('LITURGIA', pageWidth / 2, yPos, { align: 'center' });
-  yPos += fontSize * 1.2;
-  
-  doc.setFontSize(fontSize * 1.4);
-  const dataFormatada = new Date(culto.Dia + 'T00:00:00')
-    .toLocaleDateString('pt-BR', { 
-      weekday: 'long',
-      day: '2-digit', 
-      month: 'long', 
-      year: 'numeric' 
-    })
-    .toUpperCase();
-  doc.text(dataFormatada, pageWidth / 2, yPos, { align: 'center' });
-  yPos += fontSize * 1.2;
-  
-  // Linha separadora
-  doc.setDrawColor(16, 60, 48);
-  doc.setLineWidth(0.5);
-  doc.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 8;
-  
-  // FUNÇÃO PARA MUDAR DE COLUNA/PÁGINA
-  const mudarColunaOuPagina = () => {
-    if (usarDuasColunas && colunaAtual === 1) {
-      colunaAtual = 2;
-      yPos = headerHeight + 12 + fontSize * 4.4 + 8; // Mesma altura do início do conteúdo
-      return coluna2X;
-    } else if (paginaAtual < 2) {
-      doc.addPage();
-      paginaAtual++;
-      colunaAtual = 1;
-      desenharCabecalho(paginaAtual);
-      yPos = headerHeight + 12;
-      return coluna1X;
+  useEffect(() => {
+    if (culto) {
+      carregarItens(culto['Culto nr.']);
+    } else if (dia) {
+      setItens(modeloPadrao(dia));
     }
-    return colunaAtual === 1 ? coluna1X : coluna2X;
-  };
-  
-  // RENDERIZAR ITENS
-  let xPos = coluna1X;
-  const lineHeight = fontSize * 0.4;
-  
-  for (const item of itens) {
-    // Verificar espaço disponível (estimativa)
-    const espacoNecessario = fontSize * 1.2 + (item.descricao ? lineHeight * 3 : 0) + fontSize;
-    
-    if (yPos + espacoNecessario > pageHeight - 15) {
-      xPos = mudarColunaOuPagina();
-    }
-    
-    // TIPO DO ITEM
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(fontSize * 1.2);
-    const tipoTexto = `${itemNumero}. ${item.tipo.toUpperCase()}`;
-    const linhasTipo = doc.splitTextToSize(tipoTexto, colunaWidth);
-    
-    linhasTipo.forEach((linha: string) => {
-      if (yPos > pageHeight - 15) {
-        xPos = mudarColunaOuPagina();
-      }
-      doc.text(linha, xPos, yPos);
-      yPos += fontSize * 1.2;
-    });
-    
-    // DESCRIÇÃO
-    if (item.descricao && item.descricao.trim()) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(fontSize);
-      const linhas = item.descricao.split('\n').filter(l => l.trim());
-      
-      for (const linha of linhas) {
-        if (yPos > pageHeight - 15) {
-          xPos = mudarColunaOuPagina();
-        }
-        
-        const linhaLimpa = linha.trim().replace(/^●\s*/, '• ').replace(/^%I\s*/, '• ');
-        const linhasQuebradas = doc.splitTextToSize(`   ${linhaLimpa}`, colunaWidth);
-        
-        linhasQuebradas.forEach((l: string) => {
-          if (yPos > pageHeight - 15) {
-            xPos = mudarColunaOuPagina();
-          }
-          doc.text(l, xPos, yPos);
-          yPos += lineHeight * 1.3;
+  }, []);
+
+  const carregarItens = async (cultoNr: number) => {
+    const { data } = await supabase
+      .from('louvor_itens')
+      .select('*, canticos(nome)')
+      .eq('culto_id', cultoNr)
+      .order('ordem');
+
+    if (!data) return;
+
+    // Agrupar linhas do mesmo item
+    const agrupados: LouvorItem[] = [];
+    data.forEach((linha: any) => {
+      const ultimo = agrupados[agrupados.length - 1];
+      if (
+        ultimo &&
+        ultimo.tipo === linha.tipo &&
+        ultimo.conteudo_publico === linha.conteudo_publico &&
+        ultimo.descricao === linha.descricao &&
+        ultimo.horario === linha.horario
+      ) {
+        ultimo.canticos_lista.push({ cantico_id: linha.cantico_id, tom: linha.tom });
+      } else {
+        agrupados.push({
+          id: linha.id,
+          tipo: linha.tipo,
+          ordem: linha.ordem,
+          conteudo_publico: linha.conteudo_publico,
+          descricao: linha.descricao,
+          horario: linha.horario,
+          canticos_lista: linha.cantico_id ? [{ cantico_id: linha.cantico_id, tom: linha.tom }] : [],
         });
       }
-    }
-    
-    // MÚSICAS
-    const permiteMusica = item.tem_cantico || 
-                         item.tipo.toLowerCase().includes('cântico') || 
-                         item.tipo.toLowerCase().includes('prelúdio') ||
-                         item.tipo.toLowerCase().includes('poslúdio');
-    
-    if (permiteMusica && item.lista_musicas?.length > 0) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(fontSize);
-      
-      for (const musica of item.lista_musicas) {
-        if (musica.cantico_id) {
-          const cantico = canticos.find(c => c.id === musica.cantico_id);
-          if (cantico) {
-            if (yPos > pageHeight - 15) {
-              xPos = mudarColunaOuPagina();
-            }
-            
-            const textoMusica = `   • ${cantico.nome}${musica.tom ? ` (${musica.tom})` : ''}`;
-            const linhasMusica = doc.splitTextToSize(textoMusica, colunaWidth);
-            
-            linhasMusica.forEach((l: string) => {
-              if (yPos > pageHeight - 15) {
-                xPos = mudarColunaOuPagina();
-              }
-              doc.text(l, xPos, yPos);
-              yPos += lineHeight * 1.2;
-            });
-          }
+    });
+
+    setItens(agrupados);
+  };
+
+  const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImagemUpload(file);
+    const reader = new FileReader();
+    reader.onload = e => setImagemPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const importarInstagram = async () => {
+    if (!instagramUrl.trim()) return;
+    setImportando(true);
+    try {
+      const postId = instagramUrl.match(/\/p\/([^\/]+)/)?.[1] || instagramUrl.match(/\/reel\/([^\/]+)/)?.[1];
+      if (!postId) { alert('URL inválida'); return; }
+      const response = await fetch('/api/instagram-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postUrl: instagramUrl }),
+      });
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const file = new File([blob], `instagram-${postId}.jpg`, { type: 'image/jpeg' });
+      setImagemUpload(file);
+      const reader = new FileReader();
+      reader.onload = e => setImagemPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+      setInstagramUrl('');
+      alert('✅ Imagem importada!');
+    } catch { alert('❌ Erro ao importar'); }
+    finally { setImportando(false); }
+  };
+
+  const uploadImagem = async (file: File, cultoNr: number): Promise<string | null> => {
+    const ext = file.name.split('.').pop();
+    const nome = `culto-${cultoNr}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('liturgias_thumbnails').upload(nome, file, { upsert: false });
+    if (error) return null;
+    const { data } = supabase.storage.from('liturgias_thumbnails').getPublicUrl(nome);
+    return data.publicUrl;
+  };
+
+  const adicionarItem = (posicao: number) => {
+    const novo: LouvorItem = {
+      tipo: 'Cânticos Congregacionais',
+      ordem: posicao + 1,
+      conteudo_publico: null,
+      descricao: null,
+      horario: null,
+      canticos_lista: [],
+    };
+    const novos = [...itens];
+    novos.splice(posicao, 0, novo);
+    setItens(novos.map((it, i) => ({ ...it, ordem: i + 1 })));
+  };
+
+  const salvar = async () => {
+    if (!dia) return alert('Selecione a data!');
+    setLoading(true);
+    try {
+      let cId = culto?.['Culto nr.'];
+      let imagemUrl = culto?.imagem_url || null;
+
+      if (!cId) {
+        const { data, error } = await supabase
+          .from('Louvores IPPN')
+          .insert({ Dia: dia, palavra_pastoral: palavraPastoral || null, palavra_pastoral_autor: palavraPastoralAutor || null })
+          .select().single();
+        if (error) throw error;
+        cId = data['Culto nr.'];
+      } else {
+        await supabase.from('Louvores IPPN').update({
+          Dia: dia,
+          palavra_pastoral: palavraPastoral || null,
+          palavra_pastoral_autor: palavraPastoralAutor || null,
+        }).eq('"Culto nr."', cId);
+      }
+
+      if (imagemUpload) {
+        const url = await uploadImagem(imagemUpload, cId);
+        if (url) {
+          imagemUrl = url;
+          await supabase.from('Louvores IPPN').update({ imagem_url: imagemUrl }).eq('"Culto nr."', cId);
         }
       }
-    }
-    
-    yPos += 4;
-    itemNumero++;
-  }
-  
-  // RODAPÉ EM TODAS AS PÁGINAS
-  for (let i = 1; i <= paginaAtual; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setTextColor(120, 120, 120);
-    doc.setFont('helvetica', 'italic');
-    
-    const rodapeTexto = usarDuasColunas 
-      ? `Liturgia • ${new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR')} • Página ${i}/${paginaAtual}`
-      : `Página ${i}/${paginaAtual}`;
-    
-    doc.text(rodapeTexto, pageWidth / 2, pageHeight - 8, { align: 'center' });
-  }
-  
-  const dataArquivo = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR').replace(/\//g, '.');
-  const nomeArquivo = `LITURGIA_${dataArquivo}.pdf`;
-  doc.save(nomeArquivo);
-};
 
-// --- COMPONENTE DE VISUALIZAÇÃO DE LITURGIA ---
-function LiturgiaView({ culto, itens, canticos, onClose }: any) {
+      await supabase.from('louvor_itens').delete().eq('culto_id', cId);
+
+      const rows: any[] = [];
+      let ord = 1;
+      itens.forEach(it => {
+        if (it.canticos_lista.length > 0) {
+          it.canticos_lista.forEach(m => {
+            rows.push({
+              culto_id: cId, ordem: ord++, tipo: it.tipo,
+              conteudo_publico: it.conteudo_publico || null,
+              descricao: it.descricao || null,
+              horario: it.horario || null,
+              cantico_id: m.cantico_id || null,
+              tom: m.tom || null,
+            });
+          });
+        } else {
+          rows.push({
+            culto_id: cId, ordem: ord++, tipo: it.tipo,
+            conteudo_publico: it.conteudo_publico || null,
+            descricao: it.descricao || null,
+            horario: it.horario || null,
+            cantico_id: null, tom: null,
+          });
+        }
+      });
+
+      const { error } = await supabase.from('louvor_itens').insert(rows);
+      if (error) throw error;
+
+      alert('✅ Salvo com sucesso!');
+      onSalvo();
+    } catch (e: any) {
+      alert(`Erro: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="mt-4 bg-slate-50 rounded-2xl p-6 border-2 border-slate-200">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-black text-slate-800">LITURGIA COMPLETA</h3>
-        <button 
-          onClick={onClose}
-          className="text-slate-500 hover:text-slate-700 font-bold text-2xl"
-        >
-          ✕
+    <div className="min-h-screen bg-slate-50 pb-32">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-30 flex items-center justify-between shadow-sm">
+        <button onClick={onCancelar} className="text-emerald-700 font-bold text-base px-4 py-2.5 hover:bg-emerald-50 rounded-xl transition-colors active:bg-emerald-100">
+          ← Voltar
         </button>
-      </div>
-      
-      <div className="space-y-4">
-        {itens.map((item: LouvorItem, idx: number) => {
-          const permiteMusica = item.tem_cantico || 
-                               item.tipo.toLowerCase().includes('cântico') || 
-                               item.tipo.toLowerCase().includes('prelúdio') ||
-                               item.tipo.toLowerCase().includes('poslúdio');
-          
-          return (
-            <div key={idx} className="bg-white rounded-xl p-4 border border-slate-200">
-              <h4 className="font-bold text-slate-800 mb-2 text-sm uppercase">
-                {idx + 1}. {item.tipo}
-              </h4>
-              
-              {item.descricao && (
-                <p className="text-slate-600 text-sm mb-2 whitespace-pre-line">
-                  {item.descricao}
-                </p>
-              )}
-              
-              {permiteMusica && item.lista_musicas && item.lista_musicas.length > 0 && (
-                <div className="space-y-1 mt-2">
-                  {item.lista_musicas.map((m, mIdx) => {
-                    const cantico = canticos.find((c: any) => c.id === m.cantico_id);
-                    if (!cantico) return null;
-                    
-                    return (
-                      <div key={mIdx} className="text-sm text-emerald-700 font-medium">
-                        🎵 {cantico.nome} {m.tom ? `(${m.tom})` : ''}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+        <h2 className="font-black text-slate-800 text-base uppercase tracking-wider">
+          {culto ? 'Editar Liturgia' : 'Nova Liturgia'}
+        </h2>
+        <div className="w-24" />
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 pt-6 space-y-4">
+
+        {/* DATA */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5">
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Data do Culto</label>
+          <input
+            type="date"
+            value={dia}
+            onChange={e => {
+              setDia(e.target.value);
+              if (!culto && e.target.value) setItens(modeloPadrao(e.target.value));
+            }}
+            disabled={!isLideranca}
+            className="text-2xl font-black text-emerald-800 border-none focus:outline-none bg-transparent w-full py-1"
+          />
+        </div>
+
+        {/* PALAVRA PASTORAL */}
+        {isLideranca && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <label className="text-xs font-black text-emerald-600 uppercase tracking-widest block mb-3">
+              ✝️ Palavra Pastoral
+            </label>
+            <textarea
+              value={palavraPastoral}
+              onChange={e => setPalavraPastoral(e.target.value)}
+              placeholder="Escreva a palavra pastoral da semana..."
+              rows={4}
+              className="w-full text-base text-slate-700 border border-emerald-100 rounded-xl px-4 py-3 bg-emerald-50/30 focus:outline-none focus:border-emerald-300 resize-none placeholder:text-slate-300 mb-3"
+            />
+            <input
+              value={palavraPastoralAutor}
+              onChange={e => setPalavraPastoralAutor(e.target.value)}
+              placeholder="Autor"
+              className="w-full text-base text-slate-500 border border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-slate-300 italic"
+            />
+          </div>
+        )}
+
+        {/* IMAGEM */}
+        {isLideranca && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">
+              Imagem do Tema
+            </label>
+
+            {/* Instagram */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="url"
+                placeholder="URL do post do Instagram..."
+                value={instagramUrl}
+                onChange={e => setInstagramUrl(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-purple-400"
+              />
+              <button
+                onClick={importarInstagram}
+                disabled={importando}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+              >
+                {importando ? '⏳' : '📥'}
+              </button>
             </div>
-          );
-        })}
+
+            <div className="flex items-center gap-3 my-3">
+              <div className="flex-1 h-px bg-slate-100" />
+              <span className="text-xs text-slate-400">ou</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+
+            {imagemPreview && (
+              <div className="relative mb-3 group">
+                <img src={imagemPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl" />
+                <button
+                  onClick={() => { setImagemPreview(null); setImagemUpload(null); }}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >×</button>
+              </div>
+            )}
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImagemChange}
+              className="w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* ITENS DA LITURGIA */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Liturgia</h3>
+            {isLideranca && (
+              <button
+                onClick={() => adicionarItem(0)}
+                className="text-sm font-bold text-emerald-600 hover:bg-emerald-50 px-4 py-2 rounded-xl transition-colors active:bg-emerald-100"
+              >
+                + item no início
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {itens.map((it, idx) => (
+              <div key={idx}>
+                <ItemLiturgia
+                  item={it}
+                  index={idx}
+                  canticos={canticos}
+                  onCreate={async (nome: string) => {
+                    const { data }: any = await supabase.from('canticos').insert({ nome }).select().single();
+                    const novo = { ...data, ultima_vez: null };
+                    setCanticos((prev: Cantico[]) => [...prev, novo]);
+                    return novo;
+                  }}
+                  onUpdate={(u: LouvorItem) => {
+                    const novos = [...itens];
+                    novos[idx] = u;
+                    setItens(novos);
+                  }}
+                  onRemove={() => setItens(itens.filter((_, i) => i !== idx))}
+                  onMove={(d: string) => {
+                    const novos = [...itens];
+                    const alvo = d === 'cima' ? idx - 1 : idx + 1;
+                    if (alvo >= 0 && alvo < novos.length) {
+                      [novos[idx], novos[alvo]] = [novos[alvo], novos[idx]];
+                      setItens(novos);
+                    }
+                  }}
+                  isLideranca={isLideranca}
+                  podVerTom={podVerTom}
+                  canEditarMusica={canEditarMusica}
+                />
+
+                {isLideranca && (
+                  <button
+                    onClick={() => adicionarItem(idx + 1)}
+                    className="w-full mt-1 py-2.5 text-sm text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors font-semibold active:bg-emerald-100"
+                  >
+                    + adicionar item aqui
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+
+      {/* Botão salvar fixo */}
+      {isLideranca && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-40">
+          <button
+            onClick={salvar}
+            disabled={loading}
+            className="w-full max-w-2xl mx-auto block bg-emerald-700 hover:bg-emerald-800 text-white py-4 rounded-2xl font-bold text-base shadow-lg disabled:opacity-60 transition-colors"
+          >
+            {loading ? '⏳ Salvando...' : '✅ Salvar Liturgia'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- CARD DE CULTO NA LISTAGEM ---
+function CultoCard({ culto, onEditar, onWhatsApp, onPDF }: any) {
+  const dataFormatada = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR', {
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+  });
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-all shadow-sm">
+      <div className="flex items-center gap-4 p-4">
+        {culto.imagem_url && (
+          <img src={culto.imagem_url} alt="" className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">#{culto['Culto nr.']}</p>
+          <h3 className="font-bold text-slate-800 text-base capitalize truncate mt-0.5">{dataFormatada}</h3>
+          {culto.palavra_pastoral && (
+            <p className="text-sm text-emerald-600 truncate mt-1">✝️ Palavra pastoral disponível</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => onWhatsApp(culto)} className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 active:bg-emerald-200 transition-colors flex items-center justify-center" title="WhatsApp">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.559 4.189 1.619 6.011L0 24l6.117-1.605a11.847 11.847 0 005.925 1.586h.005c6.635 0 12.032-5.396 12.035-12.032a11.76 11.76 0 00-3.528-8.485" />
+            </svg>
+          </button>
+          <button onClick={() => onPDF(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center" title="PDF">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+          </button>
+          <button onClick={() => onEditar(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center text-lg" title="Editar">
+            ✏️
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -673,956 +756,323 @@ function LiturgiaView({ culto, itens, canticos, onClose }: any) {
 
 // --- PÁGINA PRINCIPAL ---
 export default function CultosPage() {
-  const [userRole, setUserRole] = useState<string | null>(null); 
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [canticos, setCanticos] = useState<Cantico[]>([]);
-  const [cultos, setCultos] = useState<any[]>([]);
-  const [modoEdicao, setModoEdicao] = useState(false);
-  const [cultoEditando, setCultoEditando] = useState<any>(null);
-  const [dia, setDia] = useState('');
-  const [itens, setItens] = useState<LouvorItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [cultoExpandido, setCultoExpandido] = useState<number | null>(null);
-  const [liturgiasCarregadas, setLiturgiasCarregadas] = useState<{[key: number]: LouvorItem[]}>({});
-  
-  // ESTADOS PARA IMAGEM
-  const [imagemUpload, setImagemUpload] = useState<File | null>(null);
-  const [imagemPreview, setImagemPreview] = useState<string | null>(null);
-  
-  // 🆕 ESTADOS PARA INSTAGRAM
-  const [instagramUrl, setInstagramUrl] = useState('');
-  const [isImportingFromInstagram, setIsImportingFromInstagram] = useState(false);
+  const [cultos, setCultos] = useState<Culto[]>([]);
+  const [editando, setEditando] = useState<Culto | null | 'novo'>(null);
+  const [loading, setLoading] = useState(true);
 
   const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
 
-  // FUNÇÃO DE UPLOAD
-  const uploadImagem = async (file: File, cultoNr: number): Promise<string | null> => {
-    try {
-      const extensao = file.name.split('.').pop();
-      const nomeArquivo = `culto-${cultoNr}-${Date.now()}.${extensao}`;
-      
-      const { data, error } = await supabase.storage
-        .from('liturgias_thumbnails')
-        .upload(nomeArquivo, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) throw error;
-
-      const { data: urlData } = supabase.storage
-        .from('liturgias_thumbnails')
-        .getPublicUrl(nomeArquivo);
-
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('Erro ao fazer upload:', error);
-      return null;
-    }
-  };
-
-  // HANDLE IMAGEM LOCAL
-  const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Selecione apenas imagens!');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Imagem muito grande! Máximo 5MB.');
-      return;
-    }
-
-    setImagemUpload(file);
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagemPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // 🆕 IMPORTAR DO INSTAGRAM
-  const importarDoInstagram = async () => {
-    if (!instagramUrl.trim()) {
-      alert('Cole a URL do post do Instagram');
-      return;
-    }
-
-    setIsImportingFromInstagram(true);
-
-    try {
-      // Valida a URL
-      const postId = instagramUrl.match(/\/p\/([^\/]+)/)?.[1] || 
-                     instagramUrl.match(/\/reel\/([^\/]+)/)?.[1];
-      
-      if (!postId) {
-        alert('URL do Instagram inválida');
-        return;
-      }
-
-      // Busca a imagem via API route
-      const response = await fetch('/api/instagram-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postUrl: instagramUrl }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao buscar imagem');
-      }
-
-      // Converte resposta em Blob
-      const blob = await response.blob();
-      const file = new File([blob], `instagram-${postId}-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-      // Define a imagem para upload (será enviada ao salvar)
-      setImagemUpload(file);
-      
-      // Cria preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagemPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-      
-      alert('✅ Imagem importada do Instagram! Clique em Salvar para confirmar.');
-      setInstagramUrl(''); // Limpa o campo
-
-    } catch (error) {
-      console.error('Erro ao importar do Instagram:', error);
-      alert('❌ Erro ao importar imagem do Instagram. Tente novamente.');
-    } finally {
-      setIsImportingFromInstagram(false);
-    }
-  };
-
-  const carregarUsuario = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      setUserRole('staff');
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('pessoas')
-      .select('cargo')
-      .eq('usuario_id', user.id)
-      .eq('tem_acesso', true)
-      .eq('ativo', true)
-      .single();
-
-    if (data?.cargo) {
-      setUserRole(data.cargo);
-    } else {
-      setUserRole('staff');
-    }
-  };
-
-const carregarDados = async () => {
-  // Buscar cânticos da VIEW unificada (inclui hinos + cânticos)
-  const { data: todosCanticos } = await supabase
-    .from('canticos_unificados')
-    .select('id, nome, tipo, numero')
-    .order('numero', { ascending: true, nullsFirst: false });
-  
-  if (todosCanticos) {
-    setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
-  }
-
-  const { data: cu } = await supabase
-    .from('Louvores IPPN')
-    .select('*')
-    .order('Dia', { ascending: false });
-  if (cu) setCultos(cu || []);
-
-  if (todosCanticos) {
-    buscarUltimasDatas(todosCanticos);
-  }
-};
-
-  const buscarUltimasDatas = async (canticosBase: any[]) => {
-    const { data: todosItens } = await supabase
-      .from('louvor_itens')
-      .select('cantico_id, culto_id')
-      .not('cantico_id', 'is', null);
-
-    if (!todosItens) return;
-
-    const { data: todosCultos } = await supabase
-      .from('Louvores IPPN')
-      .select('"Culto nr.", Dia');
-
-    if (!todosCultos) return;
-
-    const mapaCultos = new Map();
-    todosCultos.forEach((c: any) => {
-      mapaCultos.set(c['Culto nr.'], c.Dia);
-    });
-
-    const mapaUltimasDatas = new Map();
-    
-    todosItens.forEach((item: any) => {
-      const dataDoculto = mapaCultos.get(item.culto_id);
-      if (!dataDoculto) return;
-
-      const dataAtual = mapaUltimasDatas.get(item.cantico_id);
-      if (!dataAtual || dataDoculto > dataAtual) {
-        mapaUltimasDatas.set(item.cantico_id, dataDoculto);
-      }
-    });
-
-    const canticosAtualizados = canticosBase.map(c => ({
-      ...c,
-      ultima_vez: mapaUltimasDatas.get(c.id) || null
-    }));
-
-    setCanticos(canticosAtualizados);
-  };
-
-  useEffect(() => { 
-    carregarUsuario();
-    carregarDados(); 
+  useEffect(() => {
+    carregarTudo();
   }, []);
 
-  if (!userRole) {
-    return (
-      <div className="p-8 text-center font-bold text-slate-500">
-        Carregando...
-      </div>
-    );
-  }
+  const carregarTudo = async () => {
+    setLoading(true);
 
-  const toggleExpandirCulto = async (cultoNr: number) => {
-    if (cultoExpandido === cultoNr) {
-      setCultoExpandido(null);
-      return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase.from('pessoas').select('cargo').eq('usuario_id', user.id).eq('tem_acesso', true).eq('ativo', true).single();
+      setUserRole(data?.cargo || 'staff');
+    } else {
+      setUserRole('staff');
     }
 
-    if (liturgiasCarregadas[cultoNr]) {
-      setCultoExpandido(cultoNr);
-      return;
-    }
+    const { data: todosCanticos } = await supabase
+      .from('canticos_unificados')
+      .select('id, nome, tipo, numero')
+      .order('nome');
+    if (todosCanticos) setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
 
-    const { data, error } = await supabase
-      .from('louvor_itens')
+    const { data: cultosData } = await supabase
+      .from('Louvores IPPN')
       .select('*')
-      .eq('culto_id', cultoNr)
-      .order('ordem');
-    
-    if (error || !data) {
-      alert('Erro ao carregar liturgia!');
-      return;
-    }
+      .order('Dia', { ascending: false });
+    if (cultosData) setCultos(cultosData);
 
-    const agrupados: LouvorItem[] = [];
-    data.forEach((linha) => {
-      const ultimo = agrupados[agrupados.length - 1];
-      
-      if (ultimo && 
-          ultimo.tipo === linha.tipo && 
-          ultimo.descricao === linha.descricao &&
-          (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-        ultimo.lista_musicas.push({ 
-          cantico_id: linha.cantico_id, 
-          tom: linha.tom 
-        });
-      } else {
-        agrupados.push({
-          tipo: linha.tipo,
-          ordem: linha.ordem,
-          descricao: linha.descricao,
-          tem_cantico: !!linha.cantico_id,
-          lista_musicas: [{ 
-            cantico_id: linha.cantico_id, 
-            tom: linha.tom 
-          }]
-        });
-      }
-    });
-
-    setLiturgiasCarregadas(prev => ({ ...prev, [cultoNr]: agrupados }));
-    setCultoExpandido(cultoNr);
-  };
-
-  const shareWhatsApp = async (culto: any) => {
-    const cultoNr = culto['Culto nr.'];
-    let itensParaExportar = liturgiasCarregadas[cultoNr];
-    
-    if (!itensParaExportar) {
-      const { data } = await supabase
-        .from('louvor_itens')
-        .select('*')
-        .eq('culto_id', cultoNr)
-        .order('ordem');
-      
-      if (!data) return;
-      
-      const agrupados: LouvorItem[] = [];
-      data.forEach((linha) => {
-        const ultimo = agrupados[agrupados.length - 1];
-        if (ultimo && 
-            ultimo.tipo === linha.tipo && 
-            ultimo.descricao === linha.descricao &&
-            (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
-        } else {
-          agrupados.push({
-            tipo: linha.tipo,
-            ordem: linha.ordem,
-            descricao: linha.descricao,
-            tem_cantico: !!linha.cantico_id,
-            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
-          });
-        }
-      });
-      itensParaExportar = agrupados;
-    }
-
-    const dataFormatada = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
-    
-    let texto = `LITURGIA DO CULTO DE *${dataFormatada}*\n\n`;
-
-    let contadorMusica = 1;
-    
-    itensParaExportar.forEach((item: LouvorItem) => {
-      const tipoUpper = item.tipo.toUpperCase();
-      const permiteMusica = item.tem_cantico || 
-                           item.tipo.toLowerCase().includes('cântico') || 
-                           item.tipo.toLowerCase().includes('prelúdio') ||
-                           item.tipo.toLowerCase().includes('poslúdio');
-      
-      texto += `*${tipoUpper}*\n`;
-      
-      if (item.descricao && item.descricao.trim()) {
-        const linhas = item.descricao.split('\n').filter(l => l.trim());
-        linhas.forEach(linha => {
-          const limpa = linha.trim().replace(/^●\s*/, '- ');
-          texto += `   ${limpa}\n`;
-        });
-      }
-      
-      if (permiteMusica && item.lista_musicas && item.lista_musicas.length > 0) {
-        item.lista_musicas.forEach(m => {
-          const cantico = canticos.find(c => c.id === m.cantico_id);
-          if (cantico) {
-            texto += `${contadorMusica}. ${cantico.nome}${m.tom ? ` (${m.tom})` : ''}\n`;
-            contadorMusica++;
+    // Buscar últimas datas dos cânticos
+    if (todosCanticos) {
+      const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
+      const { data: todosCultos } = await supabase.from('Louvores IPPN').select('"Culto nr.", Dia');
+      if (itens && todosCultos) {
+        const mapaCultos = new Map(todosCultos.map((c: any) => [c['Culto nr.'], c.Dia]));
+        const mapaUltimas = new Map<string, string>();
+        itens.forEach((it: any) => {
+          const dia = mapaCultos.get(it.culto_id);
+          if (!dia) return;
+          if (!mapaUltimas.has(it.cantico_id) || dia > mapaUltimas.get(it.cantico_id)!) {
+            mapaUltimas.set(it.cantico_id, dia as string);
           }
         });
+        setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: mapaUltimas.get(c.id) || null })));
       }
-      
-      texto += `\n`;
-    });
-
-    const { data: escala } = await supabase
-      .from('escalas')
-      .select('id')
-      .eq('culto_id', cultoNr)
-      .single();
-
-    texto += `-----\n*ESCALA*\n`;
-
-    if (escala) {
-      const { data: funcoes } = await supabase
-        .from('escalas_funcoes')
-        .select(`
-          ordem,
-          tags_funcoes(nome),
-          pessoas(nome)
-        `)
-        .eq('escala_id', escala.id)
-        .order('ordem');
-
-      if (funcoes && funcoes.length > 0) {
-        funcoes.forEach((f: any) => {
-          texto += `- ${f.tags_funcoes.nome}: ${f.pessoas.nome}\n`;
-        });
-      } else {
-        texto += `- Ministracao: _A definir_\n`;
-        texto += `- Violao: _A definir_\n`;
-        texto += `- Voz 1: _A definir_\n`;
-        texto += `- Voz 2: _A definir_\n`;
-        texto += `- Voz 3: _A definir_\n`;
-      }
-    } else {
-      texto += `- Ministracao: _A definir_\n`;
-      texto += `- Violao: _A definir_\n`;
-      texto += `- Voz 1: _A definir_\n`;
-      texto += `- Voz 2: _A definir_\n`;
-      texto += `- Voz 3: _A definir_\n`;
     }
+
+    setLoading(false);
+  };
+
+  const shareWhatsApp = async (culto: Culto) => {
+    const cultoNr = culto['Culto nr.'];
+    const { data } = await supabase.from('louvor_itens').select('*, canticos(nome)').eq('culto_id', cultoNr).order('ordem');
+    if (!data) return;
+
+    const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
+    let texto = `LITURGIA DO CULTO DE *${dataFmt}*\n\n`;
+
+    if (culto.palavra_pastoral) {
+      texto += `✝️ *PALAVRA PASTORAL*\n${culto.palavra_pastoral}\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
+    }
+
+    data.forEach((it: any) => {
+      texto += `*${it.tipo.toUpperCase()}*`;
+      if (it.horario) texto += ` _(${it.horario})_`;
+      texto += '\n';
+      if (it.conteudo_publico) texto += `${it.conteudo_publico}\n`;
+      if (it.canticos?.nome) texto += `🎵 ${it.canticos.nome}${it.tom ? ` (${it.tom})` : ''}\n`;
+      texto += '\n';
+    });
 
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   };
 
-  const sharePDF = async (culto: any) => {
-    setLoading(true);
-    
+  const sharePDF = async (culto: Culto) => {
     const cultoNr = culto['Culto nr.'];
-    let itensParaExportar = liturgiasCarregadas[cultoNr];
-    
-    if (!itensParaExportar) {
-      const { data } = await supabase
-        .from('louvor_itens')
-        .select('*')
-        .eq('culto_id', cultoNr)
-        .order('ordem');
-      
-      if (!data) {
-        setLoading(false);
-        return;
-      }
-      
-      const agrupados: LouvorItem[] = [];
-      data.forEach((linha) => {
-        const ultimo = agrupados[agrupados.length - 1];
-        if (ultimo && 
-            ultimo.tipo === linha.tipo && 
-            ultimo.descricao === linha.descricao &&
-            (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
-        } else {
-          agrupados.push({
-            tipo: linha.tipo,
-            ordem: linha.ordem,
-            descricao: linha.descricao,
-            tem_cantico: !!linha.cantico_id,
-            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
-          });
-        }
-      });
-      itensParaExportar = agrupados;
-    }
-    
-    await gerarPDF(culto, itensParaExportar, canticos);
-    setLoading(false);
-  };
+    const { data } = await supabase
+      .from('louvor_itens')
+      .select('*, canticos(nome)')
+      .eq('culto_id', cultoNr)
+      .order('ordem');
+    if (!data) return;
 
-  const iniciarEdicao = async (culto: any) => {
-    setLoading(true);
-    
-    const cultoNr = culto['Culto nr.'];
-    let itensParaEditar = liturgiasCarregadas[cultoNr];
-    
-    if (!itensParaEditar) {
-      const { data, error } = await supabase
-        .from('louvor_itens')
-        .select('*')
-        .eq('culto_id', cultoNr)
-        .order('ordem');
-      
-      if (error || !data) {
-        alert('Erro ao carregar liturgia!');
-        setLoading(false);
-        return;
-      }
-      
-      const agrupados: LouvorItem[] = [];
-      data.forEach((linha) => {
-        const ultimo = agrupados[agrupados.length - 1];
-        if (ultimo && 
-            ultimo.tipo === linha.tipo && 
-            ultimo.descricao === linha.descricao &&
-            (linha.cantico_id !== null || ultimo.lista_musicas[0]?.cantico_id !== null)) {
-          ultimo.lista_musicas.push({ cantico_id: linha.cantico_id, tom: linha.tom });
-        } else {
-          agrupados.push({
-            tipo: linha.tipo,
-            ordem: linha.ordem,
-            descricao: linha.descricao,
-            tem_cantico: !!linha.cantico_id,
-            lista_musicas: [{ cantico_id: linha.cantico_id, tom: linha.tom }]
-          });
-        }
-      });
-      itensParaEditar = agrupados;
-    }
-    
-    setItens(itensParaEditar);
-    setCultoEditando(culto);
-    setDia(culto.Dia);
-    
-    // CARREGAR IMAGEM EXISTENTE
-    if (culto.imagem_url) {
-      setImagemPreview(culto.imagem_url);
-    } else {
-      setImagemPreview(null);
-    }
-    setImagemUpload(null);
-    setInstagramUrl(''); // 🆕 Limpa URL do Instagram
-    
-    setModoEdicao(true);
-    setLoading(false);
-  };
-
-  const criarCultoPadrao = async () => {
-    const calcularProximoDomingo = (data: Date): Date => {
-      const resultado = new Date(data);
-      const diasAteProximoDomingo = (7 - resultado.getDay()) % 7 || 7;
-      resultado.setDate(resultado.getDate() + diasAteProximoDomingo);
-      return resultado;
+    // Agrupar itens consecutivos do mesmo tipo/horario/conteudo
+    type ItemAgrupado = {
+      tipo: string;
+      horario: string | null;
+      conteudo_publico: string | null;
+      descricao: string | null;
+      canticos: { nome: string; tom: string | null }[];
     };
-
-    const { data: cultosExistentes } = await supabase
-      .from('Louvores IPPN')
-      .select('Dia')
-      .order('Dia', { ascending: false });
-
-    let proximoDomingo = calcularProximoDomingo(new Date());
-    const datasExistentes = new Set(cultosExistentes?.map(c => c.Dia) || []);
-    
-    while (datasExistentes.has(proximoDomingo.toISOString().split('T')[0])) {
-      proximoDomingo = calcularProximoDomingo(new Date(proximoDomingo.getTime() + 24 * 60 * 60 * 1000));
-    }
-
-    const modeloPadrao: LouvorItem[] = [
-      {
-        tipo: 'Prelúdio',
-        ordem: 1,
-        descricao: null,
-        tem_cantico: true,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Saudação e Acolhida à Igreja',
-        ordem: 2,
-        descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)',
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Cânticos Congregacionais',
-        ordem: 3,
-        descricao: null,
-        tem_cantico: true,
-        lista_musicas: [
-          { cantico_id: null, tom: null },
-          { cantico_id: null, tom: null },
-          { cantico_id: null, tom: null }
-        ]
-      },
-      {
-        tipo: 'Confissão de Pecados',
-        ordem: 4,
-        descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.',
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Dízimos e Ofertas',
-        ordem: 5,
-        descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.',
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Cântico para as Ofertas',
-        ordem: 6,
-        descricao: 'Oração pelas ofertas e dízimo.',
-        tem_cantico: true,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Pregação da Palavra',
-        ordem: 7,
-        descricao: null,
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Cântico Final',
-        ordem: 8,
-        descricao: 'Poslúdio',
-        tem_cantico: true,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Oração - Bênção Apostólica',
-        ordem: 9,
-        descricao: 'Amém tríplice',
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      },
-      {
-        tipo: 'Lembretes - Liturgo',
-        ordem: 10,
-        descricao: 'Apresentação dos convidados\nAniversariantes / Casamento',
-        tem_cantico: false,
-        lista_musicas: [{ cantico_id: null, tom: null }]
-      }
-    ];
-    
-    setItens(modeloPadrao);
-    setCultoEditando(null);
-    setDia(proximoDomingo.toISOString().split('T')[0]);
-    setImagemPreview(null);
-    setImagemUpload(null);
-    setInstagramUrl(''); // 🆕 Limpa URL do Instagram
-    setModoEdicao(true);
-  };
-
-  const salvar = async () => {
-    if (!dia) return alert("Selecione a data!");
-    setLoading(true);
-    
-    try {
-      let cId = cultoEditando?.['Culto nr.'];
-      let imagemUrl = cultoEditando?.imagem_url || null;
-
-      // PASSO 1: Garantir que o Culto existe no banco para ter um ID
-      if (!cId) {
-        const { data, error: errorCulto } = await supabase
-          .from('Louvores IPPN')
-          .insert({ Dia: dia }) 
-          .select()
-          .single();
-        
-        if (errorCulto) throw errorCulto;
-        cId = data['Culto nr.'];
+    const agrupados: ItemAgrupado[] = [];
+    for (const it of data) {
+      const ultimo = agrupados[agrupados.length - 1];
+      if (
+        ultimo &&
+        ultimo.tipo === it.tipo &&
+        ultimo.horario === it.horario &&
+        ultimo.conteudo_publico === it.conteudo_publico &&
+        ultimo.descricao === it.descricao
+      ) {
+        if (it.canticos?.nome) {
+          ultimo.canticos.push({ nome: it.canticos.nome, tom: it.tom });
+        }
       } else {
-        const { error: errorUpdate } = await supabase
-          .from('Louvores IPPN')
-          .update({ Dia: dia })
-          .eq('"Culto nr."', cId);
-        
-        if (errorUpdate) throw errorUpdate;
+        agrupados.push({
+          tipo: it.tipo,
+          horario: it.horario,
+          conteudo_publico: it.conteudo_publico,
+          descricao: it.descricao,
+          canticos: it.canticos?.nome ? [{ nome: it.canticos.nome, tom: it.tom }] : [],
+        });
       }
-
-      // PASSO 2: Upload da imagem
-      if (imagemUpload) {
-        const url = await uploadImagem(imagemUpload, cId);
-        if (url) {
-          imagemUrl = url;
-          await supabase
-            .from('Louvores IPPN')
-            .update({ imagem_url: imagemUrl })
-            .eq('"Culto nr."', cId);
-        }
-      }
-
-      // PASSO 3: Limpar itens antigos
-      const { error: errorDelete } = await supabase
-        .from('louvor_itens')
-        .delete()
-        .eq('culto_id', cId);
-      if (errorDelete) throw errorDelete;
-
-      // PASSO 4: Inserir novos itens
-      const rows: {
-        culto_id: number;
-        ordem: number;
-        tipo: string;
-        descricao: string | null;
-        cantico_id: string | null;
-        tom: string | null;
-      }[] = [];
-
-      let ord = 1;
-      
-      itens.forEach((it) => {
-        const permiteMusica = it.tem_cantico === true || 
-                            it.tipo.toLowerCase().includes('cântico') || 
-                            it.tipo.toLowerCase().includes('prelúdio') ||
-                            it.tipo.toLowerCase().includes('poslúdio');
-        
-        if (permiteMusica && it.lista_musicas) {
-          it.lista_musicas.forEach((m) => {
-            rows.push({
-              culto_id: cId,
-              ordem: ord++,
-              tipo: it.tipo,
-              descricao: it.descricao || null,
-              cantico_id: m.cantico_id || null,
-              tom: m.tom || null
-            });
-          });
-        } else {
-          rows.push({
-            culto_id: cId,
-            ordem: ord++,
-            tipo: it.tipo,
-            descricao: it.descricao || null,
-            cantico_id: null,
-            tom: null
-          });
-        }
-      });
-
-      const { error: errorInsert } = await supabase.from('louvor_itens').insert(rows);
-      if (errorInsert) throw errorInsert;
-      
-      alert('Liturgia salva com sucesso! ✅');
-      setModoEdicao(false);
-      setLiturgiasCarregadas({});
-      setImagemUpload(null);
-      setImagemPreview(null);
-      setInstagramUrl(''); // 🆕 Limpa URL do Instagram
-      await carregarDados();
-    } catch (e: any) {
-      alert(`Erro ao salvar: ${e.message || 'Erro desconhecido'}`);
-    } finally {
-      setLoading(false);
     }
-  };
 
-  const adicionarItemEm = (posicao: number) => {
-    const novoItem: LouvorItem = {
-      tipo: posicao === 0 ? 'Prelúdio' : 'Cânticos Congregacionais',
-      ordem: posicao,
-      descricao: '',
-      tem_cantico: posicao === 0 ? true : false,
-      lista_musicas: [{ cantico_id: null, tom: null }]
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const m = 14;
+    const colGap = 6;
+    const colW = (pw - m * 2 - colGap) / 2;
+    const lineH = 5.5;
+    const titleH = 6.5;
+    const headerBottom = 32;
+    const contentBottom = ph - 12;
+
+    // Função para calcular altura de um item
+    const calcAlturaItem = (it: ItemAgrupado, largura: number): number => {
+      doc.setFontSize(11);
+      const tituloTxt = `${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
+      const tituloLinhas = doc.splitTextToSize(tituloTxt, largura);
+      let h = tituloLinhas.length * titleH + 2;
+      if (it.conteudo_publico) {
+        doc.setFontSize(10);
+        const cl = doc.splitTextToSize(it.conteudo_publico, largura - 4);
+        h += cl.length * lineH;
+      }
+      if (it.descricao) {
+        doc.setFontSize(9);
+        const dl = doc.splitTextToSize(it.descricao, largura - 4);
+        h += dl.length * lineH;
+      }
+      h += it.canticos.length * lineH;
+      h += 6;
+      return h;
     };
 
-    const novosItens = [...itens];
-    novosItens.splice(posicao, 0, novoItem);
-    setItens(novosItens);
+    // Cabeçalho
+    doc.setFillColor(16, 60, 48);
+    doc.rect(0, 0, pw, headerBottom - 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pw / 2, 11, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('Uma igreja da familia de Deus  -  Manaus/AM', pw / 2, 18, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('LITURGIA', pw / 2, 26, { align: 'center' });
+
+    // Data
+    const dataFmt = new Date(culto.Dia + 'T00:00:00')
+      .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+      .toUpperCase();
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    let y = headerBottom + 4;
+    doc.text(dataFmt, pw / 2, y, { align: 'center' });
+    y += 4;
+    doc.setDrawColor(16, 60, 48);
+    doc.line(m, y, pw - m, y);
+    y += 6;
+
+    // Decidir se usa 1 ou 2 colunas
+    const alturaTotal1col = agrupados.reduce((acc, it) => acc + calcAlturaItem(it, pw - m * 2), 0);
+    const espacoDisponivel = contentBottom - y - 6;
+    const usarDuasColunas = alturaTotal1col > espacoDisponivel;
+
+    const renderItem = (it: ItemAgrupado, num: number, xBase: number, yPos: number, largura: number): number => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      const tituloTxt = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
+      const tituloLinhas = doc.splitTextToSize(tituloTxt, largura);
+      doc.text(tituloLinhas, xBase, yPos);
+      yPos += tituloLinhas.length * titleH + 2;
+
+      if (it.conteudo_publico) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(55, 55, 55);
+        const cl = doc.splitTextToSize(it.conteudo_publico, largura - 4);
+        doc.text(cl, xBase + 3, yPos);
+        yPos += cl.length * lineH;
+      }
+
+      if (it.descricao) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(120, 120, 120);
+        const dl = doc.splitTextToSize(it.descricao, largura - 4);
+        doc.text(dl, xBase + 3, yPos);
+        yPos += dl.length * lineH;
+      }
+
+      for (const c of it.canticos) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.setTextColor(16, 90, 60);
+        const nomeTxt = `${c.nome}${c.tom ? ' (' + c.tom + ')' : ''}`;
+        const cl = doc.splitTextToSize(nomeTxt, largura - 4);
+        doc.text(cl, xBase + 3, yPos);
+        yPos += cl.length * lineH;
+      }
+
+      return yPos + 6;
+    };
+
+    if (!usarDuasColunas) {
+      // Uma coluna simples
+      let num = 1;
+      for (const it of agrupados) {
+        y = renderItem(it, num, m, y, pw - m * 2);
+        num++;
+      }
+    } else {
+      // Fluxo jornal: preenche col1 até contentBottom, resto vai pra col2
+      const x1 = m;
+      const x2 = m + colW + colGap;
+
+      // Linha divisória
+      doc.setDrawColor(220, 220, 220);
+      doc.line(x2 - colGap / 2, y - 2, x2 - colGap / 2, contentBottom);
+
+      let col = 1;
+      let xAtual = x1;
+      let yAtual = y;
+      let larguraAtual = colW;
+      let num = 1;
+
+      for (const it of agrupados) {
+        const h = calcAlturaItem(it, larguraAtual);
+
+        // Se não cabe na coluna atual, vai para col2
+        if (col === 1 && yAtual + h > contentBottom) {
+          col = 2;
+          xAtual = x2;
+          yAtual = y;
+          larguraAtual = colW;
+        }
+
+        yAtual = renderItem(it, num, xAtual, yAtual, larguraAtual);
+        num++;
+      }
+    }
+
+
+
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
-  if (modoEdicao) return (
-    <div className="min-h-screen bg-slate-50 pb-32 print:bg-white print:pb-0">
-      <header className="bg-white border-b-2 border-slate-200 p-4 sticky top-0 z-30 flex justify-between items-center shadow-sm print:hidden">
-        <button onClick={() => setModoEdicao(false)} className="text-emerald-700 font-bold px-4">← Sair</button>
-        <h2 className="font-black text-slate-800 uppercase tracking-tighter">Edição de Liturgia</h2>
-        <div className="w-10"></div>
-      </header>
-      <main className="p-4 max-w-2xl mx-auto print:max-w-none print:p-0">
-        <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 mb-6 print:border-none print:text-center">
-          <h1 className="hidden print:block font-serif font-bold text-2xl uppercase tracking-widest mb-4">Liturgia IP Ponta Negra</h1>
-          <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest print:hidden">Data da Liturgia</label>
-          <input type="date" value={dia} onChange={e => setDia(e.target.value)} disabled={!isLideranca} className="w-full text-2xl font-black text-emerald-800 border-none p-0 focus:ring-0 bg-transparent print:text-center print:text-lg" />
-        </div>
-        
-        {/* 🆕 UPLOAD DE IMAGEM COM INSTAGRAM */}
-        {isLideranca && (
-          <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 mb-6 print:hidden">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-4 block tracking-widest">
-              Imagem do Tema
-            </label>
-            
-            {/* Importar do Instagram */}
-            <div className="mb-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200">
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
-                <span className="text-sm font-bold text-purple-700">Importar do Instagram</span>
-              </div>
-              
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  placeholder="https://www.instagram.com/p/ABC123/"
-                  value={instagramUrl}
-                  onChange={(e) => setInstagramUrl(e.target.value)}
-                  disabled={isImportingFromInstagram}
-                  className="flex-1 border-2 border-purple-200 rounded-xl p-3 text-sm focus:border-purple-500 outline-none bg-white disabled:bg-slate-50"
-                />
-                <button
-                  type="button"
-                  onClick={importarDoInstagram}
-                  disabled={isImportingFromInstagram}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-                >
-                  {isImportingFromInstagram ? '⏳' : '📥'}
-                </button>
-              </div>
-              
-              <p className="text-xs text-purple-600 mt-2">
-                Cole a URL de um post público do Instagram da igreja
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-4 my-4">
-              <div className="flex-1 h-px bg-slate-200"></div>
-              <span className="text-xs text-slate-400 font-bold">OU</span>
-              <div className="flex-1 h-px bg-slate-200"></div>
-            </div>
-            
-            {/* Preview da imagem */}
-            {imagemPreview && (
-              <div className="relative mb-4 group">
-                <img 
-                  src={imagemPreview} 
-                  alt="Preview" 
-                  className="w-full h-64 object-cover rounded-2xl border-2 border-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImagemPreview(null);
-                    setImagemUpload(null);
-                  }}
-                  className="absolute top-3 right-3 bg-red-500 text-white p-3 rounded-xl hover:bg-red-600 transition-all shadow-xl opacity-0 group-hover:opacity-100"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur-sm text-white px-3 py-2 rounded-lg text-xs font-bold">
-                  ✅ Imagem carregada
-                </div>
-              </div>
-            )}
-            
-            {/* Upload local */}
-            <div className="relative">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImagemChange}
-                className="w-full border-2 border-dashed border-slate-300 rounded-xl p-6 text-sm file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 hover:border-slate-400 transition-all cursor-pointer"
-              />
-              <p className="text-xs text-slate-500 mt-2 flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Formatos: JPG, PNG, WEBP (máx. 5MB)
-              </p>
-            </div>
-          </div>
-        )}
-        
-        <div className="space-y-4">
-          {isLideranca && (
-            <button
-              onClick={() => adicionarItemEm(0)}
-              className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-2xl text-emerald-600 hover:bg-emerald-50 hover:border-emerald-400 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
-            >
-              <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
-              <span>Adicionar item no início</span>
-            </button>
-          )}
-
-          {itens.map((it, idx) => (
-            <div key={idx}>
-              <ItemLiturgia 
-                item={it} 
-                index={idx} 
-                canticos={canticos} 
-                userRole={userRole}
-                onUpdate={(u: any) => { const n = [...itens]; n[idx] = u; setItens(n); }}
-                onRemove={() => setItens(itens.filter((_, i) => i !== idx))}
-                onMove={(d: any) => {
-                  const n = [...itens]; const t = d === 'cima' ? idx - 1 : idx + 1;
-                  if (t >= 0 && t < n.length) { [n[idx], n[t]] = [n[t], n[idx]]; setItens(n); }
-                }}
-                onCreate={async (n: string) => { 
-                  const { data }: any = await supabase.from('canticos').insert({ nome: n }).select().single(); 
-                  const novoCantico = { ...data, ultima_vez: null };
-                  setCanticos([...canticos, novoCantico]); 
-                  return novoCantico; 
-                }}
-              />
-              
-              {isLideranca && (
-                <button
-                  onClick={() => adicionarItemEm(idx + 1)}
-                  className="w-full py-3 mt-4 border-2 border-dashed border-slate-300 rounded-2xl text-slate-500 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-700 transition-all font-bold text-sm flex items-center justify-center gap-2 group"
-                >
-                  <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
-                  <span>Adicionar item litúrgico</span>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t-2 border-slate-200 z-40 print:hidden">
-          <button onClick={salvar} disabled={loading} className="w-full max-w-2xl mx-auto block bg-emerald-700 text-white py-4 rounded-3xl font-bold text-lg shadow-xl active:scale-95 transition-all">
-            {loading ? '⏳ Gravando...' : '✅ Salvar'}
-          </button>
-        </div>
-      </main>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-slate-500 text-base">Carregando...</p>
+      </div>
     </div>
   );
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <div className="max-w-2xl mx-auto mt-8">
-        <h1 className="text-4xl font-black text-slate-900 mb-8 tracking-tighter uppercase">Liturgias</h1>
-        {isLideranca && (
-          <button onClick={criarCultoPadrao} className="w-full bg-emerald-800 text-white py-5 rounded-3xl font-bold text-xl shadow-xl mb-8 active:scale-95 transition-all">+ Nova Liturgia Padrão</button>
-        )}
-        <div className="space-y-4">
-          {cultos.map(c => {
-            const cultoNr = c['Culto nr.'];
-            const expandido = cultoExpandido === cultoNr;
-            const liturgia = liturgiasCarregadas[cultoNr];
-            
-            return (
-              <div key={cultoNr} className="bg-white border-2 border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-                <div 
-                  className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
-                  onClick={() => toggleExpandirCulto(cultoNr)}
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    {c.imagem_url && (
-                      <img 
-                        src={c.imagem_url} 
-                        alt="Tema do culto" 
-                        className="w-20 h-20 object-cover rounded-xl"
-                      />
-                    )}
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Registro #{cultoNr}</p>
-                      <h2 className="text-xl font-bold text-slate-800">
-                        {new Date(c.Dia + 'T00:00:00').toLocaleDateString('pt-BR', { 
-                          day: '2-digit', 
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </h2>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 items-center">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); shareWhatsApp(c); }} 
-                      className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl hover:bg-emerald-100 transition-colors" 
-                      title="Compartilhar WhatsApp"
-                    >
-                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.559 4.189 1.619 6.011L0 24l6.117-1.605a11.847 11.847 0 005.925 1.586h.005c6.635 0 12.032-5.396 12.035-12.032a11.76 11.76 0 00-3.528-8.485" />
-                      </svg>
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); sharePDF(c); }} 
-                      className="bg-slate-50 text-slate-600 p-4 rounded-2xl hover:bg-slate-100 transition-colors" 
-                      title="Gerar PDF"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                      </svg>
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); iniciarEdicao(c); }} 
-                      className="bg-slate-50 text-slate-800 p-4 rounded-2xl hover:bg-slate-100 transition-colors" 
-                      title="Editar"
-                    >
-                      <span className="text-xl">✏️</span>
-                    </button>
-                    <span className={`text-2xl transition-transform ${expandido ? 'rotate-180' : ''}`}>
-                      ▼
-                    </span>
-                  </div>
-                </div>
+  if (editando !== null) return (
+    <EditorLiturgia
+      culto={editando === 'novo' ? null : editando}
+      canticos={canticos}
+      setCanticos={setCanticos}
+      userRole={userRole}
+      onSalvo={() => { setEditando(null); carregarTudo(); }}
+      onCancelar={() => setEditando(null)}
+    />
+  );
 
-                {expandido && liturgia && (
-                  <LiturgiaView 
-                    culto={c} 
-                    itens={liturgia} 
-                    canticos={canticos}
-                    onClose={() => setCultoExpandido(null)}
-                  />
-                )}
-              </div>
-            );
-          })}
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Liturgias</h1>
+          {isLideranca && (
+            <button
+              onClick={() => setEditando('novo')}
+              className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
+            >
+              + Nova
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {cultos.map(c => (
+            <CultoCard
+              key={c['Culto nr.']}
+              culto={c}
+              onEditar={(culto: Culto) => setEditando(culto)}
+              onWhatsApp={shareWhatsApp}
+              onPDF={sharePDF}
+            />
+          ))}
         </div>
       </div>
     </div>
