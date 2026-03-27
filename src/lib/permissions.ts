@@ -1,7 +1,7 @@
 // lib/permissions.ts
 import { ADMIN_EMAILS } from './admin-config';
 
-export type CargoTipo = 'membro' | 'pastor' | 'seminarista' | 'presbitero' | 'staff' | 'musico' | 'admin';
+export type CargoTipo = 'membro' | 'diacono' | 'presbitero' | 'pastor' | 'seminarista' | 'staff' | 'musico' | 'admin' | 'superadmin';
 
 export interface UsuarioPermitido {
   id: string;
@@ -17,42 +17,49 @@ export interface UsuarioPermitido {
 // Cargos que podem acessar o painel administrativo
 // ⚠️ NOTA: 'membro' NÃO está nesta lista - membros são apenas cadastros sem acesso ao sistema
 export const CARGOS_ACESSO_ADMIN: CargoTipo[] = [
-  'pastor',
+  'diacono',
   'presbitero',
+  'pastor',
   'musico',
   'seminarista',
   'staff',
-  'admin'
+  'admin',
+  'superadmin'
 ];
 
 // Cargos que podem gerenciar usuários (cadastrar/editar/excluir)
 export const CARGOS_GERENCIAR_USUARIOS: CargoTipo[] = [
-  'admin'
+  'admin',
+  'superadmin'
 ];
 
 // Cargos que podem criar/editar escalas
 export const CARGOS_GERENCIAR_ESCALAS: CargoTipo[] = [
-  'pastor',
   'presbitero',
+  'pastor',
   'staff',
-  'admin'
+  'admin',
+  'superadmin'
 ];
 
 // Cargos que podem gerenciar músicas/cultos
 export const CARGOS_GERENCIAR_CONTEUDO: CargoTipo[] = [
-  'pastor',
+  'diacono',
   'presbitero',
+  'pastor',
   'musico',
   'seminarista',
   'staff',
-  'admin'
+  'admin',
+  'superadmin'
 ];
 
 /**
- * 🔐 Verifica se o email está na lista hardcoded de super-admins
- * Super-admins sempre têm permissão total, independente do cargo no banco
+ * 🔐 Verifica se o email está na lista hardcoded de super-admins,
+ * ou se o cargo é 'superadmin' no banco de dados.
  */
-export function isSuperAdmin(email: string | null | undefined): boolean {
+export function isSuperAdmin(email: string | null | undefined, cargo?: CargoTipo | null): boolean {
+  if (cargo === 'superadmin') return true;
   if (!email) return false;
   return ADMIN_EMAILS.includes(email.toLowerCase());
 }
@@ -108,12 +115,14 @@ export function podeGerenciarConteudo(cargo: CargoTipo | null): boolean {
 export function getCargoLabel(cargo: CargoTipo): string {
   const labels: Record<CargoTipo, string> = {
     membro: 'Membro',
+    diacono: 'Diácono',
+    presbitero: 'Presbítero',
     pastor: 'Pastor',
     seminarista: 'Seminarista',
-    presbitero: 'Presbítero',
     staff: 'Staff',
     musico: 'Músico',
-    admin: 'Administrador'
+    admin: 'Administrador',
+    superadmin: 'Super Admin'
   };
   return labels[cargo];
 }
@@ -124,12 +133,14 @@ export function getCargoLabel(cargo: CargoTipo): string {
 export function getCargoCor(cargo: CargoTipo): string {
   const cores: Record<CargoTipo, string> = {
     membro: 'bg-slate-100 text-slate-700',
+    diacono: 'bg-teal-100 text-teal-800',
+    presbitero: 'bg-indigo-100 text-indigo-800',
     pastor: 'bg-purple-100 text-purple-800',
     seminarista: 'bg-blue-100 text-blue-800',
-    presbitero: 'bg-indigo-100 text-indigo-800',
     staff: 'bg-cyan-100 text-cyan-800',
     musico: 'bg-emerald-100 text-emerald-800',
-    admin: 'bg-red-100 text-red-800'
+    admin: 'bg-red-100 text-red-800',
+    superadmin: 'bg-orange-100 text-orange-800'
   };
   return cores[cargo];
 }
@@ -140,12 +151,14 @@ export function getCargoCor(cargo: CargoTipo): string {
 export function getCargoIcone(cargo: CargoTipo): string {
   const icones: Record<CargoTipo, string> = {
     membro: '👤',
+    diacono: '🤝',
+    presbitero: '👔',
     pastor: '📖',
     seminarista: '📚',
-    presbitero: '👔',
     staff: '🛠️',
     musico: '🎵',
-    admin: '🔐'
+    admin: '🔐',
+    superadmin: '⭐'
   };
   return icones[cargo];
 }

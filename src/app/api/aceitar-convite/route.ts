@@ -106,6 +106,20 @@ export async function POST(request: NextRequest) {
 
       if (acessoError) throw acessoError;
 
+      // Vincular usuário à igreja com o cargo (fonte de verdade)
+      if (pessoa.igreja_id) {
+        const { error: igrejaError } = await supabaseAdmin
+          .from('usuarios_igrejas')
+          .upsert({
+            usuario_id: user_id,
+            igreja_id: pessoa.igreja_id,
+            cargo: pessoa.cargo,
+            ativo: true
+          }, { onConflict: 'usuario_id,igreja_id' });
+
+        if (igrejaError) throw igrejaError;
+      }
+
       // Marcar convite como aceito
       await supabaseAdmin
         .from('convites')
@@ -129,7 +143,7 @@ export async function POST(request: NextRequest) {
     // Verificar se já existe pessoa com este email
     const { data: pessoaExistente } = await supabaseAdmin
       .from('pessoas')
-      .select('id, tem_acesso, email')
+      .select('id, tem_acesso, email, igreja_id')
       .eq('email', user.email || convite.email)
       .single();
 
@@ -161,6 +175,20 @@ export async function POST(request: NextRequest) {
         });
 
       if (acessoError) throw acessoError;
+
+      // Vincular usuário à igreja com o cargo (fonte de verdade)
+      if (pessoaExistente.igreja_id) {
+        const { error: igrejaError } = await supabaseAdmin
+          .from('usuarios_igrejas')
+          .upsert({
+            usuario_id: user_id,
+            igreja_id: pessoaExistente.igreja_id,
+            cargo: convite.cargo,
+            ativo: true
+          }, { onConflict: 'usuario_id,igreja_id' });
+
+        if (igrejaError) throw igrejaError;
+      }
 
       // Marcar convite como aceito
       await supabaseAdmin
@@ -209,6 +237,20 @@ export async function POST(request: NextRequest) {
       });
 
     if (acessoError) throw acessoError;
+
+    // Vincular usuário à igreja com o cargo (fonte de verdade)
+    if (convite.igreja_id) {
+      const { error: igrejaError } = await supabaseAdmin
+        .from('usuarios_igrejas')
+        .upsert({
+          usuario_id: user_id,
+          igreja_id: convite.igreja_id,
+          cargo: convite.cargo,
+          ativo: true
+        }, { onConflict: 'usuario_id,igreja_id' });
+
+      if (igrejaError) throw igrejaError;
+    }
 
     // Marcar convite como aceito
     await supabaseAdmin

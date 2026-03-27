@@ -82,7 +82,7 @@ export async function PATCH(
     // Verificar se pessoa existe
     const { data: pessoaExistente } = await supabaseAdmin
     .from('pessoas')
-    .select('id, nome, tem_acesso, email')
+    .select('id, nome, tem_acesso, email, usuario_id, igreja_id')
     .eq('id', id)
     .single();
 
@@ -113,7 +113,7 @@ export async function PATCH(
     if (ativo !== undefined) dadosAtualizacao.ativo = ativo;
     if (observacoes !== undefined) dadosAtualizacao.observacoes = observacoes || null;
 
-    // Atualizar
+    // Atualizar pessoas
     const { data: pessoa, error } = await supabaseAdmin
       .from('pessoas')
       .update(dadosAtualizacao)
@@ -122,6 +122,37 @@ export async function PATCH(
       .single();
 
     if (error) throw error;
+
+    // Sincronizar cargo/ativo em usuarios_igrejas e usuarios_acesso (se o usuário tem acesso)
+    if (pessoaExistente.usuario_id && (cargo !== undefined || ativo !== undefined)) {
+      const atualizacoesVinculo: any = {};
+      if (cargo !== undefined) atualizacoesVinculo.cargo = cargo;
+      if (ativo !== undefined) atualizacoesVinculo.ativo = ativo;
+
+      // Atualizar usuarios_igrejas (fonte de verdade para cargo)
+      if (pessoaExistente.igreja_id) {
+        await supabaseAdmin
+          .from('usuarios_igrejas')
+          .update(atualizacoesVinculo)
+          .eq('usuario_id', pessoaExistente.usuario_id)
+          .eq('igreja_id', pessoaExistente.igreja_id);
+      }
+
+      // Manter usuarios_acesso em sincronia
+      const atualizacoesAcesso: any = {};
+      if (cargo !== undefined) atualizacoesAcesso.cargo = cargo;
+      if (nome !== undefined) atualizacoesAcesso.nome = nome.trim();
+      if (telefone !== undefined) atualizacoesAcesso.telefone = telefone || null;
+      if (ativo !== undefined) atualizacoesAcesso.ativo = ativo;
+
+      if (Object.keys(atualizacoesAcesso).length > 0) {
+        atualizacoesAcesso.atualizado_em = new Date().toISOString();
+        await supabaseAdmin
+          .from('usuarios_acesso')
+          .update(atualizacoesAcesso)
+          .eq('id', pessoaExistente.usuario_id);
+      }
+    }
 
     return NextResponse.json({
       success: true,
