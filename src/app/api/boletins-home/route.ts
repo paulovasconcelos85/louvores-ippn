@@ -1,8 +1,6 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeIgreja, resolveBoletimSourceTable } from '@/lib/church-utils';
+import { normalizeIgreja } from '@/lib/church-utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,37 +13,37 @@ const supabaseAdmin = createClient(
   }
 );
 
+interface BoletimSecaoRow {
+  id: string;
+  igreja_id: string | null;
+  culto_id: number | null;
+  tipo: string;
+  titulo: string;
+  icone: string | null;
+  ordem: number | null;
+  visivel: boolean | null;
+  criado_em: string | null;
+}
+
+interface BoletimItemRow {
+  id: string;
+  secao_id: string | null;
+  conteudo: string;
+  destaque: boolean | null;
+  ordem: number | null;
+  criado_em: string | null;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const igrejaId = searchParams.get('igreja_id');
-    const page = Number(searchParams.get('page') || '0');
-    const safePage = Number.isFinite(page) && page >= 0 ? page : 0;
-    const from = safePage * 10;
-    const to = from + 9;
+    const igrejaId = request.nextUrl.searchParams.get('igreja_id');
 
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    if (!igrejaId) {
+      return NextResponse.json(
+        { error: 'igreja_id e obrigatorio.' },
+        { status: 400 }
+      );
+    }
 
     const { data: igrejaRaw, error: igrejaError } = await supabaseAdmin
       .from('igrejas')
@@ -64,72 +62,92 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const sourceTable = resolveBoletimSourceTable(igreja);
+    const { data: secoesRaw, error: secoesError } = await supabaseAdmin
+      .from('boletim_secoes')
+      .select('*')
+      .eq('igreja_id', igrejaId)
+      .eq('visivel', true)
+      .order('ordem', { ascending: true })
+      .order('criado_em', { ascending: true });
 
-    if (!sourceTable) {
-      return NextResponse.json({
-        igreja,
-        sourceTable: null,
-        boletins: [],
-        total: 0,
-        message: 'Esta igreja ainda nao possui uma fonte de boletim configurada no sistema.',
-      });
-    }
+    if (secoesError) throw secoesError;
 
-    const agora = new Date();
-    const diaSemana = agora.getDay();
-    const horaAtual = agora.getHours();
-    let dataDeCorteFuturos: Date;
+    const secoes = (secoesRaw || []) as BoletimSecaoRow[];
+    const secaoIds = secoes.map((secao) => secao.id);
 
-    if (user) {
-      dataDeCorteFuturos = new Date();
-      dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
-    } else if (diaSemana === 6 && horaAtual >= 14) {
-      dataDeCorteFuturos = new Date();
-      dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 1);
-      dataDeCorteFuturos.setHours(23, 59, 59);
-    } else if (diaSemana === 0) {
-      dataDeCorteFuturos = new Date();
-      dataDeCorteFuturos.setHours(23, 59, 59);
-    } else {
-      dataDeCorteFuturos = new Date();
-      dataDeCorteFuturos.setHours(0, 0, 0, 0);
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from(sourceTable)
-      .select(`
-        "Culto nr.",
-        Dia,
-        imagem_url,
-        palavra_pastoral,
-        palavra_pastoral_autor,
-        louvor_itens (
-          id,
-          ordem,
-          tipo,
-          tom,
-          conteudo_publico,
-          canticos ( nome )
+    const [
+      { data: itensRaw, error: itensError },
+      { data: cultosRaw, error: cultosError },
+      { data: redesRaw, error: redesError },
+      { data: igrejaDetalhes, error: detalhesError },
+    ] = await Promise.all([
+      secaoIds.length > 0
+        ? supabaseAdmin
+            .from('boletim_itens')
+            .select('*')
+            .in('secao_id', secaoIds)
+            .order('ordem', { ascending: true })
+            .order('criado_em', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      supabaseAdmin
+        .from('igreja_cultos')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .eq('ativo', true)
+        .order('ordem', { ascending: true })
+        .order('horario', { ascending: true }),
+      supabaseAdmin
+        .from('igreja_redes_sociais')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .eq('ativo', true)
+        .order('ordem', { ascending: true }),
+      supabaseAdmin
+        .from('igrejas')
+        .select(
+          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim'
         )
-      `)
-      .lte('Dia', dataDeCorteFuturos.toISOString())
-      .order('"Culto nr."', { ascending: false })
-      .range(from, to);
+        .eq('id', igrejaId)
+        .maybeSingle(),
+    ]);
 
-    if (error) throw error;
+    if (itensError) throw itensError;
+    if (cultosError) throw cultosError;
+    if (redesError) throw redesError;
+    if (detalhesError) throw detalhesError;
+    const itens = (itensRaw || []) as BoletimItemRow[];
+    const itensPorSecao = new Map<string, BoletimItemRow[]>();
+
+    for (const item of itens) {
+      if (!item.secao_id) continue;
+      const secaoItens = itensPorSecao.get(item.secao_id) || [];
+      secaoItens.push(item);
+      itensPorSecao.set(item.secao_id, secaoItens);
+    }
+
+    const boletimSecoes = secoes.map((secao) => ({
+      ...secao,
+      itens: (itensPorSecao.get(secao.id) || []).sort(
+        (a, b) => (a.ordem || 0) - (b.ordem || 0)
+      ),
+    }));
 
     return NextResponse.json({
       igreja,
-      sourceTable,
-      boletins: data || [],
-      total: (data || []).length,
-      message: null,
+      igrejaDetalhes,
+      agendaCultos: cultosRaw || [],
+      redesSociais: redesRaw || [],
+      boletimSecoes,
+      totalSecoes: boletimSecoes.length,
+      message:
+        boletimSecoes.length === 0
+          ? 'Esta igreja ainda nao publicou secoes do boletim.'
+          : null,
     });
   } catch (error: any) {
-    console.error('Erro ao carregar boletins da home:', error);
+    console.error('Erro ao carregar boletim da home:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao carregar boletins.' },
+      { error: error.message || 'Erro ao carregar boletim.' },
       { status: 500 }
     );
   }

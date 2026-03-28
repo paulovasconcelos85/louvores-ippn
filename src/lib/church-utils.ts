@@ -45,15 +45,3 @@ export function normalizeIgreja(raw: IgrejaRaw): IgrejaSelecionavel | null {
 export function formatIgrejaLocalizacao(igreja: IgrejaSelecionavel) {
   return [igreja.cidade, igreja.regiao, igreja.pais].filter(Boolean).join(', ');
 }
-
-export function resolveBoletimSourceTable(igreja: IgrejaSelecionavel) {
-  const nome = igreja.nome.toLowerCase();
-  const sigla = igreja.sigla?.toLowerCase();
-
-  // Adaptador temporario enquanto apenas a IPPN possui tabela legada de boletins.
-  if (sigla === 'ippn' || nome.includes('ponta negra')) {
-    return 'Louvores IPPN';
-  }
-
-  return null;
-}
