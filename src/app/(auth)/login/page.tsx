@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, signIn, signUp, signOut, signInWithGoogle, signInWithAzure } = useAuth();
   
   const [email, setEmail] = useState('');
@@ -38,11 +37,11 @@ export default function LoginPage() {
    * ele é jogado automaticamente para o painel administrativo.
    */
   useEffect(() => {
-    const erroUrl = searchParams.get('erro');
+    const erroUrl = new URLSearchParams(window.location.search).get('erro');
     if (erroUrl) {
       setError(erroUrl);
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
