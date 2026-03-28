@@ -58,19 +58,22 @@ function isUuid(value: string) {
 }
 
 function isIgrejaLegacyIPPN(raw: Record<string, unknown>) {
-  const values = [
-    raw.slug,
-    raw.nome,
-    raw.nome_abreviado,
-    raw.nome_completo,
-  ]
-    .filter((value): value is string => typeof value === 'string')
-    .map((value) => value.toLowerCase());
+  const slug = typeof raw.slug === 'string' ? raw.slug.trim().toLowerCase() : null;
+  const nome = typeof raw.nome === 'string' ? raw.nome.trim().toLowerCase() : null;
+  const nomeAbreviado =
+    typeof raw.nome_abreviado === 'string'
+      ? raw.nome_abreviado.trim().toLowerCase()
+      : null;
+  const nomeCompleto =
+    typeof raw.nome_completo === 'string'
+      ? raw.nome_completo.trim().toLowerCase()
+      : null;
 
-  return values.some(
-    (value) =>
-      value.includes('ippn') ||
-      value.includes('ponta negra')
+  return (
+    slug === 'ippn-manaus' ||
+    nome === 'ippn' ||
+    nomeAbreviado === 'ippn' ||
+    nomeCompleto === 'igreja presbiteriana da ponta negra'
   );
 }
 
