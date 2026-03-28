@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { syncApprovedUserAccess } from '@/lib/access-sync';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -29,10 +30,22 @@ export async function GET(request: Request) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      // 2. Redireciona para o valor de 'next' (ex: /redefinir-senha)
+      if (data.user) {
+        const syncResult = await syncApprovedUserAccess({
+          id: data.user.id,
+          email: data.user.email,
+        });
+
+        if (syncResult.status !== 'granted') {
+          const loginUrl = new URL('/login', request.url);
+          loginUrl.searchParams.set('erro', syncResult.message);
+          return NextResponse.redirect(loginUrl);
+        }
+      }
+
       return NextResponse.redirect(new URL(next, request.url));
     }
   }

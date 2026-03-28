@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import { CargoTipo } from '@/lib/permissions';
 
 export interface Pessoa {
@@ -142,7 +141,6 @@ export function usePessoas() {
     }
   }, []);
 
-  // Enviar convite
   const enviarConvite = useCallback(async (dados: {
     pessoa_id?: string;
     email: string;
@@ -154,17 +152,30 @@ export function usePessoas() {
     setError(null);
 
     try {
-      const response = await fetch('/api/enviar-convite', {
+      void dados;
+      throw new Error('O fluxo de convites foi desativado. Cadastre o acesso por outro processo.');
+    } catch (err: any) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const liberarAcesso = useCallback(async (id: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/pessoas/${id}/liberar-acesso`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados)
       });
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao enviar convite');
+      if (!response.ok) throw new Error(data.error || 'Erro ao liberar acesso');
 
-      return { success: true, data: data.data };
+      return { success: true, message: data.message };
     } catch (err: any) {
       setError(err.message);
       return { success: false, error: err.message };
@@ -181,6 +192,7 @@ export function usePessoas() {
     criarPessoa,
     atualizarPessoa,
     deletarPessoa,
-    enviarConvite
+    enviarConvite,
+    liberarAcesso
   };
 }

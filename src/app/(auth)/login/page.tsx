@@ -1,17 +1,36 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, signIn, signInWithGoogle, signInWithAzure } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, signIn, signUp, signOut, signInWithGoogle, signInWithAzure } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [modo, setModo] = useState<'entrar' | 'primeiro_acesso'>('entrar');
+  const [sincronizandoAcesso, setSincronizandoAcesso] = useState(false);
+  const [mensagemSucesso, setMensagemSucesso] = useState('');
+
+  const finalizarAcesso = async () => {
+    const response = await fetch('/api/finalizar-acesso', {
+      method: 'POST',
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || data.error || 'Seu acesso ainda não foi liberado.');
+    }
+
+    return data;
+  };
 
   /**
    * 🔄 Monitor de Sessão
@@ -19,15 +38,47 @@ export default function LoginPage() {
    * ele é jogado automaticamente para o painel administrativo.
    */
   useEffect(() => {
-    if (user) {
-      router.push('/admin');
+    const erroUrl = searchParams.get('erro');
+    if (erroUrl) {
+      setError(erroUrl);
     }
-  }, [user, router]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let ativo = true;
+
+    const sincronizar = async () => {
+      try {
+        setSincronizandoAcesso(true);
+        setError('');
+        await finalizarAcesso();
+        if (ativo) {
+          router.push('/admin');
+        }
+      } catch (err: any) {
+        await signOut();
+        if (ativo) {
+          setError(err.message || 'Seu acesso ainda não foi liberado.');
+          setLoading(false);
+          setSincronizandoAcesso(false);
+        }
+      }
+    };
+
+    sincronizar();
+
+    return () => {
+      ativo = false;
+    };
+  }, [user, router, signOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setMensagemSucesso('');
 
     try {
       const { error: signInError } = await signIn(email, password);
@@ -54,6 +105,7 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
+    setMensagemSucesso('');
     try {
       const { error: googleError } = await signInWithGoogle();
       if (googleError) throw googleError;
@@ -67,6 +119,7 @@ export default function LoginPage() {
   const handleAzureLogin = async () => {
     setLoading(true);
     setError('');
+    setMensagemSucesso('');
     try {
       const { error: azureError } = await signInWithAzure();
       if (azureError) throw azureError;
@@ -75,6 +128,53 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handlePrimeiroAcesso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMensagemSucesso('');
+
+    try {
+      if (password.length < 6) {
+        throw new Error('A senha deve ter no mínimo 6 caracteres.');
+      }
+
+      if (password !== confirmPassword) {
+        throw new Error('As senhas não conferem.');
+      }
+
+      const { data, error: signUpError } = await signUp(email, password);
+      if (signUpError) throw signUpError;
+
+      if (data.session) {
+        await finalizarAcesso();
+        router.push('/admin');
+        return;
+      }
+
+      setMensagemSucesso('Conta criada. Se houver confirmação por e-mail ativa, conclua a confirmação e depois entre normalmente.');
+      setModo('entrar');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao criar sua conta.');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+  };
+
+  if (sincronizandoAcesso) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-700 mx-auto"></div>
+          <p className="mt-4 text-slate-700 font-semibold">Preparando seu acesso...</p>
+          <p className="text-sm text-slate-500 mt-2">Estamos validando seu cadastro e vinculando sua conta.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
@@ -99,10 +199,12 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">
-              Bem-vindo de volta!
+              {modo === 'entrar' ? 'Bem-vindo de volta!' : 'Primeiro acesso'}
             </h2>
             <p className="text-slate-600 text-sm">
-              Entre com suas credenciais
+              {modo === 'entrar'
+                ? 'Entre com suas credenciais'
+                : 'Crie sua conta com o mesmo e-mail liberado pela administração'}
             </p>
           </div>
 
@@ -112,7 +214,42 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {mensagemSucesso && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm flex items-center gap-2">
+              <span>✅</span> {mensagemSucesso}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 mb-6 bg-slate-100 rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setModo('entrar');
+                setError('');
+                setMensagemSucesso('');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                modo === 'entrar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModo('primeiro_acesso');
+                setError('');
+                setMensagemSucesso('');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                modo === 'primeiro_acesso' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Primeiro acesso
+            </button>
+          </div>
+
+          <form onSubmit={modo === 'entrar' ? handleSubmit : handlePrimeiroAcesso} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 E-mail
@@ -142,6 +279,23 @@ export default function LoginPage() {
               />
             </div>
 
+            {modo === 'primeiro_acesso' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Confirmar senha
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -156,7 +310,7 @@ export default function LoginPage() {
                   Processando...
                 </span>
               ) : (
-                'Entrar'
+                modo === 'entrar' ? 'Entrar' : 'Criar conta'
               )}
             </button>
           </form>
@@ -220,7 +374,7 @@ export default function LoginPage() {
 
           <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs text-blue-900">
-              <span className="font-semibold">ℹ️ Primeiro acesso?</span> Peça ao administrador do sistema para cadastrar seu e-mail na lista de acesso.
+              <span className="font-semibold">ℹ️ Primeiro acesso?</span> O administrador precisa liberar seu e-mail primeiro. Depois disso, você pode criar sua conta aqui ou entrar com Google/Microsoft usando o mesmo e-mail.
             </p>
           </div>
         </div>

@@ -15,7 +15,8 @@ import {
   MapPin,
   Star,
   Church,
-  UserCheck
+  UserCheck,
+  Globe
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -359,6 +360,27 @@ export default function AdminPage() {
               </span>
             </div>
           </Link>
+
+          {permissoes.isSuperAdmin && (
+            <button
+              onClick={() => router.push('/admin/igrejas')}
+              className="bg-white rounded-xl p-6 shadow-sm border-2 border-amber-500 hover:shadow-lg transition-all text-left group"
+            >
+              <div className="w-12 h-12 bg-amber-500 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Globe className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                Igrejas
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                Base inicial para gestão multi-igreja e expansão geográfica
+              </p>
+              <span className="text-xs text-amber-800 font-semibold bg-amber-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
+                <Star className="w-3 h-3" />
+                Super Admin
+              </span>
+            </button>
+          )}
         </div>
       </main>
     </div>

@@ -18,22 +18,18 @@ import {
   Search, 
   CheckCircle2, 
   Info,
-  Copy,
-  MessageCircle,
   X,
   Music,
-  BookOpen,
   Briefcase,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
-  GraduationCap,
-  Scale
+  UserCheck
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePessoas, Pessoa } from '@/hooks/usePessoas';
-import { CargoTipo, getCargoLabel, getCargoCor, getCargoIcone } from '@/lib/permissions';
+import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 
@@ -59,12 +55,12 @@ export default function GerenciarPessoas() {
     criarPessoa, 
     atualizarPessoa, 
     deletarPessoa,
-    enviarConvite: enviarConviteHook 
+    liberarAcesso
   } = usePessoas();
 
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const [enviandoConvite, setEnviandoConvite] = useState<string | null>(null);
+  const [liberandoAcessoId, setLiberandoAcessoId] = useState<string | null>(null);
 
   const [sortField, setSortField] = useState<SortField>('nome');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -88,10 +84,6 @@ export default function GerenciarPessoas() {
   const [todasTags, setTodasTags] = useState<Tag[]>([]);
   const [tagsUsuario, setTagsUsuario] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
-
-  const [linkConvite, setLinkConvite] = useState<string | null>(null);
-  const [nomeConvidado, setNomeConvidado] = useState('');
-  const [emailConvidado, setEmailConvidado] = useState('');
 
   const totalLoading = authLoading || permLoading;
 
@@ -285,37 +277,33 @@ export default function GerenciarPessoas() {
     }
   };
 
-  const enviarConvitePessoa = async (pessoa: Pessoa) => {
-    if (!pessoa.email) {
-      setMensagem('❌ Adicione um email para esta pessoa antes de enviar convite');
-      return;
-    }
+  const liberarAcessoPessoa = async (pessoa: Pessoa) => {
     if (pessoa.tem_acesso) {
-      setMensagem('ℹ️ Esta pessoa já tem acesso ao sistema');
+      setMensagem('ℹ️ Esta pessoa já possui acesso liberado.');
       return;
     }
-    if (!confirm(`Enviar convite de acesso para ${pessoa.nome} (${pessoa.email})?`)) return;
-    setEnviandoConvite(pessoa.id);
+
+    if (!pessoa.email) {
+      setMensagem('❌ Adicione um e-mail antes de liberar o acesso.');
+      return;
+    }
+
+    if (!confirm(`Liberar acesso para ${pessoa.nome} usando ${pessoa.email}?`)) return;
+
     try {
-      const resultado = await enviarConviteHook({
-        pessoa_id: pessoa.id,
-        email: pessoa.email,
-        nome: pessoa.nome,
-        cargo: pessoa.cargo,
-        telefone: pessoa.telefone
-      });
+      setLiberandoAcessoId(pessoa.id);
+      const resultado = await liberarAcesso(pessoa.id);
+
       if (resultado.success) {
-        setLinkConvite(resultado.data.link);
-        setNomeConvidado(pessoa.nome);
-        setEmailConvidado(pessoa.email);
-        setMensagem('✅ Convite enviado por email!');
+        setMensagem(`✅ ${resultado.message}`);
+        listarPessoas();
       } else {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
       setMensagem(`❌ Erro: ${error.message}`);
     } finally {
-      setEnviandoConvite(null);
+      setLiberandoAcessoId(null);
     }
   };
 
@@ -684,13 +672,17 @@ export default function GerenciarPessoas() {
                           <td className="px-4 py-4">
                             <div className="flex items-center justify-center gap-1">
                               {!pessoa.tem_acesso && (
-                                <button 
-                                  onClick={() => enviarConvitePessoa(pessoa)} 
-                                  disabled={enviandoConvite === pessoa.id || !pessoa.ativo || !pessoa.email}
-                                  className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors"
-                                  title="Enviar convite de acesso"
+                                <button
+                                  onClick={() => liberarAcessoPessoa(pessoa)}
+                                  disabled={liberandoAcessoId === pessoa.id || !pessoa.email}
+                                  className="p-2 hover:bg-emerald-50 text-emerald-700 rounded-lg transition-colors disabled:opacity-30"
+                                  title="Liberar acesso"
                                 >
-                                  {enviandoConvite === pessoa.id ? <div className="animate-spin w-4 h-4 border-2 border-emerald-600 border-b-transparent rounded-full" /> : <Mail className="w-4 h-4" />}
+                                  {liberandoAcessoId === pessoa.id ? (
+                                    <div className="animate-spin w-4 h-4 border-2 border-emerald-700 border-b-transparent rounded-full" />
+                                  ) : (
+                                    <UserCheck className="w-4 h-4" />
+                                  )}
                                 </button>
                               )}
                               <button onClick={() => abrirModalEdicao(pessoa)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors" title="Editar">
@@ -736,7 +728,7 @@ export default function GerenciarPessoas() {
                 <ul className="space-y-1 list-inside list-disc opacity-80">
                   <li>Pessoas registradas para organização interna</li>
                   <li>Não possuem senha ou acesso ao painel</li>
-                  <li>Podem ser convidadas para ter acesso a qualquer momento</li>
+                  <li>Ganham acesso quando um administrador libera o e-mail para login</li>
                 </ul>
               </div>
               <div className="space-y-2">
@@ -744,8 +736,8 @@ export default function GerenciarPessoas() {
                   <ShieldCheck className="w-4 h-4 text-emerald-400" /> Usuários com Acesso
                 </p>
                 <ul className="space-y-1 list-inside list-disc opacity-80">
-                  <li>Possuem login e senha no sistema</li>
-                  <li>Permissões de visualização baseadas no Cargo</li>
+                  <li>Podem entrar com e-mail e senha, Google ou Microsoft</li>
+                  <li>Permissões de visualização baseadas no cargo e no vínculo com a igreja</li>
                   <li>Podem ser inativados para bloqueio imediato de acesso</li>
                 </ul>
               </div>
@@ -852,52 +844,6 @@ export default function GerenciarPessoas() {
           </div>
         )}
 
-        {/* Modal Convite */}
-        {linkConvite && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center animate-in zoom-in-95 duration-300">
-              <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Mail className="w-10 h-10" />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-2">Convite Gerado!</h3>
-              <p className="text-slate-500 mb-8 leading-relaxed">
-                Um convite foi enviado para <strong>{emailConvidado}</strong>. Você também pode compartilhar o link manualmente.
-              </p>
-
-              <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
-                <code className="text-[10px] text-slate-400 block mb-2 font-mono uppercase tracking-widest">Link de Acesso Único</code>
-                <p className="text-xs text-slate-600 break-all font-mono font-medium">{linkConvite}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(linkConvite);
-                    setMensagem('✅ Link copiado!');
-                  }}
-                  className="flex flex-col items-center gap-2 p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all group"
-                >
-                  <Copy className="w-6 h-6 text-slate-400 group-hover:text-slate-900" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Copiar Link</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    const msg = `Olá *${nomeConvidado}*! 👋\nVocê foi convidado(a) para o sistema da IPPN.\n\n✅ *Acesse aqui:*\n${linkConvite}`;
-                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-                  }}
-                  className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-2xl transition-all group"
-                >
-                  <MessageCircle className="w-6 h-6 text-green-500 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-bold text-green-600 uppercase">WhatsApp</span>
-                </button>
-              </div>
-
-              <button onClick={() => setLinkConvite(null)} className="w-full text-slate-400 font-bold hover:text-slate-900 transition-colors">
-                Fechar
-              </button>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

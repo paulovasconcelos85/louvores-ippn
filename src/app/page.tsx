@@ -75,7 +75,7 @@ export default function Home() {
   const compartilharWhatsApp = async (culto: Culto) => {
     const itens = agruparItens(getItensOrdenados(culto));
     const data = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
-    let texto = `*LITURGIA DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
+    let texto = `*BOLETIM ELETRONICO DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
 
     if (culto.palavra_pastoral) {
       texto += `✝️ *PALAVRA PASTORAL*\n_"${culto.palavra_pastoral}"_\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
@@ -160,7 +160,7 @@ export default function Home() {
               Igreja Presbiteriana Ponta Negra
             </p>
             <h1 className="text-xl font-bold text-white">
-              Liturgias dos Cultos
+              Boletim Eletronico
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -192,13 +192,22 @@ export default function Home() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 mb-2">
+            Boletim da Igreja
+          </p>
+          <p className="text-slate-700 text-sm leading-relaxed">
+            Aqui reunimos a palavra pastoral, a imagem-tema do culto, a ordem da liturgia e, para quem estiver logado, a escala relacionada.
+            A home deixa de ser apenas uma vitrine de liturgia e passa a ser o nosso boletim eletronico central.
+          </p>
+        </div>
 
         {/* Aviso logado */}
         {user && (
           <div className="mb-6 flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
             <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-sm text-blue-700">
-              Logado — visualizando cultos futuros (até 14 dias à frente).
+              Logado — visualizando boletins futuros (ate 14 dias a frente).
             </p>
           </div>
         )}
@@ -213,9 +222,9 @@ export default function Home() {
 
         {/* Sem cultos */}
         {!loading && cultos.length === 0 && (
-          <div className="flex flex-col items-center py-24 gap-3 bg-white rounded-2xl border border-slate-200">
-            <Music className="w-10 h-10 text-slate-300" />
-            <p className="text-slate-400">Nenhum culto cadastrado ainda.</p>
+            <div className="flex flex-col items-center py-24 gap-3 bg-white rounded-2xl border border-slate-200">
+              <Music className="w-10 h-10 text-slate-300" />
+            <p className="text-slate-400">Nenhum boletim publicado ainda.</p>
           </div>
         )}
 
@@ -236,7 +245,7 @@ export default function Home() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-1">
-                          Culto #{culto['Culto nr.']}
+                          Boletim #{culto['Culto nr.']}
                         </p>
                         <h3 className="text-lg font-bold text-white capitalize">
                           {formatDate(culto.Dia)}
@@ -302,7 +311,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Itens da liturgia */}
+                    {/* Conteudo do boletim */}
                     <div className="divide-y divide-slate-50">
                       {itens.map((it, idx) => (
                         <div key={idx} className="py-3 flex items-start gap-3">
