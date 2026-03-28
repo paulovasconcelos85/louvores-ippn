@@ -77,10 +77,11 @@ function isIgrejaLegacyIPPN(raw: Record<string, unknown>) {
   );
 }
 
-async function buildLegacyBoletimFallback() {
+async function buildLegacyBoletimFallback(igrejaId: string) {
   const { data: cultoRaw, error: cultoError } = await supabaseAdmin
     .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_autor')
+    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_autor, igreja_id')
+    .eq('igreja_id', igrejaId)
     .order('Dia', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -331,7 +332,7 @@ export async function GET(request: NextRequest) {
     let message: string | null = null;
 
     if (boletimSecoes.length === 0 && isIgrejaLegacyIPPN(igrejaRaw)) {
-      const fallback = await buildLegacyBoletimFallback();
+      const fallback = await buildLegacyBoletimFallback(igrejaId);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
     } else if (boletimSecoes.length === 0) {
