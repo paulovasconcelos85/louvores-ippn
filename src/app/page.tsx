@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, Music } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { ChevronLeft, ChevronRight, Eye, MapPin, Music } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { EscalaIntegrada } from '@/components/EscalaIntegrada';
+import type { IgrejaSelecionavel } from '@/lib/church-utils';
+import { formatIgrejaLocalizacao } from '@/lib/church-utils';
 
 interface LouvorItem {
   id: string;
@@ -25,12 +26,24 @@ interface Culto {
   louvor_itens: LouvorItem[];
 }
 
+const STORAGE_KEY = 'oikos:selected-church-id';
+
 export default function Home() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
+
+  const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
+  const [igrejaAtualId, setIgrejaAtualId] = useState<string | null>(null);
   const [cultos, setCultos] = useState<Culto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingIgrejas, setLoadingIgrejas] = useState(true);
+  const [loadingCultos, setLoadingCultos] = useState(true);
+  const [mensagemBoletim, setMensagemBoletim] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+
+  const igrejaSelecionada = useMemo(
+    () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
+    [igrejas, igrejaAtualId]
+  );
 
   const formatDate = (dateString: string) => {
     const [year, month, day] = dateString.split('T')[0].split('-');
@@ -69,13 +82,15 @@ export default function Home() {
         });
       }
     }
+
     return agrupados;
   };
 
   const compartilharWhatsApp = async (culto: Culto) => {
     const itens = agruparItens(getItensOrdenados(culto));
     const data = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
-    let texto = `*BOLETIM ELETRONICO DO CULTO - ${data}*\n⛪ _Igreja Presbiteriana Ponta Negra_\n\n`;
+    const nomeIgreja = igrejaSelecionada?.nome || 'Igreja';
+    let texto = `*BOLETIM ELETRONICO DO CULTO - ${data}*\n⛪ _${nomeIgreja}_\n\n`;
 
     if (culto.palavra_pastoral) {
       texto += `✝️ *PALAVRA PASTORAL*\n_"${culto.palavra_pastoral}"_\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
@@ -94,74 +109,117 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (authLoading) return;
+    let active = true;
 
-    async function fetchCultos() {
-      setLoading(true);
-      const from = page * 10;
-      const to = from + 9;
+    const carregarIgrejas = async () => {
+      try {
+        setLoadingIgrejas(true);
+        const response = await fetch('/api/igrejas/selecionaveis');
+        const data = await response.json();
 
-      const agora = new Date();
-      const diaSemana = agora.getDay();
-      const horaAtual = agora.getHours();
-      let dataDeCorteFuturos: Date;
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar igrejas.');
+        }
 
-      if (user) {
-        dataDeCorteFuturos = new Date();
-        dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 14);
-      } else if (diaSemana === 6 && horaAtual >= 14) {
-        dataDeCorteFuturos = new Date();
-        dataDeCorteFuturos.setDate(dataDeCorteFuturos.getDate() + 1);
-        dataDeCorteFuturos.setHours(23, 59, 59);
-      } else if (diaSemana === 0) {
-        dataDeCorteFuturos = new Date();
-        dataDeCorteFuturos.setHours(23, 59, 59);
-      } else {
-        dataDeCorteFuturos = new Date();
-        dataDeCorteFuturos.setHours(0, 0, 0, 0);
+        if (!active) return;
+
+        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
+        setIgrejas(lista);
+
+        const igrejaPreferida =
+          typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+
+        const prioridade = [
+          igrejaPreferida,
+          data.igrejaAtualId,
+          lista[0]?.id || null,
+        ].filter(Boolean) as string[];
+
+        const primeiraValida = prioridade.find((id) => lista.some((igreja) => igreja.id === id)) || null;
+        setIgrejaAtualId(primeiraValida);
+      } catch (error) {
+        console.error('Erro ao carregar igrejas:', error);
+      } finally {
+        if (active) {
+          setLoadingIgrejas(false);
+        }
       }
+    };
 
-      const { data, error } = await supabase
-        .from('Louvores IPPN')
-        .select(`
-          "Culto nr.",
-          Dia,
-          imagem_url,
-          palavra_pastoral,
-          palavra_pastoral_autor,
-          louvor_itens (
-            id,
-            ordem,
-            tipo,
-            tom,
-            conteudo_publico,
-            canticos ( nome )
-          )
-        `)
-        .lte('Dia', dataDeCorteFuturos.toISOString())
-        .order('"Culto nr."', { ascending: false })
-        .range(from, to);
+    carregarIgrejas();
 
-      if (!error) setCultos((data as any[]) || []);
-      setLoading(false);
-    }
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    fetchCultos();
-  }, [page, user, authLoading]);
+  useEffect(() => {
+    if (!igrejaAtualId) return;
+    localStorage.setItem(STORAGE_KEY, igrejaAtualId);
+    setPage(0);
+  }, [igrejaAtualId]);
+
+  useEffect(() => {
+    if (authLoading || !igrejaAtualId) return;
+
+    let active = true;
+
+    const carregarBoletins = async () => {
+      try {
+        setLoadingCultos(true);
+        setMensagemBoletim(null);
+
+        const params = new URLSearchParams({
+          igreja_id: igrejaAtualId,
+          page: String(page),
+        });
+
+        const response = await fetch(`/api/boletins-home?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar boletins.');
+        }
+
+        if (!active) return;
+
+        setCultos((data.boletins || []) as Culto[]);
+        setMensagemBoletim(data.message || null);
+      } catch (error: any) {
+        if (!active) return;
+        console.error('Erro ao carregar boletins:', error);
+        setCultos([]);
+        setMensagemBoletim(error.message || 'Erro ao carregar boletins.');
+      } finally {
+        if (active) {
+          setLoadingCultos(false);
+        }
+      }
+    };
+
+    carregarBoletins();
+
+    return () => {
+      active = false;
+    };
+  }, [page, igrejaAtualId, authLoading, user]);
+
+  const loading = loadingIgrejas || loadingCultos;
 
   return (
     <div className="min-h-screen bg-slate-50">
-
-      {/* Header */}
       <header className="bg-emerald-900 text-white shadow-lg">
-        <div className="max-w-4xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-0.5">
-              Igreja Presbiteriana Ponta Negra
+              OIKOS Hub
             </p>
             <h1 className="text-xl font-bold text-white">
               Boletim Eletronico
             </h1>
+            {igrejaSelecionada && (
+              <p className="text-sm text-emerald-100 mt-1">{igrejaSelecionada.nome}</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {user ? (
@@ -173,7 +231,10 @@ export default function Home() {
                   Painel
                 </button>
                 <button
-                  onClick={async () => { await signOut(); window.location.reload(); }}
+                  onClick={async () => {
+                    await signOut();
+                    window.location.reload();
+                  }}
                   className="text-sm font-medium text-emerald-300/70 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
                   Sair
@@ -191,44 +252,79 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 mb-2">
-            Boletim da Igreja
-          </p>
-          <p className="text-slate-700 text-sm leading-relaxed">
-            Aqui reunimos a palavra pastoral, a imagem-tema do culto, a ordem da liturgia e, para quem estiver logado, a escala relacionada.
-            A home deixa de ser apenas uma vitrine de liturgia e passa a ser o nosso boletim eletronico central.
-          </p>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 mb-2">
+              Boletim da Igreja
+            </p>
+            <p className="text-slate-700 text-sm leading-relaxed">
+              Aqui reunimos a palavra pastoral, a imagem-tema do culto, a ordem da liturgia e, para quem estiver logado, a escala relacionada.
+              A home agora serve como o boletim eletronico publico das igrejas atendidas pelo sistema.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_260px] gap-4 items-end">
+            <div className="min-w-0">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Igreja
+              </label>
+              <select
+                value={igrejaAtualId || ''}
+                onChange={(e) => setIgrejaAtualId(e.target.value || null)}
+                className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none text-slate-900"
+              >
+                {igrejas.map((igreja) => (
+                  <option key={igreja.id} value={igreja.id}>
+                    {igreja.sigla ? `${igreja.sigla} · ${igreja.nome}` : igreja.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {igrejaSelecionada && (
+              <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-1">
+                  Localizacao
+                </p>
+                <p className="text-sm text-slate-700 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                  {formatIgrejaLocalizacao(igrejaSelecionada) || 'Nao informada'}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Aviso logado */}
         {user && (
           <div className="mb-6 flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
             <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-sm text-blue-700">
-              Logado — visualizando boletins futuros (ate 14 dias a frente).
+              Logado — visualizando boletins futuros da igreja selecionada.
             </p>
           </div>
         )}
 
-        {/* Loading */}
+        {mensagemBoletim && !loading && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+            {mensagemBoletim}
+          </div>
+        )}
+
         {loading && (
           <div className="flex flex-col items-center py-24 gap-3">
             <div className="w-8 h-8 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm">Carregando cultos...</p>
+            <p className="text-slate-400 text-sm">Carregando boletins...</p>
           </div>
         )}
 
-        {/* Sem cultos */}
         {!loading && cultos.length === 0 && (
-            <div className="flex flex-col items-center py-24 gap-3 bg-white rounded-2xl border border-slate-200">
-              <Music className="w-10 h-10 text-slate-300" />
-            <p className="text-slate-400">Nenhum boletim publicado ainda.</p>
+          <div className="flex flex-col items-center py-24 gap-3 bg-white rounded-2xl border border-slate-200">
+            <Music className="w-10 h-10 text-slate-300" />
+            <p className="text-slate-400">Nenhum boletim publicado para esta igreja.</p>
           </div>
         )}
 
-        {/* Lista de cultos */}
         {!loading && cultos.length > 0 && (
           <div className="space-y-5">
             {cultos.map((culto) => {
@@ -240,7 +336,6 @@ export default function Home() {
                   key={culto['Culto nr.']}
                   className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
-                  {/* Cabeçalho verde */}
                   <div className="bg-emerald-900 px-6 py-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -254,7 +349,7 @@ export default function Home() {
                       <div className="flex items-center gap-2 flex-shrink-0 mt-1">
                         {isFuturo && user && (
                           <span className="text-xs font-bold text-amber-300 bg-amber-400/10 border border-amber-300/20 px-3 py-1 rounded-full">
-                            Próximo
+                            Proximo
                           </span>
                         )}
                         <button
@@ -269,7 +364,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Escala (só logado) */}
                     {user && (
                       <div className="mt-4">
                         <EscalaIntegrada
@@ -280,28 +374,24 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Corpo */}
                   <div className="p-6">
-
-                    {/* Imagem */}
                     {culto.imagem_url && (
                       <div className="mb-6 rounded-xl overflow-hidden bg-slate-100">
                         <img
                           src={culto.imagem_url}
-                          alt={`Tema do culto ${culto['Culto nr.']}`}
+                          alt={`Tema do boletim ${culto['Culto nr.']}`}
                           className="w-full object-contain max-h-72"
                         />
                       </div>
                     )}
 
-                    {/* Palavra Pastoral */}
                     {culto.palavra_pastoral && (
                       <div className="mb-6 bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4">
                         <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">
-                          ✝️ Palavra Pastoral
+                          Palavra Pastoral
                         </p>
                         <p className="text-slate-700 text-sm leading-relaxed italic">
-                          "{culto.palavra_pastoral}"
+                          &quot;{culto.palavra_pastoral}&quot;
                         </p>
                         {culto.palavra_pastoral_autor && (
                           <p className="text-slate-400 text-xs mt-2 text-right">
@@ -311,7 +401,6 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Conteudo do boletim */}
                     <div className="divide-y divide-slate-50">
                       {itens.map((it, idx) => (
                         <div key={idx} className="py-3 flex items-start gap-3">
@@ -319,9 +408,7 @@ export default function Home() {
                             {idx + 1}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-800">
-                              {it.tipo}
-                            </p>
+                            <p className="text-sm font-semibold text-slate-800">{it.tipo}</p>
                             {it.conteudo_publico && (
                               <p className="text-sm text-slate-500 mt-1 whitespace-pre-line leading-relaxed">
                                 {it.conteudo_publico}
@@ -335,7 +422,8 @@ export default function Home() {
                                     onClick={() => router.push(`/letra/${encodeURIComponent(c.nome)}`)}
                                     className="text-sm text-emerald-700 font-medium italic cursor-pointer hover:text-emerald-900 hover:underline transition-colors"
                                   >
-                                    🎵 {c.nome}{c.tom ? ` (${c.tom})` : ''}
+                                    🎵 {c.nome}
+                                    {c.tom ? ` (${c.tom})` : ''}
                                   </p>
                                 ))}
                               </div>
@@ -344,7 +432,6 @@ export default function Home() {
                         </div>
                       ))}
                     </div>
-
                   </div>
                 </article>
               );
@@ -352,37 +439,35 @@ export default function Home() {
           </div>
         )}
 
-        {/* Paginação */}
         {!loading && (
           <div className="flex items-center justify-center gap-3 mt-10">
             <button
-              onClick={() => setPage(p => Math.max(p - 1, 0))}
+              onClick={() => setPage((current) => Math.max(current - 1, 0))}
               disabled={page === 0}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               <ChevronLeft className="w-4 h-4" /> Anteriores
             </button>
-            <span className="text-xs text-slate-400 font-medium">pág. {page + 1}</span>
+            <span className="text-xs text-slate-400 font-medium">pag. {page + 1}</span>
             <button
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => setPage((current) => current + 1)}
               disabled={cultos.length < 10}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              Próximos <ChevronRight className="w-4 h-4" />
+              Proximos <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         )}
-
       </main>
 
       <footer className="border-t border-slate-100 mt-16 bg-white">
-        <div className="max-w-4xl mx-auto px-5 py-6 text-center">
+        <div className="max-w-5xl mx-auto px-5 py-6 text-center">
           <p className="text-xs text-slate-400 uppercase tracking-widest font-medium">
-            OIKOS Hub · Igreja Presbiteriana Ponta Negra · Manaus/AM
+            OIKOS Hub
+            {igrejaSelecionada ? ` · ${igrejaSelecionada.nome}` : ''}
           </p>
         </div>
       </footer>
-
     </div>
   );
 }

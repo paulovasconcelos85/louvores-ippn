@@ -50,8 +50,8 @@ export default function Header() {
               <Building2 className="w-5 h-5" />
             </div>
             <div className="hidden md:block">
-              <p className="font-bold leading-tight text-slate-900">OIKOS Hub - IPPN</p>
-              <p className="text-xs text-slate-500">Gestão Integral da Igreja</p>
+              <p className="font-bold leading-tight text-slate-900">OIKOS Hub</p>
+              <p className="text-xs text-slate-500">Gestao Integral Multi-igreja</p>
             </div>
           </div>
         </div>
