@@ -264,6 +264,8 @@ export default function Home() {
 
   const loading = loadingIgrejas || loadingBoletim;
 
+  const isImageSection = (secao: BoletimSecao) => secao.tipo === 'imagem_tema';
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-emerald-900 text-white shadow-lg">
@@ -442,9 +444,17 @@ export default function Home() {
                                   : 'border-slate-200 bg-slate-50'
                               }`}
                             >
-                              <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
-                                {item.conteudo}
-                              </p>
+                              {isImageSection(secao) ? (
+                                <img
+                                  src={item.conteudo}
+                                  alt={secao.titulo}
+                                  className="w-full max-h-[28rem] object-contain rounded-lg bg-white"
+                                />
+                              ) : (
+                                <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+                                  {item.conteudo}
+                                </p>
+                              )}
                             </div>
                           ))}
                         </div>

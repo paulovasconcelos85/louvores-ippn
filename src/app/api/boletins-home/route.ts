@@ -34,6 +34,170 @@ interface BoletimItemRow {
   criado_em: string | null;
 }
 
+interface LegacyLouvorItemRow {
+  id: string;
+  ordem: number | null;
+  tipo: string | null;
+  tom: string | null;
+  conteudo_publico: string | null;
+  canticos: { nome: string | null } | null;
+}
+
+interface LegacyCultoRow {
+  'Culto nr.': number;
+  Dia: string;
+  imagem_url: string | null;
+  palavra_pastoral: string | null;
+  palavra_pastoral_autor: string | null;
+}
+
+function isIgrejaLegacyIPPN(raw: Record<string, unknown>) {
+  const values = [
+    raw.slug,
+    raw.nome,
+    raw.nome_abreviado,
+    raw.nome_completo,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.toLowerCase());
+
+  return values.some(
+    (value) =>
+      value.includes('ippn') ||
+      value.includes('ponta negra')
+  );
+}
+
+async function buildLegacyBoletimFallback() {
+  const { data: cultoRaw, error: cultoError } = await supabaseAdmin
+    .from('Louvores IPPN')
+    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_autor')
+    .order('Dia', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (cultoError) throw cultoError;
+  if (!cultoRaw) {
+    return {
+      boletimSecoes: [],
+      legacyMessage: 'Esta igreja ainda nao publicou secoes do boletim.',
+    };
+  }
+
+  const culto = cultoRaw as LegacyCultoRow;
+
+  const { data: itensRaw, error: itensError } = await supabaseAdmin
+    .from('louvor_itens')
+    .select('id, ordem, tipo, tom, conteudo_publico, canticos(nome)')
+    .eq('culto_id', culto['Culto nr.'])
+    .order('ordem', { ascending: true });
+
+  if (itensError) throw itensError;
+
+  const itens = (itensRaw || []) as LegacyLouvorItemRow[];
+
+  const secoes: Array<{
+    id: string;
+    igreja_id: string | null;
+    culto_id: number | null;
+    tipo: string;
+    titulo: string;
+    icone: string | null;
+    ordem: number | null;
+    visivel: boolean | null;
+    criado_em: string | null;
+    itens: BoletimItemRow[];
+  }> = [];
+
+  if (culto.palavra_pastoral) {
+    secoes.push({
+      id: `legacy-palavra-${culto['Culto nr.']}`,
+      igreja_id: null,
+      culto_id: culto['Culto nr.'],
+      tipo: 'palavra_pastoral',
+      titulo: 'Palavra Pastoral',
+      icone: null,
+      ordem: 0,
+      visivel: true,
+      criado_em: null,
+      itens: [
+        {
+          id: `legacy-palavra-conteudo-${culto['Culto nr.']}`,
+          secao_id: `legacy-palavra-${culto['Culto nr.']}`,
+          conteudo: culto.palavra_pastoral_autor
+            ? `${culto.palavra_pastoral}\n\n— ${culto.palavra_pastoral_autor}`
+            : culto.palavra_pastoral,
+          destaque: true,
+          ordem: 0,
+          criado_em: null,
+        },
+      ],
+    });
+  }
+
+  if (culto.imagem_url) {
+    secoes.push({
+      id: `legacy-imagem-${culto['Culto nr.']}`,
+      igreja_id: null,
+      culto_id: culto['Culto nr.'],
+      tipo: 'imagem_tema',
+      titulo: 'Imagem do Boletim',
+      icone: null,
+      ordem: 1,
+      visivel: true,
+      criado_em: null,
+      itens: [
+        {
+          id: `legacy-imagem-conteudo-${culto['Culto nr.']}`,
+          secao_id: `legacy-imagem-${culto['Culto nr.']}`,
+          conteudo: culto.imagem_url,
+          destaque: false,
+          ordem: 0,
+          criado_em: null,
+        },
+      ],
+    });
+  }
+
+  if (itens.length > 0) {
+    secoes.push({
+      id: `legacy-liturgia-${culto['Culto nr.']}`,
+      igreja_id: null,
+      culto_id: culto['Culto nr.'],
+      tipo: 'liturgia',
+      titulo: `Liturgia do culto de ${culto.Dia}`,
+      icone: null,
+      ordem: 2,
+      visivel: true,
+      criado_em: null,
+      itens: itens.map((item, index) => {
+        const tituloItem = item.tipo || `Item ${index + 1}`;
+        const cantico = item.canticos?.nome
+          ? `\nCantico: ${item.canticos.nome}${item.tom ? ` (${item.tom})` : ''}`
+          : '';
+        const conteudoBase = item.conteudo_publico?.trim() || '';
+
+        return {
+          id: item.id,
+          secao_id: `legacy-liturgia-${culto['Culto nr.']}`,
+          conteudo: `${tituloItem}${conteudoBase ? `\n${conteudoBase}` : ''}${cantico}`,
+          destaque: false,
+          ordem: item.ordem ?? index,
+          criado_em: null,
+        };
+      }),
+    });
+  }
+
+  return {
+    boletimSecoes: secoes,
+    legacyMessage:
+      secoes.length > 0
+        ? 'Boletim exibido a partir da liturgia legada enquanto esta igreja conclui a migracao para secoes do boletim.'
+        : 'Esta igreja ainda nao publicou secoes do boletim.',
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
@@ -125,12 +289,22 @@ export async function GET(request: NextRequest) {
       itensPorSecao.set(item.secao_id, secaoItens);
     }
 
-    const boletimSecoes = secoes.map((secao) => ({
+    let boletimSecoes = secoes.map((secao) => ({
       ...secao,
       itens: (itensPorSecao.get(secao.id) || []).sort(
         (a, b) => (a.ordem || 0) - (b.ordem || 0)
       ),
     }));
+
+    let message: string | null = null;
+
+    if (boletimSecoes.length === 0 && isIgrejaLegacyIPPN(igrejaRaw)) {
+      const fallback = await buildLegacyBoletimFallback();
+      boletimSecoes = fallback.boletimSecoes;
+      message = fallback.legacyMessage;
+    } else if (boletimSecoes.length === 0) {
+      message = 'Esta igreja ainda nao publicou secoes do boletim.';
+    }
 
     return NextResponse.json({
       igreja,
@@ -139,10 +313,7 @@ export async function GET(request: NextRequest) {
       redesSociais: redesRaw || [],
       boletimSecoes,
       totalSecoes: boletimSecoes.length,
-      message:
-        boletimSecoes.length === 0
-          ? 'Esta igreja ainda nao publicou secoes do boletim.'
-          : null,
+      message,
     });
   } catch (error: any) {
     console.error('Erro ao carregar boletim da home:', error);
