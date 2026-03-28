@@ -39,8 +39,8 @@ interface LegacyLouvorItemRow {
   ordem: number | null;
   tipo: string | null;
   tom: string | null;
+  cantico_id: string | null;
   conteudo_publico: string | null;
-  canticos: { nome: string | null } | null;
 }
 
 interface LegacyCultoRow {
@@ -88,13 +88,33 @@ async function buildLegacyBoletimFallback() {
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, conteudo_publico, canticos(nome)')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
   if (itensError) throw itensError;
 
   const itens = (itensRaw || []) as LegacyLouvorItemRow[];
+  const canticoIds = itens
+    .map((item) => item.cantico_id)
+    .filter((value): value is string => Boolean(value));
+
+  const { data: canticosRaw, error: canticosError } =
+    canticoIds.length > 0
+      ? await supabaseAdmin
+          .from('canticos')
+          .select('id, nome')
+          .in('id', canticoIds)
+      : { data: [], error: null };
+
+  if (canticosError) throw canticosError;
+
+  const canticosPorId = new Map(
+    ((canticosRaw || []) as Array<{ id: string; nome: string | null }>).map((cantico) => [
+      cantico.id,
+      cantico.nome,
+    ])
+  );
 
   const secoes: Array<{
     id: string;
@@ -172,8 +192,11 @@ async function buildLegacyBoletimFallback() {
       criado_em: null,
       itens: itens.map((item, index) => {
         const tituloItem = item.tipo || `Item ${index + 1}`;
-        const cantico = item.canticos?.nome
-          ? `\nCantico: ${item.canticos.nome}${item.tom ? ` (${item.tom})` : ''}`
+        const nomeCantico = item.cantico_id
+          ? canticosPorId.get(item.cantico_id)
+          : null;
+        const cantico = nomeCantico
+          ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
           : '';
         const conteudoBase = item.conteudo_publico?.trim() || '';
 
