@@ -56,27 +56,6 @@ function isUuid(value: string) {
     value
   );
 }
-
-function isIgrejaLegacyIPPN(raw: Record<string, unknown>) {
-  const slug = typeof raw.slug === 'string' ? raw.slug.trim().toLowerCase() : null;
-  const nome = typeof raw.nome === 'string' ? raw.nome.trim().toLowerCase() : null;
-  const nomeAbreviado =
-    typeof raw.nome_abreviado === 'string'
-      ? raw.nome_abreviado.trim().toLowerCase()
-      : null;
-  const nomeCompleto =
-    typeof raw.nome_completo === 'string'
-      ? raw.nome_completo.trim().toLowerCase()
-      : null;
-
-  return (
-    slug === 'ippn-manaus' ||
-    nome === 'ippn' ||
-    nomeAbreviado === 'ippn' ||
-    nomeCompleto === 'igreja presbiteriana da ponta negra'
-  );
-}
-
 async function buildLegacyBoletimFallback(igrejaId: string) {
   const { data: cultoRaw, error: cultoError } = await supabaseAdmin
     .from('Louvores IPPN')
@@ -331,12 +310,14 @@ export async function GET(request: NextRequest) {
 
     let message: string | null = null;
 
+<<<<<<< HEAD
     if (boletimSecoes.length === 0 && isIgrejaLegacyIPPN(igrejaRaw)) {
+=======
+    if (boletimSecoes.length === 0) {
+>>>>>>> 9672938 (Melhora final nos boletins, agora eles estão mais bonitos e organizados. Além disso, adicionei uma funcionalidade de busca para facilitar a navegação pelos boletins. Espero que gostem!)
       const fallback = await buildLegacyBoletimFallback(igrejaId);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
-    } else if (boletimSecoes.length === 0) {
-      message = 'Esta igreja ainda nao publicou secoes do boletim.';
     }
 
     return NextResponse.json({
