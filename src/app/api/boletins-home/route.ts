@@ -310,11 +310,7 @@ export async function GET(request: NextRequest) {
 
     let message: string | null = null;
 
-<<<<<<< HEAD
-    if (boletimSecoes.length === 0 && isIgrejaLegacyIPPN(igrejaRaw)) {
-=======
     if (boletimSecoes.length === 0) {
->>>>>>> 9672938 (Melhora final nos boletins, agora eles estão mais bonitos e organizados. Além disso, adicionei uma funcionalidade de busca para facilitar a navegação pelos boletins. Espero que gostem!)
       const fallback = await buildLegacyBoletimFallback(igrejaId);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
