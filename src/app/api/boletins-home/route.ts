@@ -51,6 +51,12 @@ interface LegacyCultoRow {
   palavra_pastoral_autor: string | null;
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
 function isIgrejaLegacyIPPN(raw: Record<string, unknown>) {
   const values = [
     raw.slug,
@@ -97,7 +103,7 @@ async function buildLegacyBoletimFallback() {
   const itens = (itensRaw || []) as LegacyLouvorItemRow[];
   const canticoIds = itens
     .map((item) => item.cantico_id)
-    .filter((value): value is string => Boolean(value));
+    .filter((value): value is string => Boolean(value && isUuid(value)));
 
   const { data: canticosRaw, error: canticosError } =
     canticoIds.length > 0
