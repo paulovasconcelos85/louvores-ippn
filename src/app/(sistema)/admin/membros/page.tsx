@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber } from '@/lib/phone-mask';
-import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import FamiliaView from '@/components/FamiliaView';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
@@ -106,20 +106,18 @@ export default function PastorarMembrosPage() {
   const carregarMembros = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('pessoas')
-        .select(`
-          id, nome, cargo, email, telefone, foto_url,
-          data_nascimento, data_casamento, data_batismo,
-          situacao_saude, endereco_completo, status_membro, ativo,
-          observacoes, sexo, estado_civil, profissao, escolaridade,
-          logradouro, bairro, cep, cidade, uf, batizado, data_profissao_fe,
-          grupo_familiar_nome, grupo_familiar_lider, cursos_discipulado,
-          naturalidade_cidade, naturalidade_uf
-        `)
-        .order('nome');
-      if (error) throw error;
-      setMembros(data || []);
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+
+      const response = await fetch(`/api/pessoas?${params.toString()}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Erro ao carregar membros');
+      }
+
+      setMembros(payload.data || []);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
       setMensagem('Erro ao carregar membros');

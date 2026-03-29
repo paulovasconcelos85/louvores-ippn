@@ -8,6 +8,8 @@ export interface IgrejaSelecionavel {
   ativa: boolean;
 }
 
+export const CHURCH_STORAGE_KEY = 'oikos:selected-church-id';
+
 type IgrejaRaw = Record<string, unknown>;
 
 function asString(value: unknown): string | null {
@@ -44,4 +46,9 @@ export function normalizeIgreja(raw: IgrejaRaw): IgrejaSelecionavel | null {
 
 export function formatIgrejaLocalizacao(igreja: IgrejaSelecionavel) {
   return [igreja.cidade, igreja.regiao, igreja.pais].filter(Boolean).join(', ');
+}
+
+export function getStoredChurchId() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(CHURCH_STORAGE_KEY);
 }

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import {
   ArrowLeft,
@@ -192,13 +193,19 @@ export default function GerenciarEscalaPage() {
       
       setEscala(escalaData);
       
-      const { data: usuarios } = await supabase
-        .from('pessoas')
-        .select('id, nome, email, telefone')
-        .eq('ativo', true)
-        .order('nome');
-      
-      setTodosUsuarios(usuarios || []);
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+      params.set('ativo', 'true');
+
+      const usuariosResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const usuariosPayload = await usuariosResponse.json();
+
+      if (!usuariosResponse.ok) {
+        throw new Error(usuariosPayload.error || 'Erro ao carregar usuários');
+      }
+
+      setTodosUsuarios(usuariosPayload.data || []);
       
       const { data: tags } = await supabase
         .from('tags_funcoes')

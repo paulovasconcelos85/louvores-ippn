@@ -52,10 +52,16 @@ export async function GET() {
     let igrejaAtualId: string | null = null;
 
     if (user?.id) {
+      const { data: acesso } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
       const { data: vinculo } = await supabaseAdmin
         .from('usuarios_igrejas')
         .select('igreja_id')
-        .eq('usuario_id', user.id)
+        .eq('usuario_id', acesso?.id || '')
         .eq('ativo', true)
         .limit(1)
         .maybeSingle();

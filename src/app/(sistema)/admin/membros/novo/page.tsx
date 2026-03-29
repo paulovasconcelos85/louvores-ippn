@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
-import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import {
   ArrowLeft, User, Phone, Mail, MapPin, Calendar,
   Heart, Church, AlertCircle, Check, ChevronRight,
@@ -179,7 +179,10 @@ export default function NovoMembroPage() {
       const cursosArray = cursosDiscipulado
         .split(',').map(c => c.trim()).filter(Boolean);
 
-      const { error } = await supabase.from('pessoas').insert({
+      const response = await fetch('/api/pessoas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
         nome: nome.trim(),
         cargo,
         status_membro: statusMembro,
@@ -216,8 +219,12 @@ export default function NovoMembroPage() {
         observacoes: observacoes.trim() || null,
         ativo: true,
         criado_por: user?.id ?? null,
+        igreja_id: getStoredChurchId(),
+        })
       });
-      if (error) throw error;
+
+      const payload = await response.json();
+      if (!response.ok) throw Object.assign(new Error(payload.error || 'Erro ao salvar'), payload);
       setSucesso(true);
       setTimeout(() => router.push('/admin/membros'), 1500);
     } catch (err: any) {

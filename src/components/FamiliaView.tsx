@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { Users, Phone, ChevronDown, ChevronUp, Cake, Heart } from 'lucide-react';
 
@@ -68,34 +69,40 @@ export default function FamiliaView() {
     try {
       setLoading(true);
 
-      // Carrega todos os relacionamentos com dados das pessoas
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+      params.set('ativo', 'true');
+
+      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const pessoasPayload = await pessoasResponse.json();
+
+      if (!pessoasResponse.ok) {
+        throw new Error(pessoasPayload.error || 'Erro ao carregar pessoas');
+      }
+
+      const todasPessoas = (pessoasPayload.data || []) as MembroSimples[];
+      const pessoasMap = new Map(todasPessoas.map((pessoa) => [pessoa.id, pessoa]));
+
+      // Carrega todos os relacionamentos
       const { data: relacionamentos, error: errRel } = await supabase
         .from('relacionamentos')
         .select(`
           pessoa_id,
           pessoa_relacionada_id,
-          tipo,
-          pessoa:pessoa_id ( id, nome, telefone, data_nascimento, status_membro, cargo, situacao_saude ),
-          relacionada:pessoa_relacionada_id ( id, nome, telefone, data_nascimento, status_membro, cargo, situacao_saude )
+          tipo
         `);
 
       if (errRel) throw errRel;
 
-      // Carrega todas as pessoas ativas
-      const { data: todasPessoas, error: errPessoas } = await supabase
-        .from('pessoas')
-        .select('id, nome, telefone, data_nascimento, status_membro, cargo, situacao_saude')
-        .eq('ativo', true)
-        .order('nome');
-
-      if (errPessoas) throw errPessoas;
-
       // Monta mapa de relacionamentos: pessoa_id → lista de relacionados
       const mapaRel = new Map<string, MembroComRelacao[]>();
       (relacionamentos || []).forEach((r: any) => {
+        const relacionada = pessoasMap.get(r.pessoa_relacionada_id);
+        if (!relacionada) return;
         if (!mapaRel.has(r.pessoa_id)) mapaRel.set(r.pessoa_id, []);
         mapaRel.get(r.pessoa_id)!.push({
-          ...r.relacionada,
+          ...relacionada,
           tipo_relacao: r.tipo as TipoRelacionamento,
         });
       });
@@ -130,7 +137,7 @@ export default function FamiliaView() {
       const chefesVistos = new Set<string>();
       const familiasMap = new Map<string, Familia>();
 
-      ;(todasPessoas || []).forEach((p: MembroSimples) => {
+      todasPessoas.forEach((p: MembroSimples) => {
         const temRelacao = pessoasComRelacao.has(p.id);
         const eDependente = ehDependente.has(p.id);
         const eLadoB = conjugesLadoB.has(p.id);
@@ -145,7 +152,7 @@ export default function FamiliaView() {
       });
 
       // Pessoas sem nenhuma relação
-      const semRel = (todasPessoas || []).filter(
+      const semRel = todasPessoas.filter(
         (p: MembroSimples) => !pessoasComRelacao.has(p.id)
       );
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import { Users, Plus, Trash2, Search } from 'lucide-react';
 
 type TipoRelacionamento =
@@ -119,28 +120,46 @@ export default function RelacionamentosCard({
   const carregarRelacionamentos = async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+      params.set('ativo', 'true');
+
+      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const pessoasPayload = await pessoasResponse.json();
+
+      if (!pessoasResponse.ok) {
+        throw new Error(pessoasPayload.error || 'Erro ao carregar pessoas');
+      }
+
+      const pessoasMap = new Map(
+        ((pessoasPayload.data || []) as Array<Relacionamento['pessoa_relacionada']>).map((pessoa) => [pessoa.id, pessoa])
+      );
+
       const { data, error } = await supabase
         .from('relacionamentos')
         .select(`
           id,
           tipo,
-          pessoa_relacionada:pessoa_relacionada_id (
-            id,
-            nome,
-            cargo,
-            status_membro
-          )
+          pessoa_relacionada_id
         `)
         .eq('pessoa_id', membroId)
         .order('tipo');
 
       if (error) throw error;
 
-      const formatados = (data || []).map((r: any) => ({
-        id: r.id,
-        tipo: r.tipo as TipoRelacionamento,
-        pessoa_relacionada: r.pessoa_relacionada,
-      }));
+      const formatados = (data || [])
+        .map((r: any) => {
+          const pessoaRelacionada = pessoasMap.get(r.pessoa_relacionada_id);
+          if (!pessoaRelacionada) return null;
+
+          return {
+            id: r.id,
+            tipo: r.tipo as TipoRelacionamento,
+            pessoa_relacionada: pessoaRelacionada,
+          };
+        })
+        .filter(Boolean) as Relacionamento[];
 
       setRelacionamentos(formatados);
     } catch (err) {
@@ -159,14 +178,24 @@ export default function RelacionamentosCard({
     const timer = setTimeout(async () => {
       setBuscando(true);
       try {
-        const { data } = await supabase
-          .from('pessoas')
-          .select('id, nome')
-          .ilike('nome', `%${busca}%`)
-          .neq('id', membroId)
-          .eq('ativo', true)
-          .limit(8);
-        setPessoas(data || []);
+        const params = new URLSearchParams();
+        const igrejaId = getStoredChurchId();
+        if (igrejaId) params.set('igreja_id', igrejaId);
+        params.set('ativo', 'true');
+        params.set('busca', busca);
+
+        const response = await fetch(`/api/pessoas?${params.toString()}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Erro ao buscar pessoas');
+        }
+
+        setPessoas(
+          ((payload.data || []) as PessoaOpcao[])
+            .filter((pessoa) => pessoa.id !== membroId)
+            .slice(0, 8)
+        );
       } finally {
         setBuscando(false);
       }

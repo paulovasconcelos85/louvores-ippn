@@ -10,6 +10,7 @@ export default function PerfilPage() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
   
+  const [pessoaId, setPessoaId] = useState<string | null>(null);
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [tags, setTags] = useState<any[]>([]);
@@ -38,6 +39,7 @@ export default function PerfilPage() {
       .single();
 
     if (pessoa) {
+      setPessoaId(pessoa.id);
       setNome(pessoa.nome || '');
       setTelefone(pessoa.telefone ? formatPhoneNumber(pessoa.telefone) : '');
 
@@ -60,7 +62,7 @@ export default function PerfilPage() {
       const { data: minhasTagsData } = await supabase
         .from('usuarios_tags')
         .select('tag_id')
-        .eq('usuario_id', pessoa.id);
+        .eq('pessoa_id', pessoa.id);
       setMinhasTags((minhasTagsData || []).map(t => t.tag_id));
     }
   };
@@ -91,27 +93,20 @@ export default function PerfilPage() {
   const toggleTag = async (tagId: string) => {
     const tem = minhasTags.includes(tagId);
 
-    // Buscar pessoa_id
-    const { data: pessoa } = await supabase
-      .from('pessoas')
-      .select('id')
-      .eq('usuario_id', user!.id)
-      .single();
-
-    if (!pessoa) return;
+    if (!pessoaId) return;
 
     try {
       if (tem) {
         await supabase
           .from('usuarios_tags')
           .delete()
-          .eq('usuario_id', pessoa.id)
+          .eq('pessoa_id', pessoaId)
           .eq('tag_id', tagId);
         setMinhasTags(prev => prev.filter(t => t !== tagId));
       } else {
         await supabase
           .from('usuarios_tags')
-          .insert({ usuario_id: pessoa.id, tag_id: tagId, nivel_habilidade: 1 });
+          .insert({ pessoa_id: pessoaId, tag_id: tagId, nivel_habilidade: 1 });
         setMinhasTags(prev => [...prev, tagId]);
       }
     } catch (error: any) {

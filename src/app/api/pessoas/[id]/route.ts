@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveCurrentIgrejaId } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,11 +22,27 @@ export async function GET(
 ) {
   try {
     const { id } = await params; // Corrigido: Adicionado await
+    const igrejaId = await resolveCurrentIgrejaId(
+      request.nextUrl.searchParams.get('igreja_id')
+    );
+
+    if (!igrejaId) {
+      return NextResponse.json(
+        { error: 'Nenhuma igreja selecionada.' },
+        { status: 400 }
+      );
+    }
 
     const { data: pessoa, error } = await supabaseAdmin
       .from('pessoas')
       .select(`
         *,
+        pessoas_igrejas!inner(
+          igreja_id,
+          cargo,
+          status_membro,
+          ativo
+        ),
         usuarios_tags(
           tag_id,
           nivel_habilidade,
@@ -33,6 +50,7 @@ export async function GET(
         )
       `)
       .eq('id', id)
+      .eq('pessoas_igrejas.igreja_id', igrejaId)
       .single();
 
     if (error) throw error;
@@ -47,6 +65,10 @@ export async function GET(
     // Formatar tags
     const pessoaFormatada = {
       ...pessoa,
+      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
+      cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
+      status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
+      ativo: pessoa.pessoas_igrejas?.[0]?.ativo ?? pessoa.ativo,
       tags: pessoa.usuarios_tags
         ?.map((ut: any) => ut.tags_funcoes)
         .filter(Boolean) || []
@@ -76,8 +98,25 @@ export async function PATCH(
   try {
     const { id } = await params; // Corrigido: Adicionado await
     const body = await request.json();
+    const igrejaId = await resolveCurrentIgrejaId(body.igreja_id || request.nextUrl.searchParams.get('igreja_id'));
     
-    const { nome, cargo, email, telefone, ativo, observacoes } = body;
+    const {
+      nome,
+      cargo,
+      email,
+      telefone,
+      ativo,
+      observacoes,
+      status_membro,
+      ...restoDados
+    } = body;
+
+    if (!igrejaId) {
+      return NextResponse.json(
+        { error: 'Nenhuma igreja selecionada.' },
+        { status: 400 }
+      );
+    }
 
     // Verificar se pessoa existe
     const { data: pessoaExistente } = await supabaseAdmin
@@ -92,6 +131,15 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    const { data: vinculoExistente, error: vinculoLookupError } = await supabaseAdmin
+      .from('pessoas_igrejas')
+      .select('id')
+      .eq('pessoa_id', id)
+      .eq('igreja_id', igrejaId)
+      .maybeSingle();
+
+    if (vinculoLookupError) throw vinculoLookupError;
 
     // Não permitir editar email se já tem acesso
     if (pessoaExistente.tem_acesso && email && email !== pessoaExistente.email) {
@@ -112,6 +160,11 @@ export async function PATCH(
     if (telefone !== undefined) dadosAtualizacao.telefone = telefone || null;
     if (ativo !== undefined) dadosAtualizacao.ativo = ativo;
     if (observacoes !== undefined) dadosAtualizacao.observacoes = observacoes || null;
+    if (status_membro !== undefined) dadosAtualizacao.status_membro = status_membro;
+    if (cargo !== undefined || status_membro !== undefined || ativo !== undefined) {
+      dadosAtualizacao.igreja_id = igrejaId;
+    }
+    Object.assign(dadosAtualizacao, restoDados);
 
     // Atualizar pessoas
     const { data: pessoa, error } = await supabaseAdmin
@@ -123,19 +176,64 @@ export async function PATCH(
 
     if (error) throw error;
 
+    const dadosVinculo: any = {
+      pessoa_id: id,
+      igreja_id: igrejaId,
+      atualizado_em: new Date().toISOString()
+    };
+
+    if (cargo !== undefined) dadosVinculo.cargo = cargo;
+    if (status_membro !== undefined) dadosVinculo.status_membro = status_membro;
+    if (ativo !== undefined) dadosVinculo.ativo = ativo;
+    if (observacoes !== undefined) dadosVinculo.observacoes = observacoes || null;
+
+    if (vinculoExistente) {
+      const atualizacaoVinculo: any = {};
+      if (cargo !== undefined) atualizacaoVinculo.cargo = cargo;
+      if (status_membro !== undefined) atualizacaoVinculo.status_membro = status_membro;
+      if (ativo !== undefined) atualizacaoVinculo.ativo = ativo;
+      if (observacoes !== undefined) atualizacaoVinculo.observacoes = observacoes || null;
+
+      if (Object.keys(atualizacaoVinculo).length > 0) {
+        await supabaseAdmin
+          .from('pessoas_igrejas')
+          .update(atualizacaoVinculo)
+          .eq('id', vinculoExistente.id);
+      }
+    } else if (cargo !== undefined || status_membro !== undefined || ativo !== undefined) {
+      const { error: vinculoInsertError } = await supabaseAdmin
+        .from('pessoas_igrejas')
+        .insert({
+          ...dadosVinculo,
+          cargo: cargo || pessoa.cargo,
+          status_membro: status_membro || pessoa.status_membro || 'ativo',
+          ativo: ativo ?? pessoa.ativo ?? true,
+        });
+
+      if (vinculoInsertError) throw vinculoInsertError;
+    }
+
     // Sincronizar cargo/ativo em usuarios_igrejas e usuarios_acesso (se o usuário tem acesso)
-    if (pessoaExistente.usuario_id && (cargo !== undefined || ativo !== undefined)) {
+    if (pessoaExistente.usuario_id && (cargo !== undefined || ativo !== undefined || nome !== undefined || telefone !== undefined)) {
+      const { data: acessoExistente, error: acessoLookupError } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id')
+        .eq('auth_user_id', pessoaExistente.usuario_id)
+        .maybeSingle();
+
+      if (acessoLookupError) throw acessoLookupError;
+
       const atualizacoesVinculo: any = {};
       if (cargo !== undefined) atualizacoesVinculo.cargo = cargo;
       if (ativo !== undefined) atualizacoesVinculo.ativo = ativo;
 
       // Atualizar usuarios_igrejas (fonte de verdade para cargo)
-      if (pessoaExistente.igreja_id) {
+      if (acessoExistente?.id && igrejaId && Object.keys(atualizacoesVinculo).length > 0) {
         await supabaseAdmin
           .from('usuarios_igrejas')
           .update(atualizacoesVinculo)
-          .eq('usuario_id', pessoaExistente.usuario_id)
-          .eq('igreja_id', pessoaExistente.igreja_id);
+          .eq('usuario_id', acessoExistente.id)
+          .eq('igreja_id', igrejaId);
       }
 
       // Manter usuarios_acesso em sincronia
@@ -147,10 +245,15 @@ export async function PATCH(
 
       if (Object.keys(atualizacoesAcesso).length > 0) {
         atualizacoesAcesso.atualizado_em = new Date().toISOString();
-        await supabaseAdmin
-          .from('usuarios_acesso')
-          .update(atualizacoesAcesso)
-          .eq('id', pessoaExistente.usuario_id);
+        atualizacoesAcesso.auth_user_id = pessoaExistente.usuario_id;
+        atualizacoesAcesso.igreja_id = igrejaId;
+
+        if (acessoExistente?.id) {
+          await supabaseAdmin
+            .from('usuarios_acesso')
+            .update(atualizacoesAcesso)
+            .eq('id', acessoExistente.id);
+        }
       }
     }
 
@@ -186,11 +289,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params; // Corrigido: Adicionado await
+    const igrejaId = await resolveCurrentIgrejaId(
+      request.nextUrl.searchParams.get('igreja_id')
+    );
 
     // Verificar se pessoa existe
     const { data: pessoa } = await supabaseAdmin
       .from('pessoas')
-      .select('id, nome, tem_acesso')
+      .select('id, nome, tem_acesso, igreja_id, usuario_id')
       .eq('id', id)
       .single();
 
@@ -199,6 +305,59 @@ export async function DELETE(
         { error: 'Pessoa não encontrada' },
         { status: 404 }
       );
+    }
+
+    const { data: vinculos, error: vinculosError } = await supabaseAdmin
+      .from('pessoas_igrejas')
+      .select('id, igreja_id, cargo, status_membro, ativo')
+      .eq('pessoa_id', id);
+
+    if (vinculosError) throw vinculosError;
+
+    if (igrejaId && (vinculos?.length || 0) > 1) {
+      const { error: deleteVinculoError } = await supabaseAdmin
+        .from('pessoas_igrejas')
+        .delete()
+        .eq('pessoa_id', id)
+        .eq('igreja_id', igrejaId);
+
+      if (deleteVinculoError) throw deleteVinculoError;
+
+      if (pessoa.usuario_id) {
+        const { data: acessoExistente } = await supabaseAdmin
+          .from('usuarios_acesso')
+          .select('id')
+          .eq('auth_user_id', pessoa.usuario_id)
+          .maybeSingle();
+
+        if (acessoExistente?.id) {
+          await supabaseAdmin
+            .from('usuarios_igrejas')
+            .delete()
+            .eq('usuario_id', acessoExistente.id)
+            .eq('igreja_id', igrejaId);
+        }
+      }
+
+      const proximoVinculo = vinculos.find((vinculo) => vinculo.igreja_id !== igrejaId) || null;
+
+      if (proximoVinculo) {
+        await supabaseAdmin
+          .from('pessoas')
+          .update({
+            igreja_id: proximoVinculo.igreja_id,
+            cargo: proximoVinculo.cargo,
+            status_membro: proximoVinculo.status_membro,
+            ativo: proximoVinculo.ativo,
+            atualizado_em: new Date().toISOString(),
+          })
+          .eq('id', id);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${pessoa.nome} foi removido da igreja atual, mantendo os demais vínculos.`
+      });
     }
 
     // Não permitir deletar se tem acesso (precisa desativar primeiro)

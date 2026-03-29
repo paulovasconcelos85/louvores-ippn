@@ -17,6 +17,11 @@ type PessoaAcesso = {
   usuario_id: string | null;
 };
 
+type UsuarioAcesso = {
+  id: string;
+  igreja_id: string | null;
+};
+
 export type SyncAccessResult =
   | { status: 'granted'; message: string; pessoaId: string }
   | { status: 'pending_approval'; message: string }
@@ -38,6 +43,56 @@ function getSupabaseAdmin() {
 
 function normalizeEmail(email?: string | null) {
   return email?.toLowerCase().trim() || null;
+}
+
+async function ensureUsuarioAcesso(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  pessoa: PessoaAcesso,
+  authUserId: string,
+  email: string,
+  ativo: boolean,
+  atualizado_em: string
+) {
+  const payload = {
+    pessoa_id: pessoa.id,
+    igreja_id: pessoa.igreja_id,
+    auth_user_id: authUserId,
+    email,
+    nome: pessoa.nome,
+    cargo: pessoa.cargo,
+    telefone: pessoa.telefone,
+    ativo,
+    atualizado_em,
+  };
+
+  const { data: existente, error: usuarioExistenteError } = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (usuarioExistenteError) throw usuarioExistenteError;
+
+  if (existente) {
+    const { data: atualizado, error: updateError } = await supabaseAdmin
+      .from('usuarios_acesso')
+      .update(payload)
+      .eq('id', existente.id)
+      .select('id, igreja_id')
+      .single<UsuarioAcesso>();
+
+    if (updateError) throw updateError;
+    return atualizado;
+  }
+
+  const { data: criado, error: insertError } = await supabaseAdmin
+    .from('usuarios_acesso')
+    .insert(payload)
+    .select('id, igreja_id')
+    .single<UsuarioAcesso>();
+
+  if (insertError) throw insertError;
+  return criado;
 }
 
 export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAccessResult> {
@@ -111,31 +166,21 @@ export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAc
 
   if (pessoaUpdateError) throw pessoaUpdateError;
 
-  const { error: acessoError } = await supabaseAdmin
-    .from('usuarios_acesso')
-    .upsert(
-      {
-        id: user.id,
-        pessoa_id: pessoa.id,
-        igreja_id: pessoa.igreja_id,
-        email,
-        nome: pessoa.nome,
-        cargo: pessoa.cargo,
-        telefone: pessoa.telefone,
-        ativo,
-        atualizado_em,
-      },
-      { onConflict: 'id' }
-    );
-
-  if (acessoError) throw acessoError;
+  const usuarioAcesso = await ensureUsuarioAcesso(
+    supabaseAdmin,
+    pessoa,
+    user.id,
+    email,
+    ativo,
+    atualizado_em
+  );
 
   if (pessoa.igreja_id) {
     const { error: igrejaError } = await supabaseAdmin
       .from('usuarios_igrejas')
       .upsert(
         {
-          usuario_id: user.id,
+          usuario_id: usuarioAcesso.id,
           igreja_id: pessoa.igreja_id,
           cargo: pessoa.cargo,
           ativo,

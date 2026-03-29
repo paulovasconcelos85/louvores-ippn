@@ -47,12 +47,29 @@ export function usePermissions(): UsePermissionsReturn {
       // Verificar se é super-admin (da lista hardcoded)
       const ehSuperAdminEmail = isSuperAdmin(user.email);
 
+      const { data: acesso, error: acessoError } = await supabase
+        .from('usuarios_acesso')
+        .select('id, email, nome, telefone, foto_url, observacoes, ativo')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
+      if (acessoError && acessoError.code !== 'PGRST116') {
+        console.error('Erro ao buscar usuario de acesso:', acessoError);
+
+        if (!ehSuperAdminEmail) {
+          setError('Erro ao verificar permissões');
+          setUsuarioPermitido(null);
+          return;
+        }
+      }
+
       // Buscar vínculo com a igreja — fonte de verdade para o cargo
       const { data: vinculo, error: vinculoError } = await supabase
         .from('usuarios_igrejas')
         .select('cargo, ativo, igreja_id')
-        .eq('usuario_id', user.id)
+        .eq('usuario_id', acesso?.id || '')
         .eq('ativo', true)
+        .limit(1)
         .maybeSingle();
 
       if (vinculoError && vinculoError.code !== 'PGRST116') {
@@ -95,13 +112,6 @@ export function usePermissions(): UsePermissionsReturn {
         });
         return;
       }
-
-      // Buscar dados complementares do usuário em usuarios_acesso
-      const { data: acesso } = await supabase
-        .from('usuarios_acesso')
-        .select('email, nome, telefone, foto_url, observacoes, ativo')
-        .eq('id', user.id)
-        .maybeSingle();
 
       // Verificar se está ativo (exceto super-admins)
       if (acesso && !acesso.ativo && !ehSuperAdmin) {

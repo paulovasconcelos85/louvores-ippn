@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import {
@@ -237,12 +238,18 @@ export default function MembroDetalhesPage() {
   const carregarMembro = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('pessoas')
-        .select('*')
-        .eq('id', membroId)
-        .single();
-      if (error) throw error;
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+
+      const response = await fetch(`/api/pessoas/${membroId}?${params.toString()}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Erro ao carregar membro');
+      }
+
+      const data = payload.data;
       setMembro(data);
       setFotoError(false);
       setNome(data.nome);
@@ -327,9 +334,10 @@ export default function MembroDetalhesPage() {
         .split(',')
         .map((c) => c.trim())
         .filter(Boolean);
-      const { error } = await supabase
-        .from('pessoas')
-        .update({
+      const response = await fetch(`/api/pessoas/${membroId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           nome: nome.trim(),
           foto_url: fotoUrl.trim() || null,
           telefone: telefone ? unformatPhoneNumber(telefone) : null,
@@ -366,10 +374,11 @@ export default function MembroDetalhesPage() {
           cursos_discipulado: cursosArray.length > 0 ? cursosArray : null,
           grupo_familiar_nome: grupoFamiliarNome.trim() || null,
           grupo_familiar_lider: grupoFamiliarLider.trim() || null,
-          atualizado_em: new Date().toISOString(),
+          igreja_id: getStoredChurchId(),
         })
-        .eq('id', membroId);
-      if (error) throw error;
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Erro ao salvar alterações');
       setMensagem('Alterações salvas com sucesso!');
       setModoEdicao(false);
       carregarMembro();
@@ -385,9 +394,15 @@ export default function MembroDetalhesPage() {
     e.preventDefault();
     if (!conteudoNota.trim()) return;
     try {
+      const { data: autor } = await supabase
+        .from('pessoas')
+        .select('id')
+        .eq('usuario_id', user?.id || '')
+        .maybeSingle();
+
       const { error } = await supabase.from('notas_pastorais').insert({
         membro_id: membroId,
-        autor_id: usuarioPermitido?.id,
+        autor_id: autor?.id || null,
         tipo: tipoNota,
         titulo: tituloNota.trim() || null,
         conteudo: conteudoNota.trim(),

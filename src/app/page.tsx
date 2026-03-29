@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
-import { formatIgrejaLocalizacao } from '@/lib/church-utils';
+import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 
 interface BoletimItem {
   id: string;
@@ -82,8 +82,6 @@ interface IgrejaDetalhes {
   dia_publicacao_boletim: number | null;
   timezone_boletim: string | null;
 }
-
-const STORAGE_KEY = 'oikos:selected-church-id';
 
 const DIAS_SEMANA = ['Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado'];
 
@@ -187,7 +185,7 @@ export default function Home() {
         setIgrejas(lista);
 
         const igrejaPreferida =
-          typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+          typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
 
         const prioridade = [igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(Boolean) as string[];
         const primeiraValida =
@@ -212,7 +210,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!igrejaAtualId) return;
-    localStorage.setItem(STORAGE_KEY, igrejaAtualId);
+    localStorage.setItem(CHURCH_STORAGE_KEY, igrejaAtualId);
   }, [igrejaAtualId]);
 
   useEffect(() => {

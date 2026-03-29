@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { CargoTipo } from '@/lib/permissions';
+import { getStoredChurchId } from '@/lib/church-utils';
 
 export interface Pessoa {
   id: string;
@@ -30,6 +31,11 @@ export function usePessoas() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const appendChurchId = (params: URLSearchParams) => {
+    const igrejaId = getStoredChurchId();
+    if (igrejaId) params.append('igreja_id', igrejaId);
+  };
+
   // Listar pessoas
   const listarPessoas = useCallback(async (filtros?: {
     ativo?: boolean;
@@ -42,6 +48,7 @@ export function usePessoas() {
 
     try {
       const params = new URLSearchParams();
+      appendChurchId(params);
       if (filtros?.ativo !== undefined) params.append('ativo', String(filtros.ativo));
       if (filtros?.tem_acesso !== undefined) params.append('tem_acesso', String(filtros.tem_acesso));
       if (filtros?.cargo) params.append('cargo', filtros.cargo);
@@ -77,7 +84,10 @@ export function usePessoas() {
       const response = await fetch('/api/pessoas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados)
+        body: JSON.stringify({
+          ...dados,
+          igreja_id: getStoredChurchId(),
+        })
       });
 
       const data = await response.json();
@@ -102,7 +112,10 @@ export function usePessoas() {
       const response = await fetch(`/api/pessoas/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados)
+        body: JSON.stringify({
+          ...dados,
+          igreja_id: getStoredChurchId(),
+        })
       });
 
       const data = await response.json();
@@ -124,7 +137,10 @@ export function usePessoas() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/pessoas/${id}`, {
+      const params = new URLSearchParams();
+      appendChurchId(params);
+
+      const response = await fetch(`/api/pessoas/${id}?${params.toString()}`, {
         method: 'DELETE'
       });
 
@@ -167,7 +183,10 @@ export function usePessoas() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/pessoas/${id}/liberar-acesso`, {
+      const params = new URLSearchParams();
+      appendChurchId(params);
+
+      const response = await fetch(`/api/pessoas/${id}/liberar-acesso?${params.toString()}`, {
         method: 'POST',
       });
 

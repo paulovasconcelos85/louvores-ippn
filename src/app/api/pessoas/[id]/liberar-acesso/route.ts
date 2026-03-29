@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveCurrentIgrejaId } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,6 +19,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const igrejaId = await resolveCurrentIgrejaId(
+      _request.nextUrl.searchParams.get('igreja_id')
+    );
 
     const { data: pessoa, error: pessoaError } = await supabaseAdmin
       .from('pessoas')
@@ -39,14 +43,29 @@ export async function POST(
       );
     }
 
+    const { data: vinculo, error: vinculoError } = igrejaId
+      ? await supabaseAdmin
+          .from('pessoas_igrejas')
+          .select('cargo, ativo, igreja_id')
+          .eq('pessoa_id', id)
+          .eq('igreja_id', igrejaId)
+          .maybeSingle()
+      : { data: null, error: null };
+
+    if (vinculoError) throw vinculoError;
+
     const atualizado_em = new Date().toISOString();
-    const ativo = pessoa.ativo ?? true;
+    const ativo = vinculo?.ativo ?? pessoa.ativo ?? true;
+    const cargo = vinculo?.cargo ?? pessoa.cargo;
+    const igrejaVinculoId = vinculo?.igreja_id ?? igrejaId ?? pessoa.igreja_id;
 
     const { error: updatePessoaError } = await supabaseAdmin
       .from('pessoas')
       .update({
         tem_acesso: true,
         ativo,
+        cargo,
+        igreja_id: igrejaVinculoId,
         atualizado_em,
       })
       .eq('id', id);
@@ -54,33 +73,65 @@ export async function POST(
     if (updatePessoaError) throw updatePessoaError;
 
     if (pessoa.usuario_id) {
-      const { error: acessoError } = await supabaseAdmin
+      let usuarioAcessoId: string | null = null;
+
+      const { data: acessoExistente, error: acessoExistenteError } = await supabaseAdmin
         .from('usuarios_acesso')
-        .upsert(
-          {
-            id: pessoa.usuario_id,
+        .select('id')
+        .eq('auth_user_id', pessoa.usuario_id)
+        .maybeSingle();
+
+      if (acessoExistenteError) throw acessoExistenteError;
+
+      if (acessoExistente) {
+        const { data: acessoAtualizado, error: acessoUpdateError } = await supabaseAdmin
+          .from('usuarios_acesso')
+          .update({
             pessoa_id: pessoa.id,
-            igreja_id: pessoa.igreja_id,
+            igreja_id: igrejaVinculoId,
+            auth_user_id: pessoa.usuario_id,
             email: pessoa.email,
             nome: pessoa.nome,
-            cargo: pessoa.cargo,
+            cargo,
             telefone: pessoa.telefone,
             ativo,
             atualizado_em,
-          },
-          { onConflict: 'id' }
-        );
+          })
+          .eq('id', acessoExistente.id)
+          .select('id')
+          .single();
 
-      if (acessoError) throw acessoError;
+        if (acessoUpdateError) throw acessoUpdateError;
+        usuarioAcessoId = acessoAtualizado.id;
+      } else {
+        const { data: acessoCriado, error: acessoInsertError } = await supabaseAdmin
+          .from('usuarios_acesso')
+          .insert({
+            pessoa_id: pessoa.id,
+            igreja_id: igrejaVinculoId,
+            auth_user_id: pessoa.usuario_id,
+            email: pessoa.email,
+            nome: pessoa.nome,
+            cargo,
+            telefone: pessoa.telefone,
+            ativo,
+            atualizado_em,
+          })
+          .select('id')
+          .single();
 
-      if (pessoa.igreja_id) {
+        if (acessoInsertError) throw acessoInsertError;
+        usuarioAcessoId = acessoCriado.id;
+      }
+
+      if (usuarioAcessoId && igrejaVinculoId) {
         const { error: igrejaError } = await supabaseAdmin
           .from('usuarios_igrejas')
           .upsert(
             {
-              usuario_id: pessoa.usuario_id,
-              igreja_id: pessoa.igreja_id,
-              cargo: pessoa.cargo,
+              usuario_id: usuarioAcessoId,
+              igreja_id: igrejaVinculoId,
+              cargo,
               ativo,
             },
             { onConflict: 'usuario_id,igreja_id' }
