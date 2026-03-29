@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { syncApprovedUserAccess } from '@/lib/access-sync';
+import { isSuperAdmin } from '@/lib/permissions';
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -58,6 +59,16 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: 'Usuário não autenticado.' },
       { status: 401 }
+    );
+  }
+
+  if (isSuperAdmin(user.email)) {
+    return NextResponse.json(
+      {
+        status: 'granted',
+        message: 'Acesso de superadmin validado com sucesso.',
+      },
+      { status: 200 }
     );
   }
 

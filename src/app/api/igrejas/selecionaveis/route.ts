@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { normalizeIgreja } from '@/lib/church-utils';
+import { resolveCurrentIgrejaId } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,25 +50,7 @@ export async function GET() {
 
     const igrejas = (igrejasRaw || []).map(normalizeIgreja).filter(Boolean);
 
-    let igrejaAtualId: string | null = null;
-
-    if (user?.id) {
-      const { data: acesso } = await supabaseAdmin
-        .from('usuarios_acesso')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      const { data: vinculo } = await supabaseAdmin
-        .from('usuarios_igrejas')
-        .select('igreja_id')
-        .eq('usuario_id', acesso?.id || '')
-        .eq('ativo', true)
-        .limit(1)
-        .maybeSingle();
-
-      igrejaAtualId = vinculo?.igreja_id || null;
-    }
+    const igrejaAtualId = user?.id ? await resolveCurrentIgrejaId() : null;
 
     return NextResponse.json({
       igrejas,

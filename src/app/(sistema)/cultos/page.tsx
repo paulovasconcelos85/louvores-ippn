@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { isSuperAdmin } from '@/lib/permissions';
 import { jsPDF } from 'jspdf';
 
 // --- CONFIGURAÇÕES ---
-const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin'];
+const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin', 'superadmin'];
 const CARGOS_MUSICA = ['musico'];
 
 const TIPOS_LITURGICOS = [
@@ -774,29 +775,33 @@ export default function CultosPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const igrejaId = getStoredChurchId();
-      const { data: acesso } = await supabase
-        .from('usuarios_acesso')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (acesso?.id) {
-        let query = supabase
-          .from('usuarios_igrejas')
-          .select('cargo')
-          .eq('usuario_id', acesso.id)
-          .eq('ativo', true)
-          .limit(1);
-
-        if (igrejaId) {
-          query = query.eq('igreja_id', igrejaId);
-        }
-
-        const { data } = await query.maybeSingle();
-        setUserRole(data?.cargo || 'staff');
+      if (isSuperAdmin(user.email)) {
+        setUserRole('superadmin');
       } else {
-        setUserRole('staff');
+        const igrejaId = getStoredChurchId();
+        const { data: acesso } = await supabase
+          .from('usuarios_acesso')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+
+        if (acesso?.id) {
+          let query = supabase
+            .from('usuarios_igrejas')
+            .select('cargo')
+            .eq('usuario_id', acesso.id)
+            .eq('ativo', true)
+            .limit(1);
+
+          if (igrejaId) {
+            query = query.eq('igreja_id', igrejaId);
+          }
+
+          const { data } = await query.maybeSingle();
+          setUserRole(data?.cargo || 'staff');
+        } else {
+          setUserRole('staff');
+        }
       }
     } else {
       setUserRole('staff');

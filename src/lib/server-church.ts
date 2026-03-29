@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { isSuperAdmin } from '@/lib/permissions';
 
 function getSupabaseAdmin() {
   return createClient(
@@ -15,7 +16,7 @@ function getSupabaseAdmin() {
   );
 }
 
-export async function getAuthenticatedUserIdFromCookies() {
+async function getAuthenticatedUserFromCookies() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,25 +40,48 @@ export async function getAuthenticatedUserIdFromCookies() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  return user;
+}
+
+async function getDefaultIgrejaId(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
+) {
+  const { data: igreja, error } = await supabaseAdmin
+    .from('igrejas')
+    .select('id')
+    .eq('ativo', true)
+    .order('nome', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return igreja?.id || null;
+}
+
+export async function getAuthenticatedUserIdFromCookies() {
+  const user = await getAuthenticatedUserFromCookies();
   return user?.id ?? null;
 }
 
 export async function resolveCurrentIgrejaId(preferredIgrejaId?: string | null) {
   if (preferredIgrejaId) return preferredIgrejaId;
 
-  const authUserId = await getAuthenticatedUserIdFromCookies();
-  if (!authUserId) return null;
+  const user = await getAuthenticatedUserFromCookies();
+  if (!user?.id) return null;
 
   const supabaseAdmin = getSupabaseAdmin();
 
   const { data: acesso, error: acessoError } = await supabaseAdmin
     .from('usuarios_acesso')
     .select('id, igreja_id')
-    .eq('auth_user_id', authUserId)
+    .eq('auth_user_id', user.id)
     .maybeSingle();
 
   if (acessoError) throw acessoError;
-  if (!acesso) return null;
+  if (!acesso) {
+    return isSuperAdmin(user.email) ? getDefaultIgrejaId(supabaseAdmin) : null;
+  }
 
   const { data: vinculo, error: vinculoError } = await supabaseAdmin
     .from('usuarios_igrejas')
@@ -69,5 +93,9 @@ export async function resolveCurrentIgrejaId(preferredIgrejaId?: string | null) 
 
   if (vinculoError) throw vinculoError;
 
-  return vinculo?.igreja_id || acesso.igreja_id || null;
+  return (
+    vinculo?.igreja_id ||
+    acesso.igreja_id ||
+    (isSuperAdmin(user.email) ? await getDefaultIgrejaId(supabaseAdmin) : null)
+  );
 }
