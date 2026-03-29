@@ -1,10 +1,12 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { syncApprovedUserAccess } from '@/lib/access-sync';
 
-export async function POST() {
+export async function POST(request: Request) {
   const cookieStore = await cookies();
+  const authHeader = request.headers.get('Authorization');
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,10 +26,33 @@ export async function POST() {
     }
   );
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  let user = null;
+  let authError = null;
+
+  const bearerToken = authHeader?.replace(/^Bearer\s+/i, '').trim() || undefined;
+
+  if (bearerToken) {
+    const supabaseClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    const userResponse = await supabaseClient.auth.getUser(bearerToken);
+    user = userResponse.data.user;
+    authError = userResponse.error;
+  }
+
+  if (!user) {
+    const userResponse = await supabase.auth.getUser();
+    user = userResponse.data.user;
+    authError = userResponse.error;
+  }
 
   if (authError || !user) {
     return NextResponse.json(

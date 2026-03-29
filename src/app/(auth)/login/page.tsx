@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,8 +19,19 @@ export default function LoginPage() {
   const [mensagemSucesso, setMensagemSucesso] = useState('');
 
   const finalizarAcesso = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('Sua sessão expirou. Entre novamente para continuar.');
+    }
+
     const response = await fetch('/api/finalizar-acesso', {
       method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
 
     const data = await response.json();
