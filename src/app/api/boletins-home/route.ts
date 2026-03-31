@@ -41,6 +41,7 @@ interface LegacyLouvorItemRow {
   tom: string | null;
   cantico_id: string | null;
   conteudo_publico: string | null;
+  descricao: string | null;
 }
 
 interface LegacyCultoRow {
@@ -90,7 +91,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
@@ -144,6 +145,34 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
     });
   }
 
+  if (culto.palavra_pastoral?.trim()) {
+    secoes.push({
+      id: `legacy-pastoral-${culto['Culto nr.']}`,
+      igreja_id: null,
+      culto_id: culto['Culto nr.'],
+      tipo: 'palavra_pastoral',
+      titulo: 'Palavra Pastoral',
+      icone: null,
+      ordem: 1,
+      visivel: true,
+      criado_em: null,
+      itens: [
+        {
+          id: `legacy-pastoral-conteudo-${culto['Culto nr.']}`,
+          secao_id: `legacy-pastoral-${culto['Culto nr.']}`,
+          conteudo: `${culto.palavra_pastoral.trim()}${
+            culto.palavra_pastoral_autor?.trim()
+              ? `\n\n${culto.palavra_pastoral_autor.trim()}`
+              : ''
+          }`,
+          destaque: true,
+          ordem: 0,
+          criado_em: null,
+        },
+      ],
+    });
+  }
+
   if (itens.length > 0) {
     secoes.push({
       id: `legacy-liturgia-${culto['Culto nr.']}`,
@@ -152,7 +181,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
       tipo: 'liturgia',
       titulo: `Liturgia do culto de ${culto.Dia}`,
       icone: null,
-      ordem: 1,
+      ordem: 2,
       visivel: true,
       criado_em: null,
       itens: itens.map((item, index) => {
@@ -164,11 +193,16 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
           ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
           : '';
         const conteudoBase = item.conteudo_publico?.trim() || '';
+        const descricao = item.descricao?.trim() || '';
 
         return {
           id: item.id,
           secao_id: `legacy-liturgia-${culto['Culto nr.']}`,
-          conteudo: `${tituloItem}${conteudoBase ? `\n${conteudoBase}` : ''}${cantico}`,
+          conteudo: `${tituloItem}${
+            conteudoBase ? `\n${conteudoBase}` : ''
+          }${
+            descricao ? `\n${descricao}` : ''
+          }${cantico}`,
           destaque: false,
           ordem: item.ordem ?? index,
           criado_em: null,

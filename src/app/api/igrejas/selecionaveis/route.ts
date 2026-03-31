@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { resolveCurrentIgrejaId } from '@/lib/server-church';
+import { isSuperAdmin } from '@/lib/permissions';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,12 +42,64 @@ export async function GET() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { data: igrejasRaw, error: igrejasError } = await supabaseAdmin
-      .from('igrejas')
-      .select('*')
-      .order('nome', { ascending: true });
+    let igrejasRaw: Record<string, unknown>[] | null = [];
 
-    if (igrejasError) throw igrejasError;
+    if (!user?.id) {
+      const { data, error } = await supabaseAdmin
+        .from('igrejas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome', { ascending: true });
+
+      if (error) throw error;
+      igrejasRaw = data;
+    } else if (isSuperAdmin(user.email)) {
+      const { data, error } = await supabaseAdmin
+        .from('igrejas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome', { ascending: true });
+
+      if (error) throw error;
+      igrejasRaw = data;
+    } else {
+      const { data: acesso, error: acessoError } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id, igreja_id')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
+      if (acessoError) throw acessoError;
+
+      const { data: vinculos, error: vinculosError } = await supabaseAdmin
+        .from('usuarios_igrejas')
+        .select('igreja_id')
+        .eq('usuario_id', acesso?.id || '')
+        .eq('ativo', true);
+
+      if (vinculosError) throw vinculosError;
+
+      const igrejaIds = Array.from(
+        new Set(
+          [acesso?.igreja_id, ...(vinculos || []).map((vinculo) => vinculo.igreja_id)]
+            .filter(Boolean)
+        )
+      );
+
+      if (igrejaIds.length > 0) {
+        const { data, error } = await supabaseAdmin
+          .from('igrejas')
+          .select('*')
+          .in('id', igrejaIds)
+          .eq('ativo', true)
+          .order('nome', { ascending: true });
+
+        if (error) throw error;
+        igrejasRaw = data;
+      } else {
+        igrejasRaw = [];
+      }
+    }
 
     const igrejas = (igrejasRaw || []).map(normalizeIgreja).filter(Boolean);
 

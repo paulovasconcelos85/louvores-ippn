@@ -1,15 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getStoredChurchId } from '@/lib/church-utils';
-import { isSuperAdmin } from '@/lib/permissions';
+import { usePermissions } from '@/hooks/usePermissions';
 import { jsPDF } from 'jspdf';
-
-// --- CONFIGURAÇÕES ---
-const CARGOS_LIDERANCA = ['seminarista', 'presbitero', 'pastor', 'admin', 'superadmin'];
-const CARGOS_MUSICA = ['musico'];
+import { getStoredChurchId } from '@/lib/church-utils';
 
 const TIPOS_LITURGICOS = [
   'Prelúdio',
@@ -57,17 +54,26 @@ interface Culto {
   palavra_pastoral_autor?: string | null;
 }
 
+interface LouvorItemRow {
+  id: string;
+  culto_id: number;
+  ordem: number | null;
+  tipo: string | null;
+  tom: string | null;
+  cantico_id: string | null;
+  conteudo_publico: string | null;
+  descricao: string | null;
+  horario: string | null;
+}
+
+interface LouvorItemRowComCantico extends LouvorItemRow {
+  canticos: { nome: string | null } | null;
+}
+
 // --- HELPERS ---
 function isPrimeirosDomingo(data: Date): boolean {
   const d = new Date(data);
   return d.getDay() === 0 && d.getDate() <= 7;
-}
-
-function calcularProximoDomingo(base: Date): Date {
-  const d = new Date(base);
-  const diasAte = (7 - d.getDay()) % 7 || 7;
-  d.setDate(d.getDate() + diasAte);
-  return d;
 }
 
 function modeloPadrao(dia: string): LouvorItem[] {
@@ -107,6 +113,42 @@ function getStatusMusica(dataStr: string | null | undefined) {
   if (dias < 90) return { label: 'MODERADO', cor: 'text-amber-600', bg: 'bg-amber-50', dias, dataFormatada: fmt };
   if (dias < 180) return { label: 'HÁ TEMPO', cor: 'text-orange-600', bg: 'bg-orange-50', dias, dataFormatada: fmt };
   return { label: 'HÁ MUITO', cor: 'text-red-600', bg: 'bg-red-50', dias, dataFormatada: fmt };
+}
+
+async function carregarLouvorItensComCanticos(cultoId: number): Promise<LouvorItemRowComCantico[]> {
+  const { data: itens, error: itensError } = await supabase
+    .from('louvor_itens')
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .eq('culto_id', cultoId)
+    .order('ordem');
+
+  if (itensError) throw itensError;
+
+  const itemRows = (itens || []) as LouvorItemRow[];
+  const canticoIds = Array.from(
+    new Set(itemRows.map((item) => item.cantico_id).filter(Boolean))
+  ) as string[];
+
+  const { data: canticosData, error: canticosError } =
+    canticoIds.length > 0
+      ? await supabase.from('canticos').select('id, nome').in('id', canticoIds)
+      : { data: [], error: null };
+
+  if (canticosError) throw canticosError;
+
+  const canticosPorId = new Map(
+    ((canticosData || []) as Array<{ id: string; nome: string | null }>).map((cantico) => [
+      cantico.id,
+      cantico.nome,
+    ])
+  );
+
+  return itemRows.map((item) => ({
+    ...item,
+    canticos: item.cantico_id
+      ? { nome: canticosPorId.get(item.cantico_id) || null }
+      : null,
+  }));
 }
 
 // --- AUTOCOMPLETE DE CÂNTICO ---
@@ -353,7 +395,7 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
 }
 
 // --- EDITOR DE LITURGIA ---
-function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, userRole }: any) {
+function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, podeEditarLiturgiaCompleta, podeEditarLouvor }: any) {
   const [dia, setDia] = useState<string>(culto?.Dia || '');
   const [itens, setItens] = useState<LouvorItem[]>([]);
   const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
@@ -364,10 +406,9 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, use
   const [importando, setImportando] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const isLideranca = CARGOS_LIDERANCA.includes(userRole);
-  const isMusico = CARGOS_MUSICA.includes(userRole);
-  const podVerTom = isLideranca || isMusico;
-  const canEditarMusica = isLideranca || isMusico;
+  const isLideranca = podeEditarLiturgiaCompleta;
+  const podVerTom = isLideranca || podeEditarLouvor;
+  const canEditarMusica = isLideranca || podeEditarLouvor;
 
   useEffect(() => {
     if (culto) {
@@ -378,11 +419,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, use
   }, []);
 
   const carregarItens = async (cultoNr: number) => {
-    const { data } = await supabase
-      .from('louvor_itens')
-      .select('*, canticos(nome)')
-      .eq('culto_id', cultoNr)
-      .order('ordem');
+    const data = await carregarLouvorItensComCanticos(cultoNr);
 
     if (!data) return;
 
@@ -474,29 +511,38 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, use
     if (!dia) return alert('Selecione a data!');
     setLoading(true);
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar a liturgia');
+
       let cId = culto?.['Culto nr.'];
       let imagemUrl = culto?.imagem_url || null;
 
       if (!cId) {
         const { data, error } = await supabase
           .from('Louvores IPPN')
-          .insert({ Dia: dia, palavra_pastoral: palavraPastoral || null, palavra_pastoral_autor: palavraPastoralAutor || null })
+          .insert({
+            Dia: dia,
+            igreja_id: igrejaId,
+            palavra_pastoral: palavraPastoral || null,
+            palavra_pastoral_autor: palavraPastoralAutor || null,
+          })
           .select().single();
         if (error) throw error;
         cId = data['Culto nr.'];
       } else {
         await supabase.from('Louvores IPPN').update({
           Dia: dia,
+          igreja_id: igrejaId,
           palavra_pastoral: palavraPastoral || null,
           palavra_pastoral_autor: palavraPastoralAutor || null,
-        }).eq('"Culto nr."', cId);
+        }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
       }
 
       if (imagemUpload) {
         const url = await uploadImagem(imagemUpload, cId);
         if (url) {
           imagemUrl = url;
-          await supabase.from('Louvores IPPN').update({ imagem_url: imagemUrl }).eq('"Culto nr."', cId);
+          await supabase.from('Louvores IPPN').update({ imagem_url: imagemUrl }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
         }
       }
 
@@ -718,7 +764,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, use
 }
 
 // --- CARD DE CULTO NA LISTAGEM ---
-function CultoCard({ culto, onEditar, onWhatsApp, onPDF }: any) {
+function CultoCard({ culto, onEditar, onWhatsApp, onPDF, podeEditar }: any) {
   const dataFormatada = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
   });
@@ -747,9 +793,11 @@ function CultoCard({ culto, onEditar, onWhatsApp, onPDF }: any) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
           </button>
-          <button onClick={() => onEditar(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center text-lg" title="Editar">
-            ✏️
-          </button>
+          {podeEditar && (
+            <button onClick={() => onEditar(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center text-lg" title="Editar">
+              ✏️
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -758,53 +806,36 @@ function CultoCard({ culto, onEditar, onWhatsApp, onPDF }: any) {
 
 // --- PÁGINA PRINCIPAL ---
 export default function CultosPage() {
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const router = useRouter();
+  const { loading: permLoading, permissoes } = usePermissions();
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<Culto[]>([]);
   const [editando, setEditando] = useState<Culto | null | 'novo'>(null);
   const [loading, setLoading] = useState(true);
-
-  const isLideranca = userRole ? CARGOS_LIDERANCA.includes(userRole) : false;
+  const isLideranca = permissoes.podeEditarLiturgiaCompleta;
+  const totalLoading = loading || permLoading;
 
   useEffect(() => {
-    carregarTudo();
-  }, []);
+    if (!permLoading && !permissoes.podeGerenciarCultos) {
+      router.push('/admin');
+    }
+  }, [permLoading, permissoes.podeGerenciarCultos, router]);
+
+  useEffect(() => {
+    if (!permLoading && permissoes.podeGerenciarCultos) {
+      carregarTudo();
+    }
+  }, [permLoading, permissoes.podeGerenciarCultos]);
 
   const carregarTudo = async () => {
     setLoading(true);
+    const igrejaId = getStoredChurchId();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      if (isSuperAdmin(user.email)) {
-        setUserRole('superadmin');
-      } else {
-        const igrejaId = getStoredChurchId();
-        const { data: acesso } = await supabase
-          .from('usuarios_acesso')
-          .select('id')
-          .eq('auth_user_id', user.id)
-          .maybeSingle();
-
-        if (acesso?.id) {
-          let query = supabase
-            .from('usuarios_igrejas')
-            .select('cargo')
-            .eq('usuario_id', acesso.id)
-            .eq('ativo', true)
-            .limit(1);
-
-          if (igrejaId) {
-            query = query.eq('igreja_id', igrejaId);
-          }
-
-          const { data } = await query.maybeSingle();
-          setUserRole(data?.cargo || 'staff');
-        } else {
-          setUserRole('staff');
-        }
-      }
-    } else {
-      setUserRole('staff');
+    if (!igrejaId) {
+      setCanticos([]);
+      setCultos([]);
+      setLoading(false);
+      return;
     }
 
     const { data: todosCanticos } = await supabase
@@ -816,13 +847,17 @@ export default function CultosPage() {
     const { data: cultosData } = await supabase
       .from('Louvores IPPN')
       .select('*')
+      .eq('igreja_id', igrejaId)
       .order('Dia', { ascending: false });
     if (cultosData) setCultos(cultosData);
 
     // Buscar últimas datas dos cânticos
     if (todosCanticos) {
       const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
-      const { data: todosCultos } = await supabase.from('Louvores IPPN').select('"Culto nr.", Dia');
+      const { data: todosCultos } = await supabase
+        .from('Louvores IPPN')
+        .select('"Culto nr.", Dia')
+        .eq('igreja_id', igrejaId);
       if (itens && todosCultos) {
         const mapaCultos = new Map(todosCultos.map((c: any) => [c['Culto nr.'], c.Dia]));
         const mapaUltimas = new Map<string, string>();
@@ -841,8 +876,17 @@ export default function CultosPage() {
   };
 
   const shareWhatsApp = async (culto: Culto) => {
+    const igrejaId = getStoredChurchId();
     const cultoNr = culto['Culto nr.'];
-    const { data } = await supabase.from('louvor_itens').select('*, canticos(nome)').eq('culto_id', cultoNr).order('ordem');
+    const { data: cultoValido } = await supabase
+      .from('Louvores IPPN')
+      .select('"Culto nr."')
+      .eq('"Culto nr."', cultoNr)
+      .eq('igreja_id', igrejaId)
+      .maybeSingle();
+    if (!cultoValido) return;
+
+    const data = await carregarLouvorItensComCanticos(cultoNr);
     if (!data) return;
 
     const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -865,12 +909,17 @@ export default function CultosPage() {
   };
 
   const sharePDF = async (culto: Culto) => {
+    const igrejaId = getStoredChurchId();
     const cultoNr = culto['Culto nr.'];
-    const { data } = await supabase
-      .from('louvor_itens')
-      .select('*, canticos(nome)')
-      .eq('culto_id', cultoNr)
-      .order('ordem');
+    const { data: cultoValido } = await supabase
+      .from('Louvores IPPN')
+      .select('"Culto nr."')
+      .eq('"Culto nr."', cultoNr)
+      .eq('igreja_id', igrejaId)
+      .maybeSingle();
+    if (!cultoValido) return;
+
+    const data = await carregarLouvorItensComCanticos(cultoNr);
     if (!data) return;
 
     // Agrupar itens consecutivos do mesmo tipo/horario/conteudo
@@ -909,82 +958,68 @@ export default function CultosPage() {
     const pw = doc.internal.pageSize.getWidth();
     const ph = doc.internal.pageSize.getHeight();
     const m = 14;
-    const colGap = 6;
-    const colW = (pw - m * 2 - colGap) / 2;
+    const contentWidth = pw - m * 2;
     const lineH = 5.5;
     const titleH = 6.5;
-    const headerBottom = 32;
-    const contentBottom = ph - 12;
+    const headerBottom = 34;
+    const contentBottom = ph - 14;
 
-    // Função para calcular altura de um item
-    const calcAlturaItem = (it: ItemAgrupado, largura: number): number => {
-      doc.setFontSize(11);
-      const tituloTxt = `${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
-      const tituloLinhas = doc.splitTextToSize(tituloTxt, largura);
-      let h = tituloLinhas.length * titleH + 2;
-      if (it.conteudo_publico) {
-        doc.setFontSize(10);
-        const cl = doc.splitTextToSize(it.conteudo_publico, largura - 4);
-        h += cl.length * lineH;
-      }
-      if (it.descricao) {
-        doc.setFontSize(9);
-        const dl = doc.splitTextToSize(it.descricao, largura - 4);
-        h += dl.length * lineH;
-      }
-      h += it.canticos.length * lineH;
-      h += 6;
-      return h;
-    };
-
-    // Cabeçalho
-    doc.setFillColor(16, 60, 48);
-    doc.rect(0, 0, pw, headerBottom - 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('IGREJA PRESBITERIANA DA PONTA NEGRA', pw / 2, 11, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.text('Uma igreja da familia de Deus  -  Manaus/AM', pw / 2, 18, { align: 'center' });
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('LITURGIA', pw / 2, 26, { align: 'center' });
-
-    // Data
     const dataFmt = new Date(culto.Dia + 'T00:00:00')
       .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
       .toUpperCase();
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    let y = headerBottom + 4;
-    doc.text(dataFmt, pw / 2, y, { align: 'center' });
-    y += 4;
-    doc.setDrawColor(16, 60, 48);
-    doc.line(m, y, pw - m, y);
-    y += 6;
 
-    // Decidir se usa 1 ou 2 colunas
-    const alturaTotal1col = agrupados.reduce((acc, it) => acc + calcAlturaItem(it, pw - m * 2), 0);
-    const espacoDisponivel = contentBottom - y - 6;
-    const usarDuasColunas = alturaTotal1col > espacoDisponivel;
+    const drawHeader = () => {
+      doc.setFillColor(16, 60, 48);
+      doc.rect(0, 0, pw, headerBottom - 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('LITURGIA DO CULTO', pw / 2, 13, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text(dataFmt, pw / 2, 21, { align: 'center' });
+      doc.setFontSize(7.5);
+      doc.text('Documento gerado por igreja selecionada no OIKOS Hub', pw / 2, 28, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(16, 60, 48);
+      doc.line(m, headerBottom, pw - m, headerBottom);
+    };
 
-    const renderItem = (it: ItemAgrupado, num: number, xBase: number, yPos: number, largura: number): number => {
+    const calcAlturaItem = (it: ItemAgrupado): number => {
+      doc.setFontSize(11);
+      const tituloTxt = `${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
+      const tituloLinhas = doc.splitTextToSize(tituloTxt, contentWidth);
+      let h = tituloLinhas.length * titleH + 2;
+      if (it.conteudo_publico) {
+        doc.setFontSize(10);
+        h += doc.splitTextToSize(it.conteudo_publico, contentWidth - 4).length * lineH;
+      }
+      if (it.descricao) {
+        doc.setFontSize(9);
+        h += doc.splitTextToSize(it.descricao, contentWidth - 4).length * lineH;
+      }
+      for (const c of it.canticos) {
+        doc.setFontSize(10);
+        h += doc.splitTextToSize(`${c.nome}${c.tom ? ` (${c.tom})` : ''}`, contentWidth - 4).length * lineH;
+      }
+      return h + 6;
+    };
+
+    const renderItem = (it: ItemAgrupado, num: number, yPos: number): number => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
       const tituloTxt = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
-      const tituloLinhas = doc.splitTextToSize(tituloTxt, largura);
-      doc.text(tituloLinhas, xBase, yPos);
+      const tituloLinhas = doc.splitTextToSize(tituloTxt, contentWidth);
+      doc.text(tituloLinhas, m, yPos);
       yPos += tituloLinhas.length * titleH + 2;
 
       if (it.conteudo_publico) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.setTextColor(55, 55, 55);
-        const cl = doc.splitTextToSize(it.conteudo_publico, largura - 4);
-        doc.text(cl, xBase + 3, yPos);
+        const cl = doc.splitTextToSize(it.conteudo_publico, contentWidth - 4);
+        doc.text(cl, m + 3, yPos);
         yPos += cl.length * lineH;
       }
 
@@ -992,8 +1027,8 @@ export default function CultosPage() {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(120, 120, 120);
-        const dl = doc.splitTextToSize(it.descricao, largura - 4);
-        doc.text(dl, xBase + 3, yPos);
+        const dl = doc.splitTextToSize(it.descricao, contentWidth - 4);
+        doc.text(dl, m + 3, yPos);
         yPos += dl.length * lineH;
       }
 
@@ -1002,61 +1037,58 @@ export default function CultosPage() {
         doc.setFontSize(10);
         doc.setTextColor(16, 90, 60);
         const nomeTxt = `${c.nome}${c.tom ? ' (' + c.tom + ')' : ''}`;
-        const cl = doc.splitTextToSize(nomeTxt, largura - 4);
-        doc.text(cl, xBase + 3, yPos);
+        const cl = doc.splitTextToSize(nomeTxt, contentWidth - 4);
+        doc.text(cl, m + 3, yPos);
         yPos += cl.length * lineH;
       }
 
       return yPos + 6;
     };
 
-    if (!usarDuasColunas) {
-      // Uma coluna simples
-      let num = 1;
-      for (const it of agrupados) {
-        y = renderItem(it, num, m, y, pw - m * 2);
-        num++;
-      }
-    } else {
-      // Fluxo jornal: preenche col1 até contentBottom, resto vai pra col2
-      const x1 = m;
-      const x2 = m + colW + colGap;
+    drawHeader();
+    let y = headerBottom + 8;
+    let num = 1;
 
-      // Linha divisória
+    if (culto.palavra_pastoral) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text('PALAVRA PASTORAL', m, y);
+      y += 7;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const palavraLinhas = doc.splitTextToSize(culto.palavra_pastoral, contentWidth);
+      doc.text(palavraLinhas, m, y);
+      y += palavraLinhas.length * lineH + 2;
+
+      if (culto.palavra_pastoral_autor) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(`- ${culto.palavra_pastoral_autor}`, pw - m, y, { align: 'right' });
+        y += 8;
+      }
+
       doc.setDrawColor(220, 220, 220);
-      doc.line(x2 - colGap / 2, y - 2, x2 - colGap / 2, contentBottom);
-
-      let col = 1;
-      let xAtual = x1;
-      let yAtual = y;
-      let larguraAtual = colW;
-      let num = 1;
-
-      for (const it of agrupados) {
-        const h = calcAlturaItem(it, larguraAtual);
-
-        // Se não cabe na coluna atual, vai para col2
-        if (col === 1 && yAtual + h > contentBottom) {
-          col = 2;
-          xAtual = x2;
-          yAtual = y;
-          larguraAtual = colW;
-        }
-
-        yAtual = renderItem(it, num, xAtual, yAtual, larguraAtual);
-        num++;
-      }
+      doc.line(m, y, pw - m, y);
+      y += 7;
     }
 
+    for (const it of agrupados) {
+      const altura = calcAlturaItem(it);
+      if (y + altura > contentBottom) {
+        doc.addPage();
+        drawHeader();
+        y = headerBottom + 8;
+      }
+      y = renderItem(it, num, y);
+      num++;
+    }
 
-
-    const blob = doc.output('blob');
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const nomeArquivo = `liturgia-${culto.Dia}.pdf`;
+    doc.save(nomeArquivo);
   };
 
-  if (loading) return (
+  if (totalLoading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -1070,7 +1102,8 @@ export default function CultosPage() {
       culto={editando === 'novo' ? null : editando}
       canticos={canticos}
       setCanticos={setCanticos}
-      userRole={userRole}
+      podeEditarLiturgiaCompleta={permissoes.podeEditarLiturgiaCompleta}
+      podeEditarLouvor={permissoes.podeEditarLouvor}
       onSalvo={() => { setEditando(null); carregarTudo(); }}
       onCancelar={() => setEditando(null)}
     />
@@ -1092,10 +1125,16 @@ export default function CultosPage() {
         </div>
 
         <div className="space-y-3">
+          {cultos.length === 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500">
+              Nenhuma liturgia encontrada para a igreja selecionada.
+            </div>
+          )}
           {cultos.map(c => (
             <CultoCard
               key={c['Culto nr.']}
               culto={c}
+              podeEditar={permissoes.podeEditarLouvor}
               onEditar={(culto: Culto) => setEditando(culto)}
               onWhatsApp={shareWhatsApp}
               onPDF={sharePDF}

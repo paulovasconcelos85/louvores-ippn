@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { resolveCurrentIgrejaId } from '@/lib/server-church';
+import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
 
 // Cliente Supabase Admin
 const supabaseAdmin = createClient(
@@ -19,6 +19,19 @@ const supabaseAdmin = createClient(
 // ============================================
 export async function GET(request: NextRequest) {
   try {
+    const permissionContext = await getUserPermissionContext(
+      new URL(request.url).searchParams.get('igreja_id'),
+      request
+    );
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
+      return NextResponse.json({ error: 'Sem permissão para listar pessoas.' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     
     // Filtros opcionais
@@ -27,7 +40,7 @@ export async function GET(request: NextRequest) {
     const cargo = searchParams.get('cargo'); // musico, pastor, etc
     const busca = searchParams.get('busca'); // busca por nome/email
     const igrejaParam = searchParams.get('igreja_id');
-    const igrejaId = await resolveCurrentIgrejaId(igrejaParam);
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaParam, request);
 
     if (!igrejaId) {
       return NextResponse.json(
@@ -35,7 +48,7 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     let query = supabaseAdmin
       .from('pessoas')
       .select(`
@@ -82,8 +95,47 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
+    let legacyQuery = supabaseAdmin
+      .from('pessoas')
+      .select(`
+        id, nome, cargo, email, telefone, ativo, tem_acesso, usuario_id, foto_url, observacoes,
+        criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
+        endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
+        nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
+        profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
+        batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
+        cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+        usuarios_tags(
+          tag_id,
+          nivel_habilidade,
+          tags_funcoes(id, nome, categoria, cor, icone)
+        )
+      `)
+      .eq('igreja_id', igrejaId)
+      .order('nome');
+
+    if (ativo !== null) {
+      legacyQuery = legacyQuery.eq('ativo', ativo === 'true');
+    }
+
+    if (tem_acesso !== null) {
+      legacyQuery = legacyQuery.eq('tem_acesso', tem_acesso === 'true');
+    }
+
+    if (cargo) {
+      legacyQuery = legacyQuery.eq('cargo', cargo);
+    }
+
+    if (busca) {
+      legacyQuery = legacyQuery.or(`nome.ilike.%${busca}%,email.ilike.%${busca}%`);
+    }
+
+    const { data: legacyData, error: legacyError } = await legacyQuery;
+
+    if (legacyError) throw legacyError;
+
     // Formatar resposta com tags
-    const pessoasFormatadas = data?.map(pessoa => ({
+    const pessoasComVinculo = data?.map(pessoa => ({
       ...pessoa,
       igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
       cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
@@ -92,7 +144,99 @@ export async function GET(request: NextRequest) {
       tags: pessoa.usuarios_tags
         ?.map((ut: any) => ut.tags_funcoes)
         .filter(Boolean) || []
-    }));
+    })) || [];
+
+    const idsComVinculo = new Set(pessoasComVinculo.map((pessoa) => pessoa.id));
+    const pessoasLegacy = (legacyData || [])
+      .filter((pessoa) => !idsComVinculo.has(pessoa.id))
+      .map((pessoa: any) => ({
+        ...pessoa,
+        tags: pessoa.usuarios_tags
+          ?.map((ut: any) => ut.tags_funcoes)
+          .filter(Boolean) || []
+      }));
+
+    const idsConhecidos = new Set([
+      ...idsComVinculo,
+      ...pessoasLegacy.map((pessoa) => pessoa.id),
+    ]);
+
+    const { data: acessosDiretos, error: acessosDiretosError } = await supabaseAdmin
+      .from('usuarios_acesso')
+      .select('id, pessoa_id, igreja_id, cargo, ativo')
+      .eq('igreja_id', igrejaId)
+      .not('pessoa_id', 'is', null);
+
+    if (acessosDiretosError) throw acessosDiretosError;
+
+    const { data: vinculosUsuarios, error: vinculosUsuariosError } = await supabaseAdmin
+      .from('usuarios_igrejas')
+      .select('usuario_id, cargo, ativo')
+      .eq('igreja_id', igrejaId);
+
+    if (vinculosUsuariosError) throw vinculosUsuariosError;
+
+    const usuarioIdsPorVinculo = (vinculosUsuarios || []).map((vinculo) => vinculo.usuario_id).filter(Boolean);
+
+    let acessosPorVinculo: Array<{ id: string; pessoa_id: string | null; cargo?: string | null; ativo?: boolean | null }> = [];
+
+    if (usuarioIdsPorVinculo.length > 0) {
+      const { data: acessosData, error: acessosDataError } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id, pessoa_id, cargo, ativo')
+        .in('id', usuarioIdsPorVinculo)
+        .not('pessoa_id', 'is', null);
+
+      if (acessosDataError) throw acessosDataError;
+      acessosPorVinculo = acessosData || [];
+    }
+
+    const pessoaIdsVindosDeAcesso = Array.from(
+      new Set(
+        [...(acessosDiretos || []), ...acessosPorVinculo]
+          .map((acesso) => acesso.pessoa_id)
+          .filter(Boolean)
+      )
+    ) as string[];
+
+    let pessoasPorAcesso: any[] = [];
+
+    if (pessoaIdsVindosDeAcesso.length > 0) {
+      const idsFaltantes = pessoaIdsVindosDeAcesso.filter((id) => !idsConhecidos.has(id));
+
+      if (idsFaltantes.length > 0) {
+        const { data: pessoasAcessoData, error: pessoasAcessoError } = await supabaseAdmin
+          .from('pessoas')
+          .select(`
+            id, nome, cargo, email, telefone, ativo, tem_acesso, usuario_id, foto_url, observacoes,
+            criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
+            endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
+            nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
+            profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
+            batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
+            cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+            usuarios_tags(
+              tag_id,
+              nivel_habilidade,
+              tags_funcoes(id, nome, categoria, cor, icone)
+            )
+          `)
+          .in('id', idsFaltantes);
+
+        if (pessoasAcessoError) throw pessoasAcessoError;
+
+        pessoasPorAcesso = (pessoasAcessoData || []).map((pessoa: any) => ({
+          ...pessoa,
+          tags: pessoa.usuarios_tags
+            ?.map((ut: any) => ut.tags_funcoes)
+            .filter(Boolean) || []
+        }));
+      }
+    }
+
+    const pessoasFormatadas = [...pessoasComVinculo, ...pessoasLegacy, ...pessoasPorAcesso].sort((a, b) =>
+      a.nome.localeCompare(b.nome, 'pt-BR')
+    );
 
     return NextResponse.json({
       success: true,
@@ -115,6 +259,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const permissionContext = await getUserPermissionContext(body.igreja_id || null, request);
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers) {
+      return NextResponse.json({ error: 'Sem permissão para criar pessoas.' }, { status: 403 });
+    }
+
     const {
       nome,
       cargo,
@@ -126,7 +280,7 @@ export async function POST(request: NextRequest) {
       igreja_id: igrejaBodyId,
       ...restoDados
     } = body;
-    const igrejaId = await resolveCurrentIgrejaId(igrejaBodyId);
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaBodyId, request);
 
     // Validações
     if (!nome || !cargo) {

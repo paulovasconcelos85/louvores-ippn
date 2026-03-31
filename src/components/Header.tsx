@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Building2, 
@@ -9,10 +9,13 @@ import {
   Settings, 
   LogOut, 
   ArrowLeft,
-  ChevronDown
+  ChevronDown,
+  Church
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import type { IgrejaSelecionavel } from '@/lib/church-utils';
+import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 
 export default function Header() {
   const router = useRouter();
@@ -20,11 +23,73 @@ export default function Header() {
   const { user, loading, signOut } = useAuth();
   const { usuarioPermitido, permissoes } = usePermissions();
   const [menuAberto, setMenuAberto] = useState(false);
+  const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
+  const [igrejaAtualId, setIgrejaAtualId] = useState<string>('');
+
+  useEffect(() => {
+    if (!user?.id) {
+      setIgrejas([]);
+      setIgrejaAtualId('');
+      return;
+    }
+
+    let ativo = true;
+
+    const carregarIgrejas = async () => {
+      try {
+        const response = await fetch('/api/igrejas/selecionaveis');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar igrejas.');
+        }
+
+        if (!ativo) return;
+
+        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
+        const igrejaUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('igreja_id')
+            : null;
+        const igrejaPreferida =
+          typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
+        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
+          Boolean
+        ) as string[];
+        const igrejaResolvida =
+          prioridade.find((id) => lista.some((igreja) => igreja.id === id)) || '';
+
+        setIgrejas(lista);
+        setIgrejaAtualId(igrejaResolvida);
+      } catch (error) {
+        console.error('Erro ao carregar igrejas do header:', error);
+        if (ativo) {
+          setIgrejas([]);
+          setIgrejaAtualId('');
+        }
+      }
+    };
+
+    carregarIgrejas();
+
+    return () => {
+      ativo = false;
+    };
+  }, [user?.id]);
+
+  const handleTrocarIgreja = (novoId: string) => {
+    setIgrejaAtualId(novoId);
+    localStorage.setItem(CHURCH_STORAGE_KEY, novoId);
+    setMenuAberto(false);
+    window.location.reload();
+  };
 
   if (loading || !user) return null;
 
   const inicial = (usuarioPermitido?.nome || user.email || 'U')[0].toUpperCase();
   const mostrarVoltar = pathname !== '/admin';
+  const mostrarSeletorIgreja = igrejas.length > 1;
+  const igrejaAtual = igrejas.find((igreja) => igreja.id === igrejaAtualId) || null;
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-white border-b shadow-sm z-50">
@@ -89,9 +154,36 @@ export default function Header() {
                       {usuarioPermitido?.nome || user.email}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+                    {igrejaAtual && (
+                      <p className="text-xs text-emerald-700 mt-2 font-medium">
+                        Igreja ativa: {igrejaAtual.sigla || igrejaAtual.nome}
+                      </p>
+                    )}
                   </div>
 
                   <div className="py-1">
+                    {mostrarSeletorIgreja && (
+                      <div className="px-4 py-3 border-b bg-white">
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          Igreja ativa
+                        </label>
+                        <div className="mt-2 relative">
+                          <Church className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <select
+                            value={igrejaAtualId}
+                            onChange={(e) => handleTrocarIgreja(e.target.value)}
+                            className="w-full appearance-none rounded-lg border border-slate-300 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                          >
+                            {igrejas.map((igreja) => (
+                              <option key={igreja.id} value={igreja.id}>
+                                {igreja.sigla ? `${igreja.sigla} • ${igreja.nome}` : igreja.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={() => {
                         setMenuAberto(false);

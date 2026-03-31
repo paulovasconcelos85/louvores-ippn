@@ -43,6 +43,11 @@ interface Tag {
 
 type SortField = 'nome' | 'email' | 'telefone' | 'cargo' | 'ativo' | 'tem_acesso';
 type SortDirection = 'asc' | 'desc';
+type VisaoGestao = 'pessoas' | 'acessos';
+
+const TAGS_RESTRITAS = ['Pastor', 'Presbítero', 'Pregação', 'Diácono'];
+const CARGOS_GESTAO_LOCAL: CargoTipo[] = ['membro', 'diacono', 'musico', 'staff', 'seminarista'];
+const CARGOS_GESTAO_GLOBAL: CargoTipo[] = ['membro', 'diacono', 'musico', 'staff', 'seminarista', 'presbitero', 'pastor', 'admin'];
 
 export default function GerenciarPessoas() {
   const router = useRouter();
@@ -64,6 +69,7 @@ export default function GerenciarPessoas() {
 
   const [sortField, setSortField] = useState<SortField>('nome');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [visaoGestao, setVisaoGestao] = useState<VisaoGestao>('pessoas');
   const [filtroTexto, setFiltroTexto] = useState('');
   const [mostrarInativos, setMostrarInativos] = useState(true);
   const [filtroAcesso, setFiltroAcesso] = useState<'todos' | 'com_acesso' | 'sem_acesso'>('todos');
@@ -86,6 +92,12 @@ export default function GerenciarPessoas() {
   const [loadingTags, setLoadingTags] = useState(false);
 
   const totalLoading = authLoading || permLoading;
+  const ehGestaoGlobal = permissoes.isSuperAdmin || usuarioPermitido?.cargo === 'admin';
+  const ehGestaoLocal = permissoes.podeGerenciarUsuarios && !ehGestaoGlobal;
+  const cargosDisponiveis = ehGestaoGlobal ? CARGOS_GESTAO_GLOBAL : CARGOS_GESTAO_LOCAL;
+  const todasTagsDisponiveis = ehGestaoGlobal
+    ? todasTags
+    : todasTags.filter((tag) => !TAGS_RESTRITAS.includes(tag.nome));
 
   useEffect(() => {
     if (!totalLoading && !user) {
@@ -102,7 +114,7 @@ export default function GerenciarPessoas() {
       listarPessoas();
       carregarTodasTags();
     }
-  }, [user, permissoes.podeGerenciarUsuarios]);
+  }, [user, permissoes.podeGerenciarUsuarios, listarPessoas]);
 
   const carregarTodasTags = async () => {
     try {
@@ -188,6 +200,11 @@ export default function GerenciarPessoas() {
 
   const toggleTag = async (tagId: string) => {
     if (!pessoaEditando) return;
+    const tagSelecionada = todasTags.find((tag) => tag.id === tagId);
+    if (!ehGestaoGlobal && tagSelecionada && TAGS_RESTRITAS.includes(tagSelecionada.nome)) {
+      setMensagem('❌ Apenas gestão global pode atribuir tags de liderança e pregação.');
+      return;
+    }
     const jaTemTag = tagsUsuario.includes(tagId);
     try {
       if (jaTemTag) {
@@ -209,7 +226,7 @@ export default function GerenciarPessoas() {
         if (error) throw error;
         setTagsUsuario(prev => [...prev, tagId]);
       }
-    } catch (error: any) {
+    } catch {
       setMensagem(`❌ Erro ao alterar habilidade`);
     }
   };
@@ -219,6 +236,10 @@ export default function GerenciarPessoas() {
     setSalvando(true);
     setMensagem('');
     try {
+      if (!ehGestaoGlobal && !apenasMembro && !cargosDisponiveis.includes(novoCargo)) {
+        throw new Error('A gestão local não pode atribuir este cargo.');
+      }
+
       const resultado = await criarPessoa({
         nome: novoNome.trim(),
         cargo: apenasMembro ? 'membro' : novoCargo, // Define "membro" automaticamente
@@ -312,7 +333,11 @@ export default function GerenciarPessoas() {
     setEditandoNome(pessoa.nome);
     setEditandoEmail(pessoa.email || '');
     setEditandoTelefone(pessoa.telefone ? formatPhoneNumber(pessoa.telefone) : '');
-    setEditandoCargo(pessoa.cargo);
+    setEditandoCargo(
+      !ehGestaoGlobal && !cargosDisponiveis.includes(pessoa.cargo)
+        ? 'membro'
+        : pessoa.cargo
+    );
     carregarTagsUsuario(pessoa.id);
   };
 
@@ -330,9 +355,13 @@ export default function GerenciarPessoas() {
     if (!pessoaEditando) return;
     setSalvando(true);
     try {
+      if (!ehGestaoGlobal && !cargosDisponiveis.includes(editandoCargo)) {
+        throw new Error('A gestão local não pode atribuir este cargo.');
+      }
+
       const resultado = await atualizarPessoa(pessoaEditando.id, {
         nome: editandoNome.trim(),
-        email: editandoEmail ? editandoEmail.toLowerCase().trim() : undefined,
+        email: ehGestaoGlobal && editandoEmail ? editandoEmail.toLowerCase().trim() : undefined,
         telefone: editandoTelefone ? unformatPhoneNumber(editandoTelefone.trim()) : undefined,
         cargo: editandoCargo
       });
@@ -365,6 +394,15 @@ export default function GerenciarPessoas() {
 
   const countComAcesso = pessoas.filter(p => p.tem_acesso).length;
   const countSemAcesso = pessoas.filter(p => !p.tem_acesso).length;
+  const pessoasBase = pessoasFiltradas.filter((pessoa) => !pessoa.tem_acesso);
+  const acessosBase = pessoasFiltradas.filter((pessoa) => pessoa.tem_acesso);
+  const listaExibida = visaoGestao === 'pessoas' ? pessoasBase : acessosBase;
+  const tituloSecao = visaoGestao === 'pessoas' ? 'Pessoas da Igreja' : 'Acessos e Permissões';
+  const descricaoSecao =
+    visaoGestao === 'pessoas'
+      ? 'Cadastros internos, membros sem login e organização da base da igreja.'
+      : 'Usuários com acesso ao sistema, perfis, cargos e habilitações.';
+  const badgeSecao = visaoGestao === 'pessoas' ? pessoasBase.length : acessosBase.length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -400,8 +438,25 @@ export default function GerenciarPessoas() {
                   {getCargoLabel(usuarioPermitido.cargo)}
                 </span>
               )}
+              <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
+                ehGestaoGlobal ? 'bg-slate-900 text-white' : 'bg-amber-100 text-amber-900'
+              }`}>
+                {ehGestaoGlobal ? 'Gestão global' : 'Gestão local da igreja'}
+              </span>
             </div>
+            <p className="mt-3 text-sm text-emerald-900">
+              {ehGestaoGlobal
+                ? 'Você pode gerenciar acessos, cargos e tags sensíveis conforme o contexto da igreja selecionada.'
+                : 'Você pode cuidar do cadastro e dos acessos da igreja ativa, mas cargos administrativos e tags sensíveis continuam centralizados.'}
+            </p>
           </div>
+
+          {ehGestaoLocal && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+              <p className="font-semibold mb-1">Escopo da gestão local</p>
+              <p>Pastores, presbíteros e secretaria ajudam no cadastro e na liberação de acesso da igreja ativa. Promoções administrativas e tags de liderança continuam reservadas à gestão global.</p>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -428,6 +483,27 @@ export default function GerenciarPessoas() {
             </div>
           </div>
 
+          <div className="bg-white rounded-xl border border-slate-200 p-2 inline-flex gap-2 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setVisaoGestao('pessoas')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                visaoGestao === 'pessoas' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Pessoas da igreja
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisaoGestao('acessos')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                visaoGestao === 'acessos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Acessos e permissões
+            </button>
+          </div>
+
           {/* Mensagem */}
           {mensagem && (
             <div className={`p-4 rounded-lg flex items-center justify-between ${
@@ -448,7 +524,7 @@ export default function GerenciarPessoas() {
               className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center gap-2"
             >
               {mostrarFormulario ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-              {mostrarFormulario ? 'Cancelar' : 'Adicionar Pessoa'}
+              {mostrarFormulario ? 'Cancelar' : visaoGestao === 'pessoas' ? 'Adicionar Pessoa' : 'Adicionar Acesso'}
             </button>
           </div>
 
@@ -457,7 +533,7 @@ export default function GerenciarPessoas() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-top-4 duration-200">
               <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-700" />
-                Nova Pessoa
+                {visaoGestao === 'pessoas' ? 'Nova Pessoa da Igreja' : 'Novo Usuário / Acesso'}
               </h3>
               <form onSubmit={adicionarPessoa} className="space-y-4">
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
@@ -470,7 +546,7 @@ export default function GerenciarPessoas() {
                     />
                     <div>
                       <p className="font-semibold text-emerald-900">Cadastrar apenas como Membro</p>
-                      <p className="text-sm text-emerald-700">Apenas registro na base de dados (sem login no sistema)</p>
+                      <p className="text-sm text-emerald-700">Apenas registro na base de dados, sem login no sistema.</p>
                     </div>
                   </label>
                 </div>
@@ -534,12 +610,11 @@ export default function GerenciarPessoas() {
                           onChange={(e) => setNovoCargo(e.target.value as CargoTipo)} 
                           className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 outline-none appearance-none"
                         >
-                          <option value="musico">Músico/Cantor</option>
-                          <option value="seminarista">Seminarista</option>
-                          <option value="presbitero">Presbítero</option>
-                          <option value="staff">Staff/Equipe</option>
-                          <option value="pastor">Pastor</option>
-                          <option value="admin">Administrador</option>
+                          {cargosDisponiveis.map((cargo) => (
+                            <option key={cargo} value={cargo}>
+                              {getCargoLabel(cargo)}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -561,22 +636,23 @@ export default function GerenciarPessoas() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Pessoas Cadastradas
+                {visaoGestao === 'pessoas' ? <Users className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                {tituloSecao}
               </h3>
               <span className="text-sm bg-white/20 text-white px-3 py-1 rounded-full font-medium">
-                {pessoasFiltradas.length} pessoas
+                {badgeSecao} itens
               </span>
             </div>
 
             <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4">{descricaoSecao}</p>
               {/* Filtros */}
               <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Buscar por nome, email, cargo ou telefone..."
+                    placeholder={visaoGestao === 'pessoas' ? 'Buscar por nome, cargo ou telefone...' : 'Buscar por nome, email, cargo ou telefone...'}
                     value={filtroTexto}
                     onChange={(e) => setFiltroTexto(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -589,9 +665,9 @@ export default function GerenciarPessoas() {
                     onChange={(e) => setFiltroAcesso(e.target.value as any)}
                     className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
-                    <option value="todos">Todos os Acessos</option>
+                    <option value="todos">Todos</option>
                     <option value="com_acesso">Com Acesso</option>
-                    <option value="sem_acesso">Membros (Sem Acesso)</option>
+                    <option value="sem_acesso">Sem Acesso</option>
                   </select>
 
                   <label className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer">
@@ -611,10 +687,10 @@ export default function GerenciarPessoas() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700 mx-auto"></div>
                   <p className="mt-2 text-slate-500 text-sm">Carregando...</p>
                 </div>
-              ) : pessoasFiltradas.length === 0 ? (
+              ) : listaExibida.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>Nenhuma pessoa encontrada</p>
+                  <p>{visaoGestao === 'pessoas' ? 'Nenhuma pessoa sem acesso encontrada' : 'Nenhum acesso encontrado'}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -636,7 +712,7 @@ export default function GerenciarPessoas() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {pessoasFiltradas.map((pessoa) => (
+                      {listaExibida.map((pessoa) => (
                         <tr key={pessoa.id} className={`hover:bg-slate-50/50 transition-colors ${!pessoa.ativo ? 'opacity-60 bg-slate-50/30' : ''}`}>
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-3">
@@ -660,7 +736,7 @@ export default function GerenciarPessoas() {
                           <td className="px-4 py-4 text-center hidden md:table-cell">
                             {pessoa.tem_acesso ? 
                               <span className="text-emerald-600 text-xs font-bold uppercase tracking-wider">Acesso OK</span> : 
-                              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Membro</span>
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Cadastro local</span>
                             }
                           </td>
                           <td className="px-4 py-4 text-center hidden md:table-cell">
@@ -779,23 +855,32 @@ export default function GerenciarPessoas() {
                         type="email" 
                         value={editandoEmail} 
                         onChange={(e) => setEditandoEmail(e.target.value)} 
-                        disabled={pessoaEditando.tem_acesso} 
+                        disabled={pessoaEditando.tem_acesso || !ehGestaoGlobal} 
                         className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50" 
                       />
+                      {!ehGestaoGlobal && (
+                        <p className="mt-1 text-xs text-slate-500">A gestão local não altera e-mail.</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">Cargo / Função</label>
-                      <select value={editandoCargo} onChange={(e) => setEditandoCargo(e.target.value as CargoTipo)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none">
-                        <option value="membro">👤 Membro</option>
-                        <option value="musico">🎵 Músico/Cantor</option>
-                        <option value="seminarista">📚 Seminarista</option>
-                        <option value="presbitero">👔 Presbítero</option>
-                        <option value="staff">🛠️ Staff/Equipe</option>
-                        <option value="pastor">📖 Pastor</option>
-                        <option value="admin">🔐 Administrador</option>
+                      <select
+                        value={editandoCargo}
+                        onChange={(e) => setEditandoCargo(e.target.value as CargoTipo)}
+                        disabled={!ehGestaoGlobal && !cargosDisponiveis.includes(pessoaEditando.cargo)}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
+                      >
+                        {cargosDisponiveis.map((cargo) => (
+                          <option key={cargo} value={cargo}>
+                            {getCargoLabel(cargo)}
+                          </option>
+                        ))}
                       </select>
+                      {!ehGestaoGlobal && (
+                        <p className="mt-1 text-xs text-slate-500">Cargos pastorais e administrativos ficam sob gestão global.</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">Telefone</label>
@@ -813,7 +898,7 @@ export default function GerenciarPessoas() {
                   </label>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {todasTags.map(tag => (
+                    {todasTagsDisponiveis.map(tag => (
                       <button
                         key={tag.id}
                         type="button"
@@ -829,6 +914,9 @@ export default function GerenciarPessoas() {
                       </button>
                     ))}
                   </div>
+                  {!ehGestaoGlobal && (
+                    <p className="text-xs text-slate-500">Tags de liderança e pregação ficam ocultas para a gestão local.</p>
+                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-slate-100">

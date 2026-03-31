@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { resolveCurrentIgrejaId } from '@/lib/server-church';
+import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,8 +19,22 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const igrejaId = await resolveCurrentIgrejaId(
-      _request.nextUrl.searchParams.get('igreja_id')
+    const permissionContext = await getUserPermissionContext(
+      _request.nextUrl.searchParams.get('igreja_id'),
+      _request
+    );
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers) {
+      return NextResponse.json({ error: 'Sem permissão para liberar acesso.' }, { status: 403 });
+    }
+
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
+      _request.nextUrl.searchParams.get('igreja_id'),
+      _request
     );
 
     const { data: pessoa, error: pessoaError } = await supabaseAdmin

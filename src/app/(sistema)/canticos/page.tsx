@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { usePermissions } from '@/hooks/usePermissions';
 import { 
   ArrowLeft, 
   Plus, 
@@ -76,6 +77,7 @@ const SpotifyIcon = ({ size = 18 }: { size?: number }) => (
 
 export default function CanticosPage() {
   const router = useRouter();
+  const { loading: permLoading, permissoes } = usePermissions();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [historico, setHistorico] = useState<Map<string, string[]>>(new Map());
@@ -116,6 +118,7 @@ export default function CanticosPage() {
 
   const [avisoSimilaridade, setAvisoSimilaridade] = useState<string[]>([]);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const totalLoading = permLoading;
 
   const textoParaSlides = (texto: string): HolyricsParagraph[] => {
     if (!texto.trim()) return [];
@@ -401,7 +404,7 @@ export default function CanticosPage() {
         } else {
           alert('❌ Arquivo JSON não está no formato Holyrics.');
         }
-      } catch (error) {
+      } catch {
         alert('❌ Erro ao ler arquivo JSON.');
       }
     } else {
@@ -414,9 +417,16 @@ export default function CanticosPage() {
   };
 
   useEffect(() => {
+    if (!permLoading && !permissoes.podeGerenciarCanticos) {
+      router.push('/admin');
+    }
+  }, [permLoading, permissoes.podeGerenciarCanticos, router]);
+
+  useEffect(() => {
+    if (permLoading || !permissoes.podeGerenciarCanticos) return;
     fetchCanticos();
     fetchHistoricoCanticos();
-  }, [fetchCanticos, fetchHistoricoCanticos]);
+  }, [permLoading, permissoes.podeGerenciarCanticos, fetchCanticos, fetchHistoricoCanticos]);
 
   useEffect(() => {
     if (criandoNovo && form.nome.length > 2) {
@@ -428,6 +438,17 @@ export default function CanticosPage() {
       setAvisoSimilaridade([]);
     }
   }, [form.nome, criandoNovo, canticos, calcularSimilaridade]);
+
+  if (totalLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-slate-500 text-base">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   const toggleExpandir = (id: string) => {
     if (editando) return;

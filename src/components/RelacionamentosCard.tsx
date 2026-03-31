@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { Users, Plus, Trash2, Search } from 'lucide-react';
 
 type TipoRelacionamento =
@@ -125,7 +126,9 @@ export default function RelacionamentosCard({
       if (igrejaId) params.set('igreja_id', igrejaId);
       params.set('ativo', 'true');
 
-      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const pessoasPayload = await pessoasResponse.json();
 
       if (!pessoasResponse.ok) {
@@ -184,7 +187,9 @@ export default function RelacionamentosCard({
         params.set('ativo', 'true');
         params.set('busca', busca);
 
-        const response = await fetch(`/api/pessoas?${params.toString()}`);
+        const response = await fetch(`/api/pessoas?${params.toString()}`, {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const payload = await response.json();
 
         if (!response.ok) {

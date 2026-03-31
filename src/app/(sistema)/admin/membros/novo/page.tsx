@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import {
   ArrowLeft, User, Phone, Mail, MapPin, Calendar,
   Heart, Church, AlertCircle, Check, ChevronRight,
@@ -181,7 +182,7 @@ export default function NovoMembroPage() {
 
       const response = await fetch('/api/pessoas', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
         nome: nome.trim(),
         cargo,

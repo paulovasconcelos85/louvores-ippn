@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import type { IgrejaSelecionavel } from '@/lib/church-utils';
+import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
@@ -17,6 +19,7 @@ export default function LoginPage() {
   const [modo, setModo] = useState<'entrar' | 'primeiro_acesso'>('entrar');
   const [sincronizandoAcesso, setSincronizandoAcesso] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
+  const [igrejaAtual, setIgrejaAtual] = useState<IgrejaSelecionavel | null>(null);
 
   const finalizarAcesso = async () => {
     const {
@@ -53,6 +56,55 @@ export default function LoginPage() {
     if (erroUrl) {
       setError(erroUrl);
     }
+  }, []);
+
+  useEffect(() => {
+    let ativo = true;
+
+    const carregarIgrejaAtual = async () => {
+      try {
+        const response = await fetch('/api/igrejas/selecionaveis');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar igrejas.');
+        }
+
+        if (!ativo) return;
+
+        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
+        const igrejaUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('igreja_id')
+            : null;
+        const igrejaPreferida =
+          typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
+        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
+          Boolean
+        ) as string[];
+        const igrejaResolvida =
+          prioridade
+            .map((id) => lista.find((igreja) => igreja.id === id) || null)
+            .find(Boolean) || null;
+
+        setIgrejaAtual(igrejaResolvida);
+
+        if (igrejaResolvida && typeof window !== 'undefined') {
+          localStorage.setItem(CHURCH_STORAGE_KEY, igrejaResolvida.id);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar identidade da igreja:', err);
+        if (ativo) {
+          setIgrejaAtual(null);
+        }
+      }
+    };
+
+    carregarIgrejaAtual();
+
+    return () => {
+      ativo = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -187,6 +239,9 @@ export default function LoginPage() {
     );
   }
 
+  const tituloIgreja = igrejaAtual?.sigla || igrejaAtual?.nome || 'OIKOS';
+  const subtituloIgreja = igrejaAtual?.nome || 'OIKOS Hub';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
       {/* Background decorativo */}
@@ -199,11 +254,11 @@ export default function LoginPage() {
         {/* Logo/Nome da Igreja */}
         <div className="text-center mb-8">
           <div className="inline-block">
-            <h1 className="text-4xl font-bold text-white mb-2">IPPN</h1>
+            <h1 className="text-4xl font-bold text-white mb-2">{tituloIgreja}</h1>
             <div className="h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
           </div>
           <p className="text-emerald-100 mt-3 text-sm">
-            OIKOS Hub
+            {subtituloIgreja}
           </p>
         </div>
 
@@ -391,7 +446,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-emerald-100 text-sm mt-6">
-          Igreja Presbiteriana Ponta Negra
+          OIKOS Hub
         </p>
       </div>
     </div>

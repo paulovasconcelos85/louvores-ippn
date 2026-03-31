@@ -20,6 +20,7 @@ interface LegacyLouvorItemRow {
   tom: string | null;
   cantico_id: string | null;
   conteudo_publico: string | null;
+  descricao: string | null;
 }
 
 interface LegacyCultoRow {
@@ -27,6 +28,8 @@ interface LegacyCultoRow {
   Dia: string;
   imagem_url: string | null;
   igreja_id: string | null;
+  palavra_pastoral: string | null;
+  palavra_pastoral_autor: string | null;
 }
 
 function isUuid(value: string) {
@@ -45,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const { data: cultosRaw, error: cultosError } = await supabaseAdmin
       .from('Louvores IPPN')
-      .select('"Culto nr.", Dia, imagem_url, igreja_id')
+      .select('"Culto nr.", Dia, imagem_url, igreja_id, palavra_pastoral, palavra_pastoral_autor')
       .eq('igreja_id', igrejaId)
       .order('Dia', { ascending: false })
       .limit(7);
@@ -61,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     const { data: itensRaw, error: itensError } = await supabaseAdmin
       .from('louvor_itens')
-      .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico')
+      .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
       .in('culto_id', cultoIds)
       .order('culto_id', { ascending: false })
       .order('ordem', { ascending: true });
@@ -103,20 +106,41 @@ export async function GET(request: NextRequest) {
           ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
           : '';
         const conteudoBase = item.conteudo_publico?.trim() || '';
+        const descricao = item.descricao?.trim() || '';
 
         return {
           id: item.id,
-          conteudo: `${tituloItem}${conteudoBase ? `\n${conteudoBase}` : ''}${cantico}`,
+          conteudo: `${tituloItem}${
+            conteudoBase ? `\n${conteudoBase}` : ''
+          }${
+            descricao ? `\n${descricao}` : ''
+          }${cantico}`,
           ordem: item.ordem ?? index,
         };
       });
+
+      const itensComPastoral =
+        culto.palavra_pastoral?.trim()
+          ? [
+              {
+                id: `legacy-pastoral-${culto['Culto nr.']}`,
+                conteudo: `Palavra Pastoral\n${culto.palavra_pastoral.trim()}${
+                  culto.palavra_pastoral_autor?.trim()
+                    ? `\n\n${culto.palavra_pastoral_autor.trim()}`
+                    : ''
+                }`,
+                ordem: -1,
+              },
+              ...itensCulto,
+            ]
+          : itensCulto;
 
       return {
         id: `legacy-${culto['Culto nr.']}`,
         cultoId: culto['Culto nr.'],
         data: culto.Dia,
         imagemUrl: culto.imagem_url,
-        itens: itensCulto,
+        itens: itensComPastoral,
       };
     });
 

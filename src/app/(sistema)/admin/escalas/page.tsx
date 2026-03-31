@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import {
   Calendar,
   Clock,
@@ -107,6 +108,10 @@ export default function EscalasPage() {
 
   const encontrarProximoDomingoDisponivel = async (): Promise<string> => {
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) {
+        throw new Error('Nenhuma igreja selecionada');
+      }
       const hoje = new Date();
       hoje.setHours(12, 0, 0, 0);
       
@@ -125,7 +130,8 @@ export default function EscalasPage() {
         .from('escalas')
         .select('data')
         .in('data', datasParaVerificar)
-        .eq('tipo_culto', 'dominical_manha');
+        .eq('tipo_culto', 'dominical_manha')
+        .eq('igreja_id', igrejaId);
 
       if (error) throw error;
 
@@ -168,6 +174,13 @@ export default function EscalasPage() {
   const carregarEscalas = async () => {
     try {
       setLoading(true);
+      const igrejaId = getStoredChurchId();
+
+      if (!igrejaId) {
+        setEscalas([]);
+        setMensagem('Selecione uma igreja para visualizar as escalas');
+        return;
+      }
       
       let query = supabase
         .from('escalas')
@@ -188,6 +201,7 @@ export default function EscalasPage() {
             )
           )
         `)
+        .eq('igreja_id', igrejaId)
         .order('data', { ascending: true })
         .order('hora_inicio', { ascending: true })
         .order('ordem', { foreignTable: 'escalas_funcoes', ascending: true });
@@ -237,10 +251,15 @@ export default function EscalasPage() {
     setDebugInfo(`Buscando cultos para: ${data}`);
     
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) {
+        throw new Error('Nenhuma igreja selecionada');
+      }
       const { data: cultos, error } = await supabase
         .from('Louvores IPPN')
         .select('*')
-        .eq('Dia', data);
+        .eq('Dia', data)
+        .eq('igreja_id', igrejaId);
 
       if (error) {
         console.error('Erro:', error);
@@ -276,9 +295,13 @@ export default function EscalasPage() {
 
   const criarCultoAutomaticamente = async (dataEscala: string): Promise<number | null> => {
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) {
+        throw new Error('Nenhuma igreja selecionada');
+      }
       const { data: novoCulto, error: errorCulto } = await supabase
         .from('Louvores IPPN')
-        .insert({ Dia: dataEscala })
+        .insert({ Dia: dataEscala, igreja_id: igrejaId })
         .select()
         .single();
 
@@ -374,13 +397,20 @@ export default function EscalasPage() {
     setMensagem('');
 
     try {
+      const igrejaId = getStoredChurchId();
+
+      if (!igrejaId) {
+        throw new Error('Selecione uma igreja antes de salvar a escala');
+      }
+
       let cultoIdFinal = cultoSelecionado;
 
       if (criarNovoCulto && !cultoSelecionado) {
         const { data: verificacao } = await supabase
           .from('Louvores IPPN')
           .select('*')
-          .eq('Dia', data);
+          .eq('Dia', data)
+          .eq('igreja_id', igrejaId);
 
         if (verificacao && verificacao.length > 0) {
           cultoIdFinal = verificacao[0]['Culto nr.'];
@@ -403,6 +433,7 @@ export default function EscalasPage() {
         observacoes: observacoes || null,
         status,
         culto_id: cultoIdFinal,
+        igreja_id: igrejaId,
         criado_por: user?.id,
         atualizado_em: new Date().toISOString()
       };
@@ -411,7 +442,8 @@ export default function EscalasPage() {
         const { error } = await supabase
           .from('escalas')
           .update(dados)
-          .eq('id', escalaEditando.id);
+          .eq('id', escalaEditando.id)
+          .eq('igreja_id', igrejaId);
 
         if (error) throw error;
         setMensagem(cultoIdFinal 
@@ -444,10 +476,12 @@ export default function EscalasPage() {
     }
 
     try {
+      const igrejaId = getStoredChurchId();
       const { error } = await supabase
         .from('escalas')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('igreja_id', igrejaId);
 
       if (error) throw error;
       setMensagem('Escala deletada com sucesso');

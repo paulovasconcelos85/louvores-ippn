@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { Users, Phone, ChevronDown, ChevronUp, Cake, Heart } from 'lucide-react';
 
@@ -74,7 +75,9 @@ export default function FamiliaView() {
       if (igrejaId) params.set('igreja_id', igrejaId);
       params.set('ativo', 'true');
 
-      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const pessoasResponse = await fetch(`/api/pessoas?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const pessoasPayload = await pessoasResponse.json();
 
       if (!pessoasResponse.ok) {

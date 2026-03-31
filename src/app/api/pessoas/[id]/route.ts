@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { resolveCurrentIgrejaId } from '@/lib/server-church';
+import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,8 +22,22 @@ export async function GET(
 ) {
   try {
     const { id } = await params; // Corrigido: Adicionado await
-    const igrejaId = await resolveCurrentIgrejaId(
-      request.nextUrl.searchParams.get('igreja_id')
+    const permissionContext = await getUserPermissionContext(
+      request.nextUrl.searchParams.get('igreja_id'),
+      request
+    );
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
+      return NextResponse.json({ error: 'Sem permissão para consultar pessoas.' }, { status: 403 });
+    }
+
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
+      request.nextUrl.searchParams.get('igreja_id'),
+      request
     );
 
     if (!igrejaId) {
@@ -33,7 +47,7 @@ export async function GET(
       );
     }
 
-    const { data: pessoa, error } = await supabaseAdmin
+    const { data: pessoaComVinculo, error } = await supabaseAdmin
       .from('pessoas')
       .select(`
         *,
@@ -53,7 +67,28 @@ export async function GET(
       .eq('pessoas_igrejas.igreja_id', igrejaId)
       .single();
 
-    if (error) throw error;
+    let pessoa = pessoaComVinculo;
+
+    if (error && error.code !== 'PGRST116') throw error;
+
+    if (!pessoa) {
+      const { data: pessoaLegacy, error: legacyError } = await supabaseAdmin
+        .from('pessoas')
+        .select(`
+          *,
+          usuarios_tags(
+            tag_id,
+            nivel_habilidade,
+            tags_funcoes(id, nome, categoria, cor, icone)
+          )
+        `)
+        .eq('id', id)
+        .eq('igreja_id', igrejaId)
+        .single();
+
+      if (legacyError && legacyError.code !== 'PGRST116') throw legacyError;
+      pessoa = pessoaLegacy;
+    }
 
     if (!pessoa) {
       return NextResponse.json(
@@ -98,7 +133,23 @@ export async function PATCH(
   try {
     const { id } = await params; // Corrigido: Adicionado await
     const body = await request.json();
-    const igrejaId = await resolveCurrentIgrejaId(body.igreja_id || request.nextUrl.searchParams.get('igreja_id'));
+    const permissionContext = await getUserPermissionContext(
+      body.igreja_id || request.nextUrl.searchParams.get('igreja_id'),
+      request
+    );
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
+      return NextResponse.json({ error: 'Sem permissão para atualizar pessoas.' }, { status: 403 });
+    }
+
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
+      body.igreja_id || request.nextUrl.searchParams.get('igreja_id'),
+      request
+    );
     
     const {
       nome,
@@ -110,6 +161,16 @@ export async function PATCH(
       status_membro,
       ...restoDados
     } = body;
+
+    const alterandoCamposSensíveis =
+      cargo !== undefined || email !== undefined || body.tem_acesso !== undefined;
+
+    if (alterandoCamposSensíveis && !permissionContext.canManageUsers) {
+      return NextResponse.json(
+        { error: 'Sem permissão para alterar cargo, e-mail ou acesso ao sistema.' },
+        { status: 403 }
+      );
+    }
 
     if (!igrejaId) {
       return NextResponse.json(
@@ -289,8 +350,22 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params; // Corrigido: Adicionado await
-    const igrejaId = await resolveCurrentIgrejaId(
-      request.nextUrl.searchParams.get('igreja_id')
+    const permissionContext = await getUserPermissionContext(
+      request.nextUrl.searchParams.get('igreja_id'),
+      request
+    );
+
+    if (!permissionContext?.user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
+    if (!permissionContext.canManageUsers) {
+      return NextResponse.json({ error: 'Sem permissão para remover pessoas.' }, { status: 403 });
+    }
+
+    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
+      request.nextUrl.searchParams.get('igreja_id'),
+      request
     );
 
     // Verificar se pessoa existe

@@ -10,7 +10,6 @@ import {
   CalendarDays,
   BarChart3,
   CheckCircle2,
-  Clock,
   AlertCircle,
   MapPin,
   Star,
@@ -21,6 +20,8 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCargoLabel, getCargoCor } from '@/lib/permissions';
+import type { IgrejaSelecionavel } from '@/lib/church-utils';
+import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -35,10 +36,11 @@ interface MinhaProximaEscala {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { usuarioPermitido, loading: permLoading, permissoes } = usePermissions();
   
   const [proximaEscala, setProximaEscala] = useState<MinhaProximaEscala | null>(null);
+  const [igrejaAtual, setIgrejaAtual] = useState<IgrejaSelecionavel | null>(null);
 
   const loading = authLoading || permLoading;
 
@@ -100,13 +102,65 @@ export default function AdminPage() {
     if (!loading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+    if (!loading && user && !permissoes.podeAcessarAdmin) {
+      router.push('/');
+    }
+  }, [user, loading, permissoes.podeAcessarAdmin, router]);
 
   useEffect(() => {
     if (user) {
       buscarProximaEscala();
     }
   }, [user, buscarProximaEscala]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    const carregarIgrejaAtual = async () => {
+      try {
+        const response = await fetch('/api/igrejas/selecionaveis');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar igrejas.');
+        }
+
+        if (!ativo) return;
+
+        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
+        const igrejaUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('igreja_id')
+            : null;
+        const igrejaPreferida =
+          typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
+        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
+          Boolean
+        ) as string[];
+        const igrejaResolvida =
+          prioridade
+            .map((id) => lista.find((igreja) => igreja.id === id) || null)
+            .find(Boolean) || null;
+
+        setIgrejaAtual(igrejaResolvida);
+
+        if (igrejaResolvida && typeof window !== 'undefined') {
+          localStorage.setItem(CHURCH_STORAGE_KEY, igrejaResolvida.id);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar identidade da igreja:', error);
+        if (ativo) {
+          setIgrejaAtual(null);
+        }
+      }
+    };
+
+    carregarIgrejaAtual();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -123,8 +177,9 @@ export default function AdminPage() {
     return null;
   }
 
-  const podeAcessarMembros = permissoes.isSuperAdmin || 
-    ['admin', 'pastor', 'presbitero', 'seminarista'].includes(usuarioPermitido?.cargo || '');
+  const podeAcessarMembros = permissoes.podePastorearMembros;
+  const nomeIgreja = igrejaAtual?.nome || 'sua igreja';
+  const tituloHub = igrejaAtual?.sigla ? `OIKOS Hub • ${igrejaAtual.sigla}` : 'OIKOS Hub';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -133,8 +188,11 @@ export default function AdminPage() {
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-8 text-white mb-8">
           <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <Church className="w-8 h-8" />
-            Bem-vindo ao OIKOS Hub - IPPN!
+            Bem-vindo ao {tituloHub}
           </h2>
+          <p className="text-emerald-100 mb-4 text-sm sm:text-base">
+            Painel administrativo de {nomeIgreja}
+          </p>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 text-emerald-100">
               <UserCheck className="w-4 h-4" />
@@ -314,6 +372,7 @@ export default function AdminPage() {
             </button>
           )}
 
+          {permissoes.podeGerenciarCanticos && (
           <Link href="/canticos" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
@@ -328,7 +387,9 @@ export default function AdminPage() {
               </span>
             </div>
           </Link>
+          )}
 
+          {permissoes.podeGerenciarCultos && (
           <Link href="/cultos" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
@@ -343,6 +404,7 @@ export default function AdminPage() {
               </span>
             </div>
           </Link>
+          )}
 
           <Link href="/dashboard" className="block">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">

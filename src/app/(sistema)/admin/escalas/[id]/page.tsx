@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import {
   ArrowLeft,
@@ -150,6 +151,13 @@ export default function GerenciarEscalaPage() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      const igrejaId = getStoredChurchId();
+
+      if (!igrejaId) {
+        setEscala(null);
+        setMensagem('Selecione uma igreja para visualizar a escala');
+        return;
+      }
       
       const { data: escalaData, error: escalaError } = await supabase
         .from('escalas')
@@ -178,6 +186,7 @@ export default function GerenciarEscalaPage() {
           )
         `)
         .eq('id', escalaId)
+        .eq('igreja_id', igrejaId)
         .single();
 
       if (escalaError) throw escalaError;
@@ -194,11 +203,12 @@ export default function GerenciarEscalaPage() {
       setEscala(escalaData);
       
       const params = new URLSearchParams();
-      const igrejaId = getStoredChurchId();
       if (igrejaId) params.set('igreja_id', igrejaId);
       params.set('ativo', 'true');
 
-      const usuariosResponse = await fetch(`/api/pessoas?${params.toString()}`);
+      const usuariosResponse = await fetch(`/api/pessoas?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const usuariosPayload = await usuariosResponse.json();
 
       if (!usuariosResponse.ok) {
@@ -230,6 +240,10 @@ export default function GerenciarEscalaPage() {
     setMensagem('');
     
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) {
+        throw new Error('Nenhuma igreja selecionada');
+      }
       const { error } = await supabase
         .from('escalas')
         .update({
@@ -242,7 +256,8 @@ export default function GerenciarEscalaPage() {
           status,
           atualizado_em: new Date().toISOString()
         })
-        .eq('id', escalaId);
+        .eq('id', escalaId)
+        .eq('igreja_id', igrejaId);
 
       if (error) throw error;
       
@@ -395,6 +410,10 @@ export default function GerenciarEscalaPage() {
     setMensagem('');
 
     try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) {
+        throw new Error('Nenhuma igreja selecionada');
+      }
       await supabase.from('escalas_funcoes').delete().eq('escala_id', escalaId);
 
       const payload = escala.escalas_funcoes.map(f => ({

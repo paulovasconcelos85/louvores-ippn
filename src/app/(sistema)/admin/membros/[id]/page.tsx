@@ -8,6 +8,7 @@ import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import {
@@ -224,9 +225,7 @@ export default function MembroDetalhesPage() {
   const [conteudoNota, setConteudoNota] = useState('');
   const [notaPrivada, setNotaPrivada] = useState(false);
 
-  const podeAcessar =
-    permissoes.isSuperAdmin ||
-    ['admin', 'pastor', 'presbitero', 'seminarista'].includes(usuarioPermitido?.cargo || '');
+  const podeAcessar = permissoes.podePastorearMembros;
 
   useEffect(() => {
     if (user && podeAcessar && membroId) {
@@ -242,7 +241,9 @@ export default function MembroDetalhesPage() {
       const igrejaId = getStoredChurchId();
       if (igrejaId) params.set('igreja_id', igrejaId);
 
-      const response = await fetch(`/api/pessoas/${membroId}?${params.toString()}`);
+      const response = await fetch(`/api/pessoas/${membroId}?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -336,7 +337,7 @@ export default function MembroDetalhesPage() {
         .filter(Boolean);
       const response = await fetch(`/api/pessoas/${membroId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           nome: nome.trim(),
           foto_url: fotoUrl.trim() || null,

@@ -3,6 +3,14 @@ import { ADMIN_EMAILS } from './admin-config';
 
 export type CargoTipo = 'membro' | 'diacono' | 'presbitero' | 'pastor' | 'seminarista' | 'staff' | 'musico' | 'admin' | 'superadmin';
 
+export interface TagPermissao {
+  id: string;
+  nome: string;
+  categoria: string;
+  cor?: string | null;
+  icone?: string | null;
+}
+
 export interface UsuarioPermitido {
   id: string;
   email: string;
@@ -12,6 +20,7 @@ export interface UsuarioPermitido {
   telefone?: string | null;
   foto_url?: string | null;
   observacoes?: string | null;
+  tags?: TagPermissao[];
 }
 
 // Cargos que podem acessar o painel administrativo
@@ -54,6 +63,56 @@ export const CARGOS_GERENCIAR_CONTEUDO: CargoTipo[] = [
   'superadmin'
 ];
 
+export const CARGOS_PASTOREAR_MEMBROS: CargoTipo[] = [
+  'presbitero',
+  'pastor',
+  'seminarista',
+  'admin',
+  'superadmin'
+];
+
+const CATEGORIAS_TAGS_LOUVOR = new Set([
+  'louvor_lideranca',
+  'louvor_ministracao',
+  'louvor_instrumento',
+  'louvor_vocal',
+  'instrumento',
+]);
+
+const CATEGORIAS_TAGS_TECNICA = new Set([
+  'tecnica',
+  'tecnico_audio',
+  'tecnico_video',
+]);
+
+const CATEGORIAS_TAGS_GESTAO = new Set([
+  'secretaria',
+]);
+
+const CARGOS_EDITAR_LITURGIA_COMPLETA: CargoTipo[] = [
+  'seminarista',
+  'presbitero',
+  'pastor',
+  'admin',
+  'superadmin'
+];
+
+function normalizeCategoria(categoria?: string | null) {
+  return (categoria || '').trim().toLowerCase();
+}
+
+export function temTagLouvor(tags: TagPermissao[] = []): boolean {
+  return tags.some((tag) => CATEGORIAS_TAGS_LOUVOR.has(normalizeCategoria(tag.categoria)));
+}
+
+export function temTagTecnica(tags: TagPermissao[] = []): boolean {
+  return tags.some((tag) => CATEGORIAS_TAGS_TECNICA.has(normalizeCategoria(tag.categoria)));
+}
+
+export function temTagGestao(tags: TagPermissao[] = []): boolean {
+  return tags.some((tag) => CATEGORIAS_TAGS_GESTAO.has(normalizeCategoria(tag.categoria)));
+}
+
 /**
  * 🔐 Verifica se o email está na lista hardcoded de super-admins,
  * ou se o cargo é 'superadmin' no banco de dados.
@@ -67,9 +126,9 @@ export function isSuperAdmin(email: string | null | undefined, cargo?: CargoTipo
 /**
  * Verifica se o cargo tem permissão para acessar o admin
  */
-export function podeAcessarAdmin(cargo: CargoTipo | null): boolean {
-  if (!cargo) return false;
-  return CARGOS_ACESSO_ADMIN.includes(cargo);
+export function podeAcessarAdmin(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  if (cargo && CARGOS_ACESSO_ADMIN.includes(cargo)) return true;
+  return temTagLouvor(tags) || temTagTecnica(tags) || temTagGestao(tags);
 }
 
 /**
@@ -93,20 +152,57 @@ export function podeGerenciarUsuarios(cargo: CargoTipo | null, email?: string | 
   return CARGOS_GERENCIAR_USUARIOS.includes(cargo);
 }
 
+export function podeGerenciarUsuariosComTags(
+  cargo: CargoTipo | null,
+  tags: TagPermissao[] = [],
+  email?: string | null
+): boolean {
+  if (podeGerenciarUsuarios(cargo, email)) return true;
+  if (!cargo) return temTagGestao(tags);
+  return ['pastor', 'presbitero'].includes(cargo) || temTagGestao(tags);
+}
+
 /**
  * Verifica se o cargo pode gerenciar escalas
  */
 export function podeGerenciarEscalas(cargo: CargoTipo | null): boolean {
-  if (!cargo) return false;
-  return CARGOS_GERENCIAR_ESCALAS.includes(cargo);
+  if (cargo && CARGOS_GERENCIAR_ESCALAS.includes(cargo)) return true;
+  return false;
+}
+
+export function podeGerenciarEscalasComTags(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  return podeGerenciarEscalas(cargo) || temTagLouvor(tags);
 }
 
 /**
  * Verifica se o cargo pode gerenciar conteúdo (músicas/cultos)
  */
-export function podeGerenciarConteudo(cargo: CargoTipo | null): boolean {
+export function podeGerenciarConteudo(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  return podeGerenciarCultos(cargo, tags) || podeGerenciarCanticos(cargo, tags);
+}
+
+export function podeGerenciarCultos(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  if (cargo && CARGOS_GERENCIAR_CONTEUDO.includes(cargo)) return true;
+  return temTagLouvor(tags) || temTagTecnica(tags);
+}
+
+export function podeGerenciarCanticos(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  if (cargo && CARGOS_GERENCIAR_CONTEUDO.includes(cargo)) return true;
+  return temTagLouvor(tags);
+}
+
+export function podePastorearMembros(cargo: CargoTipo | null): boolean {
   if (!cargo) return false;
-  return CARGOS_GERENCIAR_CONTEUDO.includes(cargo);
+  return CARGOS_PASTOREAR_MEMBROS.includes(cargo);
+}
+
+export function podeEditarLiturgiaCompleta(cargo: CargoTipo | null): boolean {
+  if (!cargo) return false;
+  return CARGOS_EDITAR_LITURGIA_COMPLETA.includes(cargo);
+}
+
+export function podeEditarLouvor(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  return podeEditarLiturgiaCompleta(cargo) || temTagLouvor(tags);
 }
 
 /**

@@ -7,10 +7,11 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import FamiliaView from '@/components/FamiliaView';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
-  Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen, User
+  Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen
 } from 'lucide-react';
 
 interface Membro {
@@ -73,7 +74,7 @@ function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: s
 export default function PastorarMembrosPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { loading: permLoading, permissoes, usuarioPermitido } = usePermissions();
+  const { loading: permLoading, permissoes } = usePermissions();
 
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,8 +92,7 @@ export default function PastorarMembrosPage() {
   const [filtroProfissao, setFiltroProfissao] = useState('');
 
   const totalLoading = authLoading || permLoading;
-  const podeAcessar = permissoes.isSuperAdmin ||
-    ['admin', 'pastor', 'presbitero', 'seminarista'].includes(usuarioPermitido?.cargo || '');
+  const podeAcessar = permissoes.podePastorearMembros;
 
   useEffect(() => {
     if (!totalLoading && !user) { router.push('/login'); return; }
@@ -110,7 +110,9 @@ export default function PastorarMembrosPage() {
       const igrejaId = getStoredChurchId();
       if (igrejaId) params.set('igreja_id', igrejaId);
 
-      const response = await fetch(`/api/pessoas?${params.toString()}`);
+      const response = await fetch(`/api/pessoas?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const payload = await response.json();
 
       if (!response.ok) {

@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
-import type { UsuarioPermitido } from '@/lib/permissions';
+import type { TagPermissao, UsuarioPermitido } from '@/lib/permissions';
 import {
   podeAcessarAdmin,
-  podeGerenciarUsuarios,
-  podeGerenciarEscalas,
+  podeGerenciarUsuariosComTags,
+  podeGerenciarEscalasComTags,
   podeGerenciarConteudo,
-  isSuperAdmin
+  podeGerenciarCultos,
+  podeGerenciarCanticos,
+  podePastorearMembros,
+  podeEditarLiturgiaCompleta,
+  podeEditarLouvor,
+  isSuperAdmin,
 } from '@/lib/permissions';
 
 interface UsePermissionsReturn {
@@ -21,6 +26,11 @@ interface UsePermissionsReturn {
     podeGerenciarUsuarios: boolean;
     podeGerenciarEscalas: boolean;
     podeGerenciarConteudo: boolean;
+    podeGerenciarCultos: boolean;
+    podeGerenciarCanticos: boolean;
+    podePastorearMembros: boolean;
+    podeEditarLiturgiaCompleta: boolean;
+    podeEditarLouvor: boolean;
     isSuperAdmin: boolean;
   };
   isSuperAdmin: boolean;
@@ -33,7 +43,7 @@ export function usePermissions(): UsePermissionsReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPermissions = async () => {
+  const fetchPermissions = useCallback(async () => {
     if (!user?.id) {
       setUsuarioPermitido(null);
       setLoading(false);
@@ -44,12 +54,11 @@ export function usePermissions(): UsePermissionsReturn {
       setLoading(true);
       setError(null);
 
-      // Verificar se é super-admin (da lista hardcoded)
       const ehSuperAdminEmail = isSuperAdmin(user.email);
 
       const { data: acesso, error: acessoError } = await supabase
         .from('usuarios_acesso')
-        .select('id, email, nome, telefone, foto_url, observacoes, ativo')
+        .select('id, pessoa_id, email, nome, telefone, foto_url, observacoes, ativo')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
@@ -63,7 +72,6 @@ export function usePermissions(): UsePermissionsReturn {
         }
       }
 
-      // Buscar vínculo com a igreja — fonte de verdade para o cargo
       const { data: vinculo, error: vinculoError } = await supabase
         .from('usuarios_igrejas')
         .select('cargo, ativo, igreja_id')
@@ -81,7 +89,8 @@ export function usePermissions(): UsePermissionsReturn {
             email: user.email || '',
             nome: user.email?.split('@')[0] || 'Admin',
             cargo: 'superadmin',
-            ativo: true
+            ativo: true,
+            tags: [],
           });
           return;
         }
@@ -91,29 +100,53 @@ export function usePermissions(): UsePermissionsReturn {
         return;
       }
 
+      let tagsUsuario: TagPermissao[] = [];
+
+      if (acesso?.pessoa_id) {
+        const { data: tagsData, error: tagsError } = await supabase
+          .from('usuarios_tags')
+          .select(`
+            tag_id,
+            tags_funcoes (
+              id,
+              nome,
+              categoria,
+              cor,
+              icone
+            )
+          `)
+          .eq('pessoa_id', acesso.pessoa_id);
+
+        if (tagsError) {
+          console.error('Erro ao buscar tags do usuario:', tagsError);
+        } else {
+          tagsUsuario = (tagsData || [])
+            .map((item: any) => item.tags_funcoes)
+            .filter(Boolean) as TagPermissao[];
+        }
+      }
+
       const ehSuperAdminCargo = vinculo?.cargo === 'superadmin';
       const ehSuperAdmin = ehSuperAdminEmail || ehSuperAdminCargo;
 
-      // Sem vínculo ativo e não é super-admin
       if (!vinculo && !ehSuperAdmin) {
         setError('Você não tem permissão para acessar o sistema');
         setUsuarioPermitido(null);
         return;
       }
 
-      // Sem vínculo mas é super-admin
       if (!vinculo && ehSuperAdmin) {
         setUsuarioPermitido({
           id: user.id,
           email: user.email || '',
           nome: user.email?.split('@')[0] || 'Admin',
           cargo: 'superadmin',
-          ativo: true
+          ativo: true,
+          tags: tagsUsuario,
         });
         return;
       }
 
-      // Verificar se está ativo (exceto super-admins)
       if (acesso && !acesso.ativo && !ehSuperAdmin) {
         setError('Usuário desativado');
         setUsuarioPermitido(null);
@@ -128,9 +161,9 @@ export function usePermissions(): UsePermissionsReturn {
         ativo: vinculo!.ativo,
         telefone: acesso?.telefone,
         foto_url: acesso?.foto_url,
-        observacoes: acesso?.observacoes
+        observacoes: acesso?.observacoes,
+        tags: tagsUsuario,
       });
-
     } catch (err) {
       console.error('Erro ao buscar permissões:', err);
       setError('Erro ao verificar permissões');
@@ -138,23 +171,28 @@ export function usePermissions(): UsePermissionsReturn {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (!authLoading) {
       fetchPermissions();
     }
-  }, [user?.id, authLoading]);
+  }, [authLoading, fetchPermissions]);
+
+  const tags = usuarioPermitido?.tags || [];
+  const cargo = usuarioPermitido?.cargo || null;
 
   const permissoes = {
-    podeAcessarAdmin: podeAcessarAdmin(usuarioPermitido?.cargo || null),
-    podeGerenciarUsuarios: podeGerenciarUsuarios(
-      usuarioPermitido?.cargo || null,
-      user?.email
-    ),
-    podeGerenciarEscalas: podeGerenciarEscalas(usuarioPermitido?.cargo || null),
-    podeGerenciarConteudo: podeGerenciarConteudo(usuarioPermitido?.cargo || null),
-    isSuperAdmin: isSuperAdmin(user?.email, usuarioPermitido?.cargo)
+    podeAcessarAdmin: podeAcessarAdmin(cargo, tags),
+    podeGerenciarUsuarios: podeGerenciarUsuariosComTags(cargo, tags, user?.email),
+    podeGerenciarEscalas: podeGerenciarEscalasComTags(cargo, tags),
+    podeGerenciarConteudo: podeGerenciarConteudo(cargo, tags),
+    podeGerenciarCultos: podeGerenciarCultos(cargo, tags),
+    podeGerenciarCanticos: podeGerenciarCanticos(cargo, tags),
+    podePastorearMembros: podePastorearMembros(cargo),
+    podeEditarLiturgiaCompleta: podeEditarLiturgiaCompleta(cargo),
+    podeEditarLouvor: podeEditarLouvor(cargo, tags),
+    isSuperAdmin: isSuperAdmin(user?.email, usuarioPermitido?.cargo),
   };
 
   return {
@@ -163,6 +201,6 @@ export function usePermissions(): UsePermissionsReturn {
     error,
     permissoes,
     isSuperAdmin: isSuperAdmin(user?.email, usuarioPermitido?.cargo),
-    refetch: fetchPermissions
+    refetch: fetchPermissions,
   };
 }

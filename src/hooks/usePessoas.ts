@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { CargoTipo } from '@/lib/permissions';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 
 export interface Pessoa {
   id: string;
@@ -54,7 +55,9 @@ export function usePessoas() {
       if (filtros?.cargo) params.append('cargo', filtros.cargo);
       if (filtros?.busca) params.append('busca', filtros.busca);
 
-      const response = await fetch(`/api/pessoas?${params.toString()}`);
+      const response = await fetch(`/api/pessoas?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
       const data = await response.json();
 
       if (!response.ok) throw new Error(data.error || 'Erro ao listar pessoas');
@@ -83,7 +86,7 @@ export function usePessoas() {
     try {
       const response = await fetch('/api/pessoas', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           ...dados,
           igreja_id: getStoredChurchId(),
@@ -111,7 +114,7 @@ export function usePessoas() {
     try {
       const response = await fetch(`/api/pessoas/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           ...dados,
           igreja_id: getStoredChurchId(),
@@ -141,7 +144,8 @@ export function usePessoas() {
       appendChurchId(params);
 
       const response = await fetch(`/api/pessoas/${id}?${params.toString()}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: await buildAuthenticatedHeaders(),
       });
 
       const data = await response.json();
@@ -188,6 +192,7 @@ export function usePessoas() {
 
       const response = await fetch(`/api/pessoas/${id}/liberar-acesso?${params.toString()}`, {
         method: 'POST',
+        headers: await buildAuthenticatedHeaders(),
       });
 
       const data = await response.json();
