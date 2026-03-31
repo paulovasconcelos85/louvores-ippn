@@ -26,6 +26,11 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const getOAuthRedirectUrl = () =>
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/auth/callback`
+      : 'http://localhost:3000/auth/callback';
+
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -48,15 +53,13 @@ export function useAuth() {
   };
 
   const signInWithGoogle = async () => {
-    // Detecta automaticamente se está em dev ou prod
-    const redirectUrl = typeof window !== 'undefined' 
-      ? `${window.location.origin}/auth/callback`
-      : 'http://localhost:3000/auth/callback';
-
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: redirectUrl,
+        redirectTo: getOAuthRedirectUrl(),
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     });
     return { data, error };
@@ -67,8 +70,11 @@ export function useAuth() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,  // ← Mudou aqui!
+        redirectTo: getOAuthRedirectUrl(),
         scopes: 'email',
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     });
     return { data, error };

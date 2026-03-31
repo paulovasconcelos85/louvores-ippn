@@ -17,6 +17,44 @@ import {
   isSuperAdmin,
 } from '@/lib/permissions';
 
+async function findUsuarioAcesso(
+  authUserId: string,
+  email?: string | null
+) {
+  const byAuth = await supabase
+    .from('usuarios_acesso')
+    .select('id, pessoa_id, email, nome, telefone, foto_url, observacoes, ativo')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (byAuth.error && byAuth.error.code !== 'PGRST116') {
+    throw byAuth.error;
+  }
+
+  if (byAuth.data) {
+    return byAuth.data;
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const byEmail = await supabase
+    .from('usuarios_acesso')
+    .select('id, pessoa_id, email, nome, telefone, foto_url, observacoes, ativo')
+    .eq('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (byEmail.error && byEmail.error.code !== 'PGRST116') {
+    throw byEmail.error;
+  }
+
+  return byEmail.data || null;
+}
+
 interface UsePermissionsReturn {
   usuarioPermitido: UsuarioPermitido | null;
   loading: boolean;
@@ -56,13 +94,11 @@ export function usePermissions(): UsePermissionsReturn {
 
       const ehSuperAdminEmail = isSuperAdmin(user.email);
 
-      const { data: acesso, error: acessoError } = await supabase
-        .from('usuarios_acesso')
-        .select('id, pessoa_id, email, nome, telefone, foto_url, observacoes, ativo')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
+      let acesso = null;
 
-      if (acessoError && acessoError.code !== 'PGRST116') {
+      try {
+        acesso = await findUsuarioAcesso(user.id, user.email);
+      } catch (acessoError) {
         console.error('Erro ao buscar usuario de acesso:', acessoError);
 
         if (!ehSuperAdminEmail) {

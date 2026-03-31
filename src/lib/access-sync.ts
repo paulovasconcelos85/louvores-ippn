@@ -20,6 +20,13 @@ type PessoaAcesso = {
 type UsuarioAcesso = {
   id: string;
   igreja_id: string | null;
+  pessoa_id?: string | null;
+  email?: string | null;
+  auth_user_id?: string | null;
+  nome?: string | null;
+  cargo?: string | null;
+  ativo?: boolean | null;
+  telefone?: string | null;
 };
 
 export type SyncAccessResult =
@@ -45,6 +52,130 @@ function normalizeEmail(email?: string | null) {
   return email?.toLowerCase().trim() || null;
 }
 
+async function findExistingUsuarioAcesso(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  authUserId: string,
+  pessoaId: string,
+  email: string
+) {
+  const lookupByAuth = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id, pessoa_id, email, auth_user_id, nome, cargo, ativo, telefone')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle<UsuarioAcesso>();
+
+  if (lookupByAuth.error) throw lookupByAuth.error;
+  if (lookupByAuth.data) return lookupByAuth.data;
+
+  const lookupByPessoa = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id, pessoa_id, email, auth_user_id, nome, cargo, ativo, telefone')
+    .eq('pessoa_id', pessoaId)
+    .limit(1)
+    .maybeSingle<UsuarioAcesso>();
+
+  if (lookupByPessoa.error) throw lookupByPessoa.error;
+  if (lookupByPessoa.data) return lookupByPessoa.data;
+
+  const lookupByEmail = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id, pessoa_id, email, auth_user_id, nome, cargo, ativo, telefone')
+    .eq('email', email)
+    .limit(1)
+    .maybeSingle<UsuarioAcesso>();
+
+  if (lookupByEmail.error) throw lookupByEmail.error;
+  return lookupByEmail.data || null;
+}
+
+async function findPessoaFromLegacyUsuarioAcesso(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  authUserId: string,
+  email: string
+) {
+  const byAuth = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id, pessoa_id, email, auth_user_id, nome, cargo, ativo, telefone')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle<UsuarioAcesso>();
+
+  if (byAuth.error) throw byAuth.error;
+  let legacyUser = byAuth.data;
+
+  if (!legacyUser) {
+    const byEmail = await supabaseAdmin
+      .from('usuarios_acesso')
+      .select('id, igreja_id, pessoa_id, email, auth_user_id, nome, cargo, ativo, telefone')
+      .eq('email', email)
+      .limit(1)
+      .maybeSingle<UsuarioAcesso>();
+
+    if (byEmail.error) throw byEmail.error;
+    legacyUser = byEmail.data;
+  }
+
+  if (!legacyUser) return null;
+
+  if (legacyUser.pessoa_id) {
+    const pessoaResult = await supabaseAdmin
+      .from('pessoas')
+      .select('id, nome, cargo, email, telefone, ativo, tem_acesso, igreja_id, usuario_id')
+      .eq('id', legacyUser.pessoa_id)
+      .maybeSingle<PessoaAcesso>();
+
+    if (pessoaResult.error) throw pessoaResult.error;
+    if (pessoaResult.data) return pessoaResult.data;
+  }
+
+  const { data: pessoaCriada, error: pessoaCreateError } = await supabaseAdmin
+    .from('pessoas')
+    .insert({
+      nome: legacyUser.nome || email.split('@')[0],
+      cargo: (legacyUser.cargo as any) || 'membro',
+      email,
+      telefone: legacyUser.telefone || null,
+      ativo: legacyUser.ativo ?? true,
+      tem_acesso: legacyUser.ativo ?? true,
+      igreja_id: legacyUser.igreja_id,
+      usuario_id: authUserId,
+      criado_em: new Date().toISOString(),
+      atualizado_em: new Date().toISOString(),
+    })
+    .select('id, nome, cargo, email, telefone, ativo, tem_acesso, igreja_id, usuario_id')
+    .single<PessoaAcesso>();
+
+  if (pessoaCreateError) throw pessoaCreateError;
+
+  if (legacyUser.igreja_id) {
+    const { error: vinculoError } = await supabaseAdmin
+      .from('pessoas_igrejas')
+      .upsert(
+        {
+          pessoa_id: pessoaCriada.id,
+          igreja_id: legacyUser.igreja_id,
+          status_membro: 'ativo',
+          cargo: (legacyUser.cargo as any) || 'membro',
+          ativo: legacyUser.ativo ?? true,
+          atualizado_em: new Date().toISOString(),
+        },
+        { onConflict: 'pessoa_id,igreja_id' }
+      );
+
+    if (vinculoError) throw vinculoError;
+  }
+
+  await supabaseAdmin
+    .from('usuarios_acesso')
+    .update({
+      pessoa_id: pessoaCriada.id,
+      auth_user_id: authUserId,
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq('id', legacyUser.id);
+
+  return pessoaCriada;
+}
+
 async function ensureUsuarioAcesso(
   supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
   pessoa: PessoaAcesso,
@@ -65,13 +196,12 @@ async function ensureUsuarioAcesso(
     atualizado_em,
   };
 
-  const { data: existente, error: usuarioExistenteError } = await supabaseAdmin
-    .from('usuarios_acesso')
-    .select('id, igreja_id')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-
-  if (usuarioExistenteError) throw usuarioExistenteError;
+  const existente = await findExistingUsuarioAcesso(
+    supabaseAdmin,
+    authUserId,
+    pessoa.id,
+    email
+  );
 
   if (existente) {
     const { data: atualizado, error: updateError } = await supabaseAdmin
@@ -128,6 +258,10 @@ export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAc
 
     if (pessoaPorEmailError) throw pessoaPorEmailError;
     pessoa = pessoaPorEmail;
+  }
+
+  if (!pessoa) {
+    pessoa = await findPessoaFromLegacyUsuarioAcesso(supabaseAdmin, user.id, email);
   }
 
   if (!pessoa) {

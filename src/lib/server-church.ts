@@ -34,6 +34,10 @@ function getBearerToken(request?: Request | null) {
   return authHeader?.replace(/^Bearer\s+/i, '').trim() || null;
 }
 
+function normalizeEmail(email?: string | null) {
+  return email?.trim().toLowerCase() || null;
+}
+
 async function getAuthenticatedUserFromCookies() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -96,6 +100,37 @@ async function getDefaultIgrejaId(
   return igreja?.id || null;
 }
 
+async function findUsuarioAcessoByAuthOrEmail(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  authUserId: string,
+  email?: string | null
+) {
+  const byAuth = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, pessoa_id, igreja_id')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (byAuth.error) throw byAuth.error;
+  if (byAuth.data) return byAuth.data;
+
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const byEmail = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, pessoa_id, igreja_id')
+    .eq('email', normalizedEmail)
+    .limit(1)
+    .maybeSingle();
+
+  if (byEmail.error) throw byEmail.error;
+  return byEmail.data || null;
+}
+
 export async function getAuthenticatedUserIdFromCookies() {
   const user = await getAuthenticatedUser();
   return user?.id ?? null;
@@ -109,13 +144,7 @@ export async function resolveCurrentIgrejaId(preferredIgrejaId?: string | null, 
 
   const supabaseAdmin = getSupabaseAdmin();
 
-  const { data: acesso, error: acessoError } = await supabaseAdmin
-    .from('usuarios_acesso')
-    .select('id, igreja_id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
-  if (acessoError) throw acessoError;
+  const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
   if (!acesso) {
     return isSuperAdmin(user.email) ? getDefaultIgrejaId(supabaseAdmin) : null;
   }
@@ -146,13 +175,7 @@ export async function resolveAuthorizedCurrentIgrejaId(
 
   const supabaseAdmin = getSupabaseAdmin();
 
-  const { data: acesso, error: acessoError } = await supabaseAdmin
-    .from('usuarios_acesso')
-    .select('id, igreja_id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
-  if (acessoError) throw acessoError;
+  const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
 
   const ehSuperAdmin = isSuperAdmin(user.email);
 
@@ -197,13 +220,7 @@ export async function getUserPermissionContext(
   const igrejaId = await resolveAuthorizedCurrentIgrejaId(preferredIgrejaId, request);
   const ehSuperAdmin = isSuperAdmin(user.email);
 
-  const { data: acesso, error: acessoError } = await supabaseAdmin
-    .from('usuarios_acesso')
-    .select('id, pessoa_id, igreja_id')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
-  if (acessoError) throw acessoError;
+  const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
 
   let cargo: string | null = ehSuperAdmin ? 'superadmin' : null;
 

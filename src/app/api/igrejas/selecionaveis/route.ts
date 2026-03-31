@@ -63,13 +63,30 @@ export async function GET() {
       if (error) throw error;
       igrejasRaw = data;
     } else {
-      const { data: acesso, error: acessoError } = await supabaseAdmin
+      const normalizedEmail = user.email?.trim().toLowerCase();
+
+      let acesso: { id: string; igreja_id: string | null } | null = null;
+
+      const byAuth = await supabaseAdmin
         .from('usuarios_acesso')
         .select('id, igreja_id')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
-      if (acessoError) throw acessoError;
+      if (byAuth.error) throw byAuth.error;
+      acesso = byAuth.data;
+
+      if (!acesso && normalizedEmail) {
+        const byEmail = await supabaseAdmin
+          .from('usuarios_acesso')
+          .select('id, igreja_id')
+          .eq('email', normalizedEmail)
+          .limit(1)
+          .maybeSingle();
+
+        if (byEmail.error) throw byEmail.error;
+        acesso = byEmail.data;
+      }
 
       const { data: vinculos, error: vinculosError } = await supabaseAdmin
         .from('usuarios_igrejas')
