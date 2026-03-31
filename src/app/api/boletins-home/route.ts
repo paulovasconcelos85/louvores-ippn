@@ -51,6 +51,19 @@ interface LegacyCultoRow {
   palavra_pastoral_autor: string | null;
 }
 
+interface LegacyBoletimSecao {
+  id: string;
+  igreja_id: string | null;
+  culto_id: number | null;
+  tipo: string;
+  titulo: string;
+  icone: string | null;
+  ordem: number | null;
+  visivel: boolean | null;
+  criado_em: string | null;
+  itens: BoletimItemRow[];
+}
+
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
@@ -105,44 +118,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
     ])
   );
 
-  const secoes: Array<{
-    id: string;
-    igreja_id: string | null;
-    culto_id: number | null;
-    tipo: string;
-    titulo: string;
-    icone: string | null;
-    ordem: number | null;
-    visivel: boolean | null;
-    criado_em: string | null;
-    itens: BoletimItemRow[];
-  }> = [];
-
-  if (culto.palavra_pastoral) {
-    secoes.push({
-      id: `legacy-palavra-${culto['Culto nr.']}`,
-      igreja_id: null,
-      culto_id: culto['Culto nr.'],
-      tipo: 'palavra_pastoral',
-      titulo: 'Palavra Pastoral',
-      icone: null,
-      ordem: 0,
-      visivel: true,
-      criado_em: null,
-      itens: [
-        {
-          id: `legacy-palavra-conteudo-${culto['Culto nr.']}`,
-          secao_id: `legacy-palavra-${culto['Culto nr.']}`,
-          conteudo: culto.palavra_pastoral_autor
-            ? `${culto.palavra_pastoral}\n\n— ${culto.palavra_pastoral_autor}`
-            : culto.palavra_pastoral,
-          destaque: true,
-          ordem: 0,
-          criado_em: null,
-        },
-      ],
-    });
-  }
+  const secoes: LegacyBoletimSecao[] = [];
 
   if (culto.imagem_url) {
     secoes.push({
@@ -152,7 +128,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
       tipo: 'imagem_tema',
       titulo: 'Imagem do Boletim',
       icone: null,
-      ordem: 1,
+      ordem: 0,
       visivel: true,
       criado_em: null,
       itens: [
@@ -176,7 +152,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
       tipo: 'liturgia',
       titulo: `Liturgia do culto de ${culto.Dia}`,
       icone: null,
-      ordem: 2,
+      ordem: 1,
       visivel: true,
       criado_em: null,
       itens: itens.map((item, index) => {
@@ -203,10 +179,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
 
   return {
     boletimSecoes: secoes,
-    legacyMessage:
-      secoes.length > 0
-        ? 'Boletim exibido a partir da liturgia legada enquanto esta igreja conclui a migracao para secoes do boletim.'
-        : 'Esta igreja ainda nao publicou secoes do boletim.',
+    legacyMessage: secoes.length > 0 ? null : 'Esta igreja ainda nao publicou secoes do boletim.',
   };
 }
 

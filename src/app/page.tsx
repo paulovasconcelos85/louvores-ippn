@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   CalendarDays,
-  Clock3,
   ExternalLink,
   Eye,
   Globe,
@@ -12,6 +13,7 @@ import {
   Music,
   Phone,
   Share2,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
@@ -83,7 +85,66 @@ interface IgrejaDetalhes {
   timezone_boletim: string | null;
 }
 
-const DIAS_SEMANA = ['Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado'];
+interface CanticoModalData {
+  tipo: 'hinario' | 'cantico';
+  numero: string | null;
+  nome: string;
+  letra: string | null;
+  referencia: string | null;
+  tags: string[] | null;
+  autor_letra: string | null;
+  compositor: string | null;
+  youtube_url: string | null;
+  spotify_url: string | null;
+  audio_url: string | null;
+}
+
+function formatarDataExtenso(valor: string) {
+  const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, ano, mes, dia] = match;
+  const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(data);
+}
+
+function formatarPais(valor: string | null) {
+  if (!valor) return null;
+
+  const pais = valor.trim().toUpperCase();
+
+  if (pais === 'PT') return 'Portugal';
+  if (pais === 'BR') return 'Brasil';
+  if (pais === 'US' || pais === 'USA') return 'Estados Unidos';
+  if (pais === 'CA') return 'Canadá';
+
+  return valor;
+}
+
+async function lerJsonSeguro(response: Response) {
+  const texto = await response.text();
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!contentType.includes('application/json')) {
+    throw new Error('Resposta inválida do servidor.');
+  }
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    throw new Error('Não foi possível ler a resposta do servidor.');
+  }
+}
+
+function getMensagemErro(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -97,7 +158,9 @@ export default function Home() {
   const [redesSociais, setRedesSociais] = useState<RedeSocial[]>([]);
   const [loadingIgrejas, setLoadingIgrejas] = useState(true);
   const [loadingBoletim, setLoadingBoletim] = useState(true);
-  const [mensagemBoletim, setMensagemBoletim] = useState<string | null>(null);
+  const [canticoAbertoNome, setCanticoAbertoNome] = useState<string | null>(null);
+  const [canticoAberto, setCanticoAberto] = useState<CanticoModalData | null>(null);
+  const [loadingCantico, setLoadingCantico] = useState(false);
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
@@ -108,28 +171,42 @@ export default function Home() {
     ? formatIgrejaLocalizacao(igrejaSelecionada)
     : null;
 
-  const horarioPublicacao = useMemo(() => {
-    if (!igrejaDetalhes?.horario_publicacao_boletim) return null;
-
-    return igrejaDetalhes.horario_publicacao_boletim.slice(0, 5);
-  }, [igrejaDetalhes]);
-
-  const diaPublicacao = useMemo(() => {
-    const valor = igrejaDetalhes?.dia_publicacao_boletim;
-    if (!valor || valor < 1 || valor > 7) return null;
-    return DIAS_SEMANA[valor - 1];
-  }, [igrejaDetalhes]);
-
   const enderecoFormatado = useMemo(() => {
     if (!igrejaDetalhes) return null;
 
-    return (
+    const enderecoBase =
       igrejaDetalhes.endereco_completo ||
       [igrejaDetalhes.logradouro, igrejaDetalhes.complemento, igrejaDetalhes.bairro]
         .filter(Boolean)
-        .join(', ')
-    );
+        .join(', ');
+
+    const localizacaoDetalhada = [
+      igrejaDetalhes.cidade,
+      igrejaDetalhes.uf,
+      formatarPais(igrejaDetalhes.pais),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    if (enderecoBase && localizacaoDetalhada && !enderecoBase.includes(localizacaoDetalhada)) {
+      return `${enderecoBase}, ${localizacaoDetalhada}`;
+    }
+
+    return enderecoBase || localizacaoDetalhada || null;
   }, [igrejaDetalhes]);
+
+  const dataEdicao = useMemo(() => {
+    for (const secao of boletimSecoes) {
+      if (secao.tipo !== 'liturgia') continue;
+
+      const match = secao.titulo.match(/(\d{4}-\d{2}-\d{2})/);
+      if (!match) continue;
+
+      return formatarDataExtenso(match[1]);
+    }
+
+    return null;
+  }, [boletimSecoes]);
 
   const compartilharWhatsApp = async () => {
     if (!igrejaSelecionada) return;
@@ -139,10 +216,6 @@ export default function Home() {
 
     if (localizacao) {
       texto += `📍 ${localizacao}\n`;
-    }
-
-    if (diaPublicacao || horarioPublicacao) {
-      texto += `🗓️ Publicacao: ${[diaPublicacao, horarioPublicacao].filter(Boolean).join(' às ')}\n`;
     }
 
     texto += '\n';
@@ -173,7 +246,7 @@ export default function Home() {
       try {
         setLoadingIgrejas(true);
         const response = await fetch('/api/igrejas/selecionaveis');
-        const data = await response.json();
+        const data = await lerJsonSeguro(response);
 
         if (!response.ok) {
           throw new Error(data.error || 'Erro ao carregar igrejas.');
@@ -184,16 +257,22 @@ export default function Home() {
         const lista = (data.igrejas || []) as IgrejaSelecionavel[];
         setIgrejas(lista);
 
+        const igrejaUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('igreja_id')
+            : null;
         const igrejaPreferida =
           typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
 
-        const prioridade = [igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(Boolean) as string[];
+        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
+          Boolean
+        ) as string[];
         const primeiraValida =
           prioridade.find((id) => lista.some((igreja) => igreja.id === id)) || null;
 
         setIgrejaAtualId(primeiraValida);
-      } catch (error) {
-        console.error('Erro ao carregar igrejas:', error);
+      } catch (error: unknown) {
+        console.error('Erro ao carregar igrejas:', getMensagemErro(error, 'Erro ao carregar igrejas.'));
       } finally {
         if (active) {
           setLoadingIgrejas(false);
@@ -221,11 +300,10 @@ export default function Home() {
     const carregarBoletim = async () => {
       try {
         setLoadingBoletim(true);
-        setMensagemBoletim(null);
 
         const params = new URLSearchParams({ igreja_id: igrejaAtualId });
         const response = await fetch(`/api/boletins-home?${params.toString()}`);
-        const data = await response.json();
+        const data = await lerJsonSeguro(response);
 
         if (!response.ok) {
           throw new Error(data.error || 'Erro ao carregar boletim.');
@@ -237,15 +315,13 @@ export default function Home() {
         setBoletimSecoes((data.boletimSecoes || []) as BoletimSecao[]);
         setAgendaCultos((data.agendaCultos || []) as AgendaCulto[]);
         setRedesSociais((data.redesSociais || []) as RedeSocial[]);
-        setMensagemBoletim(data.message || null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!active) return;
-        console.error('Erro ao carregar boletim:', error);
+        console.error('Erro ao carregar boletim:', getMensagemErro(error, 'Erro ao carregar boletim.'));
         setIgrejaDetalhes(null);
         setBoletimSecoes([]);
         setAgendaCultos([]);
         setRedesSociais([]);
-        setMensagemBoletim(error.message || 'Erro ao carregar boletim.');
       } finally {
         if (active) {
           setLoadingBoletim(false);
@@ -260,17 +336,140 @@ export default function Home() {
     };
   }, [igrejaAtualId, authLoading]);
 
+  useEffect(() => {
+    if (!canticoAbertoNome) {
+      setCanticoAberto(null);
+      return;
+    }
+
+    let active = true;
+
+    const carregarCantico = async () => {
+      try {
+        setLoadingCantico(true);
+
+        const params = new URLSearchParams({ nome: canticoAbertoNome });
+        const response = await fetch(`/api/canticos-publicos?${params.toString()}`);
+        const data = await lerJsonSeguro(response);
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao carregar cântico.');
+        }
+
+        if (!active) return;
+        setCanticoAberto((data.cantico || null) as CanticoModalData | null);
+      } catch (error: unknown) {
+        console.error('Erro ao carregar cântico:', getMensagemErro(error, 'Erro ao carregar cântico.'));
+        if (!active) return;
+        setCanticoAberto(null);
+      } finally {
+        if (active) {
+          setLoadingCantico(false);
+        }
+      }
+    };
+
+    carregarCantico();
+
+    return () => {
+      active = false;
+    };
+  }, [canticoAbertoNome]);
+
   const loading = loadingIgrejas || loadingBoletim;
 
   const isImageSection = (secao: BoletimSecao) => secao.tipo === 'imagem_tema';
+  const isLiturgiaSection = (secao: BoletimSecao) => secao.tipo === 'liturgia';
+  const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
 
+  const boletinsAnterioresHref = igrejaAtualId
+    ? `/boletins-anteriores?igreja_id=${igrejaAtualId}`
+    : '/boletins-anteriores';
+
+  const extrairCanticoLinha = (linha: string) => {
+    const match = linha.match(/^(C[âa]ntico|Cantico|Hino):\s*(.+)$/i);
+    if (!match) return null;
+
+    const nomeCompleto = match[2].trim();
+    const nome = nomeCompleto.replace(/\s+\(([^)]+)\)\s*$/, '').trim();
+    const tomMatch = nomeCompleto.match(/\(([^)]+)\)\s*$/);
+
+    return {
+      rotulo: match[1],
+      nome,
+      tom: tomMatch ? tomMatch[1] : null,
+    };
+  };
+
+  const renderBlocoTexto = (texto: string, emphasis = false) => {
+    const linhas = texto.split('\n');
+
+    return (
+      <div className="space-y-2">
+        {linhas.map((linha, index) => {
+          const valor = linha.trim();
+
+          if (!valor) {
+            return <div key={`vazia-${index}`} className="h-2" />;
+          }
+
+          const cantico = extrairCanticoLinha(valor);
+          if (cantico) {
+            return (
+              <button
+                key={`${cantico.nome}-${index}`}
+                type="button"
+                onClick={() => setCanticoAbertoNome(cantico.nome)}
+                className="inline-flex items-center gap-2 rounded-full border border-[#d8d1c4] bg-[#faf7f0] px-3 py-1.5 text-left text-sm font-medium text-[#365c4d] transition-colors hover:border-[#365c4d] hover:bg-[#f4eee1]"
+              >
+                <span>{cantico.rotulo}:</span>
+                <span className="underline underline-offset-2">{cantico.nome}</span>
+                {cantico.tom ? <span className="text-slate-500">({cantico.tom})</span> : null}
+              </button>
+            );
+          }
+
+          return (
+            <p
+              key={`${valor}-${index}`}
+              className={`${emphasis ? 'text-slate-800' : 'text-slate-700'} text-[15px] whitespace-pre-line leading-7 sm:text-base`}
+            >
+              {valor}
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderItemConteudo = (secao: BoletimSecao, conteudo: string) => {
+    if (!isLiturgiaSection(secao)) {
+      return renderBlocoTexto(conteudo, isPastoralSection(secao));
+    }
+
+    const [titulo, ...restante] = conteudo.split('\n');
+    const corpo = restante.join('\n').trim();
+
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[15px] font-semibold text-slate-900 leading-6 sm:text-base">{titulo}</p>
+        {corpo ? renderBlocoTexto(corpo) : null}
+      </div>
+    );
+  };
+
+  const getTituloSecao = (secao: BoletimSecao) => {
+    if (!isLiturgiaSection(secao)) return secao.titulo;
+
+    return secao.titulo.match(/(\d{4}-\d{2}-\d{2})/) ? 'Liturgia' : secao.titulo;
+  };
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbf9_0%,#f4f4f1_45%,#fbfbf9_100%)]">
-      <header className="relative overflow-hidden bg-[#17352b] text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(122,161,138,0.35),transparent_35%),linear-gradient(135deg,rgba(255,255,255,0.06),transparent_50%)]" />
-        <div className="relative max-w-6xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
+      <header className="bg-[#17352b] text-white">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-emerald-200/80 text-[11px] font-semibold uppercase tracking-[0.28em] mb-1">
               OIKOS Hub
@@ -302,7 +501,7 @@ export default function Home() {
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-xl transition-colors"
+                className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-md transition-colors"
               >
                 Entrar
               </button>
@@ -311,81 +510,52 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
-        <section className="-mt-6 relative z-10 rounded-[28px] border border-white/70 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(23,53,43,0.12)] px-5 sm:px-7 py-6 sm:py-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] lg:items-end">
-            <div className="space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
-                Edicao Publica
-              </p>
+      <main className="max-w-6xl mx-auto px-4 pt-6 sm:px-6 sm:pt-8 pb-16">
+        <section className="rounded-[30px] border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-5 py-6 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:px-7 sm:py-8">
+          <div className="space-y-5">
+            <div className="space-y-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">Edição Pública</p>
               <div className="space-y-2">
-                <h2 className="text-3xl sm:text-4xl leading-tight font-semibold text-slate-900">
+                <h2 className="font-['Georgia','Times_New_Roman',serif] text-3xl sm:text-4xl leading-tight font-semibold text-slate-900">
                   {nomeExibicaoIgreja}
                 </h2>
-                <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
-                  Um boletim mais limpo, pensado primeiro para celular, com agenda, comunicados e a liturgia da igreja selecionada em uma leitura corrida e sem excesso de caixas.
+                <p className="text-sm uppercase tracking-[0.22em] text-slate-500">
+                  {dataEdicao ? `Edição de ${dataEdicao}` : 'Boletim público'}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-slate-600">
-                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#ded7cb] bg-[#faf7f0] px-3 py-1.5 text-[#365c4d]">
                   <MapPin className="w-3.5 h-3.5" />
-                  {localizacao || 'Localizacao nao informada'}
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
-                  <Clock3 className="w-3.5 h-3.5 text-slate-500" />
-                  {[diaPublicacao, horarioPublicacao].filter(Boolean).join(' às ') || 'Publicacao nao configurada'}
+                  {enderecoFormatado || localizacao || 'Localizacao nao informada'}
                 </span>
               </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Igreja
-                </label>
-                <select
-                  value={igrejaAtualId || ''}
-                  onChange={(e) => setIgrejaAtualId(e.target.value || null)}
-                  className="w-full px-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none text-slate-900 shadow-sm"
-                >
-                  {igrejas.map((igreja) => (
-                    <option key={igreja.id} value={igreja.id}>
-                      {igreja.sigla ? `${igreja.sigla} · ${igreja.nome}` : igreja.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 pt-1">
                 <button
                   onClick={compartilharWhatsApp}
                   disabled={!igrejaSelecionada}
-                  className="inline-flex items-center justify-center gap-2 flex-1 min-w-[170px] bg-[#1d6f54] hover:bg-[#165640] disabled:bg-slate-300 text-white text-sm font-semibold px-4 py-3 rounded-2xl transition-colors"
+                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-sm font-semibold px-4 py-3 transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                   Compartilhar boletim
                 </button>
-                {enderecoFormatado && (
-                  <div className="flex-1 min-w-[170px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    {enderecoFormatado}
-                  </div>
-                )}
+                <Link
+                  href={boletinsAnterioresHref}
+                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                >
+                  Boletins anteriores
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
             </div>
           </div>
         </section>
 
         {user && (
-          <div className="mt-5 flex items-center gap-3 bg-blue-50/80 border border-blue-100 rounded-2xl px-4 py-3">
+          <div className="mt-5 flex items-center gap-3 border border-blue-200 bg-[#f8fbff] px-4 py-3">
             <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-sm text-blue-700">
               Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
             </p>
-          </div>
-        )}
-
-        {mensagemBoletim && !loading && (
-          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-800">
-            {mensagemBoletim}
           </div>
         )}
 
@@ -397,10 +567,10 @@ export default function Home() {
         )}
 
         {!loading && (
-          <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_320px] xl:items-start">
-            <section className="space-y-8">
+          <div className="mt-8 grid gap-10 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
+            <section className="space-y-10">
               {boletimSecoes.length === 0 ? (
-                <div className="flex flex-col items-center py-24 gap-3 bg-white/80 rounded-[28px] border border-slate-200">
+                <div className="flex flex-col items-center gap-3 rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] py-24">
                   <Music className="w-10 h-10 text-slate-300" />
                   <p className="text-slate-400">Nenhuma secao de boletim publicada para esta igreja.</p>
                 </div>
@@ -408,66 +578,67 @@ export default function Home() {
                 boletimSecoes.map((secao, index) => (
                   <article
                     key={secao.id}
-                    className="rounded-[28px] border border-slate-200/80 bg-white/85 backdrop-blur-sm overflow-hidden shadow-[0_12px_40px_rgba(15,23,42,0.06)]"
+                    className="space-y-5"
                   >
-                    <div className="px-5 sm:px-7 pt-6 pb-4 border-b border-slate-100 bg-[linear-gradient(180deg,rgba(248,250,249,0.9),rgba(255,255,255,0.3))]">
-                      <p className="text-emerald-700 text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
+                    <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
+                      <p className="text-[#365c4d] text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
                         Secao {index + 1}
                       </p>
-                      <h3 className="text-2xl font-semibold tracking-tight text-slate-900">{secao.titulo}</h3>
-                      <p className="text-sm text-slate-500 mt-1">{secao.tipo}</p>
+                      <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold tracking-tight text-slate-900">
+                        {getTituloSecao(secao)}
+                      </h3>
                     </div>
 
-                    <div className="px-5 sm:px-7 py-5">
-                      {secao.itens.length === 0 ? (
-                        <p className="text-sm text-slate-400">Sem itens publicados nesta secao.</p>
-                      ) : (
-                        <div className="space-y-4">
-                          {secao.itens.map((item) => (
+                    {secao.itens.length === 0 ? (
+                      <p className="text-sm text-slate-400">Sem itens publicados nesta secao.</p>
+                    ) : (
+                      <div
+                        className={`rounded-[28px] border px-5 py-4 sm:px-6 sm:py-5 ${
+                          isPastoralSection(secao)
+                            ? 'border-[#d9d2c1] bg-[linear-gradient(180deg,#fffaf0_0%,#f8f0dc_100%)] shadow-[0_10px_30px_rgba(95,74,35,0.08)]'
+                            : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
+                        }`}
+                      >
+                        <div className="space-y-0">
+                          {secao.itens.map((item, itemIndex) => (
                             <div
                               key={item.id}
-                              className={`rounded-2xl px-4 sm:px-5 py-4 ${
-                                item.destaque
-                                  ? 'bg-emerald-50/90 ring-1 ring-emerald-100'
-                                  : 'bg-slate-50/80 ring-1 ring-slate-100'
-                              }`}
+                              className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
                             >
                               {isImageSection(secao) ? (
                                 <img
                                   src={item.conteudo}
                                   alt={secao.titulo}
-                                  className="w-full max-h-[28rem] object-contain rounded-xl bg-white"
+                                  className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
                                 />
                               ) : (
-                                <p className="text-[15px] text-slate-700 whitespace-pre-line leading-7">
-                                  {item.conteudo}
-                                </p>
+                                renderItemConteudo(secao, item.conteudo)
                               )}
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </article>
                 ))
               )}
             </section>
 
             <aside className="space-y-6 xl:sticky xl:top-6">
-              <section className="rounded-[28px] border border-slate-200/80 bg-white/82 backdrop-blur-sm p-5 sm:p-6 shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+              <section className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-5 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <CalendarDays className="w-4 h-4 text-emerald-700" />
-                  <h3 className="text-base font-semibold text-slate-900">Agenda</h3>
+                  <CalendarDays className="w-4 h-4 text-[#365c4d]" />
+                  <h3 className="font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">Agenda</h3>
                 </div>
 
                 {agendaCultos.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum culto configurado para esta igreja.</p>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-1">
                     {agendaCultos.map((culto) => (
                       <div
                         key={culto.id}
-                        className="rounded-2xl bg-slate-50/85 ring-1 ring-slate-100 px-4 py-3.5"
+                        className="border-t border-[#ece5d9] px-1 py-3 first:border-t-0 first:pt-0"
                       >
                         <p className="text-sm font-semibold text-slate-900">{culto.nome}</p>
                         <p className="text-sm text-slate-600 mt-1">
@@ -482,10 +653,10 @@ export default function Home() {
                 )}
               </section>
 
-              <section className="rounded-[28px] border border-slate-200/80 bg-white/82 backdrop-blur-sm p-5 sm:p-6 shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+              <section className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-5 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Globe className="w-4 h-4 text-emerald-700" />
-                  <h3 className="text-base font-semibold text-slate-900">Canais</h3>
+                  <Globe className="w-4 h-4 text-[#365c4d]" />
+                  <h3 className="font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">Canais</h3>
                 </div>
 
                 <div className="space-y-2.5">
@@ -494,7 +665,7 @@ export default function Home() {
                       href={igrejaDetalhes.site}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between rounded-2xl bg-slate-50/85 ring-1 ring-slate-100 px-4 py-3 text-sm text-slate-700 hover:ring-emerald-200 hover:text-emerald-800 transition-colors"
+                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
                       <span>Site oficial</span>
                       <ExternalLink className="w-4 h-4" />
@@ -503,7 +674,7 @@ export default function Home() {
                   {igrejaDetalhes?.email && (
                     <a
                       href={`mailto:${igrejaDetalhes.email}`}
-                      className="flex items-center justify-between rounded-2xl bg-slate-50/85 ring-1 ring-slate-100 px-4 py-3 text-sm text-slate-700 hover:ring-emerald-200 hover:text-emerald-800 transition-colors"
+                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
                       <span>{igrejaDetalhes.email}</span>
                       <ExternalLink className="w-4 h-4" />
@@ -512,7 +683,7 @@ export default function Home() {
                   {igrejaDetalhes?.telefone && (
                     <a
                       href={`tel:${igrejaDetalhes.telefone}`}
-                      className="flex items-center justify-between rounded-2xl bg-slate-50/85 ring-1 ring-slate-100 px-4 py-3 text-sm text-slate-700 hover:ring-emerald-200 hover:text-emerald-800 transition-colors"
+                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
                       <span>{igrejaDetalhes.telefone}</span>
                       <Phone className="w-4 h-4" />
@@ -524,7 +695,7 @@ export default function Home() {
                       href={rede.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between rounded-2xl bg-slate-50/85 ring-1 ring-slate-100 px-4 py-3 text-sm text-slate-700 hover:ring-emerald-200 hover:text-emerald-800 transition-colors"
+                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
                       <span className="capitalize">{rede.tipo}</span>
                       <ExternalLink className="w-4 h-4" />
@@ -544,13 +715,96 @@ export default function Home() {
       </main>
 
       <footer className="mt-16">
-        <div className="max-w-6xl mx-auto px-5 py-8 text-center">
+        <div className="max-w-6xl mx-auto px-5 py-8 space-y-8">
+          <section className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] px-5 py-5 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:px-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                  Outras comunidades
+                </p>
+                <p className="text-sm leading-6 text-slate-600 max-w-xl">
+                  Escolha outra igreja para ver o boletim publico correspondente.
+                </p>
+                {enderecoFormatado && (
+                  <p className="text-sm leading-6 text-slate-500">{enderecoFormatado}</p>
+                )}
+              </div>
+
+              <div className="w-full md:max-w-sm">
+                <label className="block text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 mb-2">
+                  Comunidade
+                </label>
+                <select
+                  value={igrejaAtualId || ''}
+                  onChange={(e) => setIgrejaAtualId(e.target.value || null)}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-400 outline-none text-slate-900"
+                >
+                  {igrejas.map((igreja) => (
+                    <option key={igreja.id} value={igreja.id}>
+                      {igreja.sigla ? `${igreja.sigla} · ${igreja.nome}` : igreja.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <div className="text-center">
           <p className="text-[11px] text-slate-400 uppercase tracking-[0.28em] font-medium">
             OIKOS Hub
             {igrejaSelecionada ? ` · ${igrejaSelecionada.nome}` : ''}
           </p>
+          </div>
         </div>
       </footer>
+
+      {canticoAbertoNome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#ece5d9] px-5 py-4 sm:px-6">
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">
+                  {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
+                </p>
+                <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold text-slate-900">
+                  {canticoAbertoNome}
+                </h2>
+                {canticoAberto?.referencia ? (
+                  <p className="text-sm text-slate-500">{canticoAberto.referencia}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCanticoAbertoNome(null)}
+                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Fechar letra"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(90vh-88px)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+              {loadingCantico ? (
+                <p className="text-sm text-slate-500">Carregando letra...</p>
+              ) : !canticoAberto?.letra ? (
+                <p className="text-sm text-slate-500">A letra deste cântico não está disponível no momento.</p>
+              ) : (
+                <div className="space-y-6">
+                  {(canticoAberto.autor_letra || canticoAberto.compositor) && (
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600">
+                      {canticoAberto.autor_letra ? <p>Letra: {canticoAberto.autor_letra}</p> : null}
+                      {canticoAberto.compositor ? <p>Música: {canticoAberto.compositor}</p> : null}
+                    </div>
+                  )}
+                  <div className="whitespace-pre-wrap font-['Georgia','Times_New_Roman',serif] text-lg leading-9 text-slate-800 sm:text-[1.35rem]">
+                    {canticoAberto.letra}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
