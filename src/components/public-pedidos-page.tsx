@@ -65,16 +65,37 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
       try {
         setLoadingIgrejas(true);
         setErro(null);
-        const response = await fetch('/api/igrejas/selecionaveis');
-        const data = await lerJsonSeguro(response);
+        const [responseLista, responseSlug] = await Promise.all([
+          fetch('/api/igrejas/selecionaveis'),
+          forcedSlug ? fetch(`/api/igrejas/slug/${encodeURIComponent(forcedSlug)}`) : Promise.resolve(null),
+        ]);
 
-        if (!response.ok) {
+        const data = await lerJsonSeguro(responseLista);
+
+        if (!responseLista.ok) {
           throw new Error(data.error || 'Erro ao carregar igrejas.');
         }
 
         if (!active) return;
 
-        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
+        const listaBase = (data.igrejas || []) as IgrejaSelecionavel[];
+        let lista = listaBase;
+        let igrejaPorSlug: IgrejaSelecionavel | null = null;
+
+        if (responseSlug) {
+          const dataSlug = await lerJsonSeguro(responseSlug);
+
+          if (!responseSlug.ok) {
+            throw new Error(dataSlug.error || 'Não encontramos uma igreja pública com esse link.');
+          }
+
+          igrejaPorSlug = (dataSlug.igreja || null) as IgrejaSelecionavel | null;
+
+          if (igrejaPorSlug && !listaBase.some((igreja) => igreja.id === igrejaPorSlug?.id)) {
+            lista = [igrejaPorSlug, ...listaBase];
+          }
+        }
+
         setIgrejas(lista);
 
         const igrejaUrl =
@@ -83,11 +104,6 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
             : null;
         const igrejaPreferida =
           typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
-
-        const igrejaPorSlug =
-          forcedSlug
-            ? lista.find((igreja) => (igreja.slug || '').toLowerCase() === forcedSlug.toLowerCase()) || null
-            : null;
 
         if (forcedSlug && !igrejaPorSlug) {
           setErro('Não encontramos uma igreja pública com esse link.');
