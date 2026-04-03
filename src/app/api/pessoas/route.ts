@@ -297,23 +297,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Se tiver email, verificar se já existe
+    // Se tiver email, verificar se a pessoa ja existe para aproveitar o cadastro no modelo multi-igreja
     if (email) {
-      const { data: pessoaExistente } = await supabaseAdmin
+      const emailNormalizado = email.toLowerCase().trim();
+
+      const { data: pessoaExistente, error: pessoaExistenteError } = await supabaseAdmin
         .from('pessoas')
-        .select('id, nome')
-        .eq('email', email.toLowerCase().trim())
-        .single();
+        .select('id, nome, cargo, ativo, status_membro, igreja_id')
+        .eq('email', emailNormalizado)
+        .maybeSingle();
+
+      if (pessoaExistenteError) throw pessoaExistenteError;
 
       if (pessoaExistente) {
-        return NextResponse.json(
-          { 
-            error: `Já existe uma pessoa com este email: ${pessoaExistente.nome}`,
-            pessoa_existente: pessoaExistente
-          },
-          { status: 409 }
-        );
+        const { data: vinculoExistente, error: vinculoExistenteError } = await supabaseAdmin
+          .from('pessoas_igrejas')
+          .select('id')
+          .eq('pessoa_id', pessoaExistente.id)
+          .eq('igreja_id', igrejaId)
+          .maybeSingle();
+
+        if (vinculoExistenteError) throw vinculoExistenteError;
+
+        if (vinculoExistente) {
+          return NextResponse.json(
+            {
+              error: `Já existe uma pessoa com este email nesta igreja: ${pessoaExistente.nome}`,
+              pessoa_existente: pessoaExistente
+            },
+            { status: 409 }
+          );
+        }
+
+        const { error: novoVinculoError } = await supabaseAdmin
+          .from('pessoas_igrejas')
+          .insert({
+            pessoa_id: pessoaExistente.id,
+            igreja_id: igrejaId,
+            status_membro,
+            cargo,
+            ativo,
+            observacoes: observacoes || null,
+          });
+
+        if (novoVinculoError) throw novoVinculoError;
+
+        if (pessoaExistente.usuario_id) {
+          const { data: acessoExistente, error: acessoExistenteError } = await supabaseAdmin
+            .from('usuarios_acesso')
+            .select('id')
+            .eq('auth_user_id', pessoaExistente.usuario_id)
+            .maybeSingle();
+
+          if (acessoExistenteError) throw acessoExistenteError;
+
+          if (acessoExistente?.id) {
+            const { error: usuarioIgrejaError } = await supabaseAdmin
+              .from('usuarios_igrejas')
+              .upsert(
+                {
+                  usuario_id: acessoExistente.id,
+                  igreja_id: igrejaId,
+                  cargo,
+                  ativo,
+                },
+                { onConflict: 'usuario_id,igreja_id' }
+              );
+
+            if (usuarioIgrejaError) throw usuarioIgrejaError;
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: `${pessoaExistente.nome} já existia e foi vinculada a esta igreja.`,
+          data: {
+            ...pessoaExistente,
+            igreja_id: igrejaId,
+            cargo,
+            status_membro,
+            ativo,
+          }
+        }, { status: 201 });
       }
+
     }
 
     // Criar pessoa

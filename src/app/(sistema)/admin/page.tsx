@@ -15,7 +15,8 @@ import {
   Star,
   Church,
   UserCheck,
-  Globe
+  Globe,
+  MessageSquareHeart
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -178,6 +179,8 @@ export default function AdminPage() {
   }
 
   const podeAcessarMembros = permissoes.podePastorearMembros;
+  const podeAcessarPedidosPastorais =
+    permissoes.isSuperAdmin || ['pastor', 'seminarista'].includes(usuarioPermitido?.cargo || '');
   const nomeIgreja = igrejaAtual?.nome || 'sua igreja';
   const tituloHub = igrejaAtual?.sigla ? `OIKOS Hub • ${igrejaAtual.sigla}` : 'OIKOS Hub';
 
@@ -345,6 +348,27 @@ export default function AdminPage() {
                 Acompanhamento e cuidado pastoral
               </p>
               <span className="text-xs text-blue-700 font-semibold bg-blue-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Disponível
+              </span>
+            </button>
+          )}
+
+          {podeAcessarPedidosPastorais && (
+            <button
+              onClick={() => router.push('/admin/pedidos-pastorais')}
+              className="bg-white rounded-xl p-6 shadow-sm border-2 border-cyan-600 hover:shadow-lg transition-all text-left group"
+            >
+              <div className="w-12 h-12 bg-cyan-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <MessageSquareHeart className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                Pedidos
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                Caixa de entrada para oração, aconselhamento e visitas
+              </p>
+              <span className="text-xs text-cyan-700 font-semibold bg-cyan-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
                 Disponível
               </span>

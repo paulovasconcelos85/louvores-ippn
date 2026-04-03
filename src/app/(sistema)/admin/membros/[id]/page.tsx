@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
+import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
@@ -395,15 +396,11 @@ export default function MembroDetalhesPage() {
     e.preventDefault();
     if (!conteudoNota.trim()) return;
     try {
-      const { data: autor } = await supabase
-        .from('pessoas')
-        .select('id')
-        .eq('usuario_id', user?.id || '')
-        .maybeSingle();
+      const autorId = await resolvePessoaIdForCurrentUser(user);
 
       const { error } = await supabase.from('notas_pastorais').insert({
         membro_id: membroId,
-        autor_id: autor?.id || null,
+        autor_id: autorId || null,
         tipo: tipoNota,
         titulo: tituloNota.trim() || null,
         conteudo: conteudoNota.trim(),

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { normalizeIgreja } from '@/lib/church-utils';
-import { resolveCurrentIgrejaId } from '@/lib/server-church';
+import { findUsuarioAcessoByAuthOrEmail, resolveCurrentIgrejaId } from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
 
 const supabaseAdmin = createClient(
@@ -63,30 +63,7 @@ export async function GET() {
       if (error) throw error;
       igrejasRaw = data;
     } else {
-      const normalizedEmail = user.email?.trim().toLowerCase();
-
-      let acesso: { id: string; igreja_id: string | null } | null = null;
-
-      const byAuth = await supabaseAdmin
-        .from('usuarios_acesso')
-        .select('id, igreja_id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (byAuth.error) throw byAuth.error;
-      acesso = byAuth.data;
-
-      if (!acesso && normalizedEmail) {
-        const byEmail = await supabaseAdmin
-          .from('usuarios_acesso')
-          .select('id, igreja_id')
-          .eq('email', normalizedEmail)
-          .limit(1)
-          .maybeSingle();
-
-        if (byEmail.error) throw byEmail.error;
-        acesso = byEmail.data;
-      }
+      const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
 
       const { data: vinculos, error: vinculosError } = await supabaseAdmin
         .from('usuarios_igrejas')

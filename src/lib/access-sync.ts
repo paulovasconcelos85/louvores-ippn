@@ -17,6 +17,13 @@ type PessoaAcesso = {
   usuario_id: string | null;
 };
 
+type PessoaIgrejaVinculo = {
+  igreja_id: string;
+  cargo: string | null;
+  ativo: boolean | null;
+  status_membro?: string | null;
+};
+
 type UsuarioAcesso = {
   id: string;
   igreja_id: string | null;
@@ -50,6 +57,55 @@ function getSupabaseAdmin() {
 
 function normalizeEmail(email?: string | null) {
   return email?.toLowerCase().trim() || null;
+}
+
+async function getPessoaChurchLinks(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  pessoaId: string,
+  fallback?: {
+    igreja_id?: string | null;
+    cargo?: string | null;
+    ativo?: boolean | null;
+  }
+) {
+  const { data, error } = await supabaseAdmin
+    .from('pessoas_igrejas')
+    .select('igreja_id, cargo, ativo, status_membro')
+    .eq('pessoa_id', pessoaId)
+    .order('ativo', { ascending: false })
+    .order('atualizado_em', { ascending: false });
+
+  if (error) throw error;
+
+  const vinculos = (data || []) as PessoaIgrejaVinculo[];
+
+  if (vinculos.length > 0) {
+    return vinculos;
+  }
+
+  if (fallback?.igreja_id) {
+    return [
+      {
+        igreja_id: fallback.igreja_id,
+        cargo: fallback.cargo || 'membro',
+        ativo: fallback.ativo ?? true,
+      },
+    ];
+  }
+
+  return [];
+}
+
+function getPrimaryPessoaChurch(
+  vinculos: PessoaIgrejaVinculo[],
+  fallback?: { igreja_id?: string | null }
+) {
+  return (
+    vinculos.find((vinculo) => vinculo.igreja_id === fallback?.igreja_id) ||
+    vinculos.find((vinculo) => vinculo.ativo !== false) ||
+    vinculos[0] ||
+    null
+  );
 }
 
 async function findExistingUsuarioAcesso(
@@ -184,15 +240,18 @@ async function ensureUsuarioAcesso(
   ativo: boolean,
   atualizado_em: string
 ) {
+  const vinculos = await getPessoaChurchLinks(supabaseAdmin, pessoa.id, pessoa);
+  const principal = getPrimaryPessoaChurch(vinculos, pessoa);
+
   const payload = {
     pessoa_id: pessoa.id,
-    igreja_id: pessoa.igreja_id,
+    igreja_id: principal?.igreja_id || pessoa.igreja_id,
     auth_user_id: authUserId,
     email,
     nome: pessoa.nome,
-    cargo: pessoa.cargo,
+    cargo: principal?.cargo || pessoa.cargo,
     telefone: pessoa.telefone,
-    ativo,
+    ativo: principal?.ativo ?? ativo,
     atualizado_em,
   };
 
@@ -288,12 +347,17 @@ export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAc
   const ativo = pessoa.ativo ?? true;
   const atualizado_em = new Date().toISOString();
 
+  const vinculosPessoa = await getPessoaChurchLinks(supabaseAdmin, pessoa.id, pessoa);
+  const igrejaPrincipal = getPrimaryPessoaChurch(vinculosPessoa, pessoa);
+
   const { error: pessoaUpdateError } = await supabaseAdmin
     .from('pessoas')
     .update({
       usuario_id: user.id,
       email,
-      ativo,
+      ativo: igrejaPrincipal?.ativo ?? ativo,
+      igreja_id: igrejaPrincipal?.igreja_id || pessoa.igreja_id,
+      cargo: igrejaPrincipal?.cargo || pessoa.cargo,
       atualizado_em,
     })
     .eq('id', pessoa.id);
@@ -309,15 +373,15 @@ export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAc
     atualizado_em
   );
 
-  if (pessoa.igreja_id) {
+  for (const vinculo of vinculosPessoa) {
     const { error: igrejaError } = await supabaseAdmin
       .from('usuarios_igrejas')
       .upsert(
         {
           usuario_id: usuarioAcesso.id,
-          igreja_id: pessoa.igreja_id,
-          cargo: pessoa.cargo,
-          ativo,
+          igreja_id: vinculo.igreja_id,
+          cargo: vinculo.cargo || pessoa.cargo,
+          ativo: vinculo.ativo ?? ativo,
         },
         { onConflict: 'usuario_id,igreja_id' }
       );

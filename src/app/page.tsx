@@ -387,6 +387,11 @@ export default function Home() {
   const boletinsAnterioresHref = igrejaAtualId
     ? `/boletins-anteriores?igreja_id=${igrejaAtualId}`
     : '/boletins-anteriores';
+  const pedidosPastoraisHref = igrejaSelecionada?.slug
+    ? `/pedidos/${igrejaSelecionada.slug}`
+    : igrejaAtualId
+      ? `/pedidos-pastorais?igreja_id=${igrejaAtualId}`
+      : '/pedidos-pastorais';
 
   const extrairCanticoLinha = (linha: string) => {
     const match = linha.match(/^(C[âa]ntico|Cantico|Hino):\s*(.+)$/i);
@@ -543,6 +548,13 @@ export default function Home() {
                   className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                 >
                   Boletins anteriores
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href={pedidosPastoraisHref}
+                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100"
+                >
+                  Pedidos
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
@@ -708,6 +720,25 @@ export default function Home() {
                       <p className="text-sm text-slate-400">Nenhum canal publico cadastrado.</p>
                     )}
                 </div>
+              </section>
+
+              <section className="rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,#f6fdf9_0%,#eef8f1_100%)] p-5 shadow-[0_10px_28px_rgba(54,92,77,0.08)] sm:p-6">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
+                  Atendimento
+                </p>
+                <h3 className="mt-3 font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">
+                  Quer compartilhar um pedido?
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Envie um pedido de oração, aconselhamento ou visita.
+                </p>
+                <Link
+                  href={pedidosPastoraisHref}
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#365c4d] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#28463b]"
+                >
+                  Abrir pedidos
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </section>
             </aside>
           </div>

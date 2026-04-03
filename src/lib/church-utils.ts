@@ -1,6 +1,7 @@
 export interface IgrejaSelecionavel {
   id: string;
   nome: string;
+  slug: string | null;
   sigla: string | null;
   cidade: string | null;
   regiao: string | null;
@@ -32,6 +33,7 @@ export function normalizeIgreja(raw: IgrejaRaw): IgrejaSelecionavel | null {
       asString(raw.nome_fantasia) ||
       asString(raw.sigla) ||
       'Igreja sem nome',
+    slug: asString(raw.slug),
     sigla: asString(raw.sigla),
     cidade: asString(raw.cidade) || asString(raw.municipio),
     regiao:

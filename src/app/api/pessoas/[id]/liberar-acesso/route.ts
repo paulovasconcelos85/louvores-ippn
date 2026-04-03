@@ -68,10 +68,22 @@ export async function POST(
 
     if (vinculoError) throw vinculoError;
 
+    const { data: vinculosPessoa, error: vinculosPessoaError } = await supabaseAdmin
+      .from('pessoas_igrejas')
+      .select('igreja_id, cargo, ativo')
+      .eq('pessoa_id', id);
+
+    if (vinculosPessoaError) throw vinculosPessoaError;
+
     const atualizado_em = new Date().toISOString();
     const ativo = vinculo?.ativo ?? pessoa.ativo ?? true;
     const cargo = vinculo?.cargo ?? pessoa.cargo;
-    const igrejaVinculoId = vinculo?.igreja_id ?? igrejaId ?? pessoa.igreja_id;
+    const igrejaVinculoId =
+      vinculo?.igreja_id ??
+      igrejaId ??
+      pessoa.igreja_id ??
+      vinculosPessoa?.find((item) => item.ativo !== false)?.igreja_id ??
+      vinculosPessoa?.[0]?.igreja_id;
 
     const { error: updatePessoaError } = await supabaseAdmin
       .from('pessoas')
@@ -139,19 +151,27 @@ export async function POST(
       }
 
       if (usuarioAcessoId && igrejaVinculoId) {
-        const { error: igrejaError } = await supabaseAdmin
-          .from('usuarios_igrejas')
-          .upsert(
-            {
-              usuario_id: usuarioAcessoId,
-              igreja_id: igrejaVinculoId,
-              cargo,
-              ativo,
-            },
-            { onConflict: 'usuario_id,igreja_id' }
-          );
+        const vinculosParaSincronizar =
+          (vinculosPessoa && vinculosPessoa.length > 0
+            ? vinculosPessoa
+            : [{ igreja_id: igrejaVinculoId, cargo, ativo }])
+            .filter((item) => item.igreja_id);
 
-        if (igrejaError) throw igrejaError;
+        for (const vinculoPessoa of vinculosParaSincronizar) {
+          const { error: igrejaError } = await supabaseAdmin
+            .from('usuarios_igrejas')
+            .upsert(
+              {
+                usuario_id: usuarioAcessoId,
+                igreja_id: vinculoPessoa.igreja_id,
+                cargo: vinculoPessoa.cargo ?? cargo,
+                ativo: vinculoPessoa.ativo ?? ativo,
+              },
+              { onConflict: 'usuario_id,igreja_id' }
+            );
+
+          if (igrejaError) throw igrejaError;
+        }
       }
     }
 

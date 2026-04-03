@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 
 export default function PerfilPage() {
@@ -29,14 +30,20 @@ export default function PerfilPage() {
   }, [user]);
 
   const carregar = async () => {
+    const pessoaIdAtual = await resolvePessoaIdForCurrentUser(user);
+
+    if (!pessoaIdAtual) {
+      return;
+    }
+
     // Buscar dados da pessoa
     const { data: pessoa } = await supabase
       .from('pessoas')
       .select('id, nome, telefone')
-      .eq('usuario_id', user!.id)
+      .eq('id', pessoaIdAtual)
       .eq('tem_acesso', true)
       .eq('ativo', true)
-      .single();
+      .maybeSingle();
 
     if (pessoa) {
       setPessoaId(pessoa.id);
@@ -73,6 +80,11 @@ export default function PerfilPage() {
     setMensagem('');
 
     try {
+      const pessoaIdAtual = await resolvePessoaIdForCurrentUser(user);
+      if (!pessoaIdAtual) {
+        throw new Error('Pessoa vinculada à conta não encontrada');
+      }
+
       await supabase
         .from('pessoas')
         .update({
@@ -80,7 +92,7 @@ export default function PerfilPage() {
           telefone: telefone ? unformatPhoneNumber(telefone) : null,
           atualizado_em: new Date().toISOString()
         })
-        .eq('usuario_id', user!.id);
+        .eq('id', pessoaIdAtual);
 
       setMensagem('✅ Perfil atualizado!');
     } catch (error: any) {
