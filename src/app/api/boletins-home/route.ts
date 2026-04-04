@@ -65,11 +65,42 @@ interface LegacyBoletimSecao {
   itens: BoletimItemRow[];
 }
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
+async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
+  const canticoIds = Array.from(
+    new Set(
+      canticoIdsRaw
+        .filter((value): value is string => Boolean(value))
+        .map((value) => String(value))
+    )
   );
+
+  if (canticoIds.length === 0) {
+    return new Map<string, string | null>();
+  }
+
+  const [canticosRawResult, canticosUnificadosResult] = await Promise.all([
+    supabaseAdmin.from('canticos').select('id, nome').in('id', canticoIds),
+    supabaseAdmin.from('canticos_unificados').select('id, nome').in('id', canticoIds),
+  ]);
+
+  if (canticosRawResult.error) throw canticosRawResult.error;
+  if (canticosUnificadosResult.error) throw canticosUnificadosResult.error;
+
+  const canticosPorId = new Map<string, string | null>();
+
+  ((canticosRawResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
+    canticosPorId.set(String(cantico.id), cantico.nome);
+  });
+
+  ((canticosUnificadosResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
+    if (!canticosPorId.has(String(cantico.id))) {
+      canticosPorId.set(String(cantico.id), cantico.nome);
+    }
+  });
+
+  return canticosPorId;
 }
+
 async function buildLegacyBoletimFallback(igrejaId: string) {
   const { data: cultoRaw, error: cultoError } = await supabaseAdmin
     .from('Louvores IPPN')
@@ -98,26 +129,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
   if (itensError) throw itensError;
 
   const itens = (itensRaw || []) as LegacyLouvorItemRow[];
-  const canticoIds = itens
-    .map((item) => item.cantico_id)
-    .filter((value): value is string => Boolean(value && isUuid(value)));
-
-  const { data: canticosRaw, error: canticosError } =
-    canticoIds.length > 0
-      ? await supabaseAdmin
-          .from('canticos')
-          .select('id, nome')
-          .in('id', canticoIds)
-      : { data: [], error: null };
-
-  if (canticosError) throw canticosError;
-
-  const canticosPorId = new Map(
-    ((canticosRaw || []) as Array<{ id: string; nome: string | null }>).map((cantico) => [
-      cantico.id,
-      cantico.nome,
-    ])
-  );
+  const canticosPorId = await resolveCanticosPorId(itens.map((item) => item.cantico_id));
 
   const secoes: LegacyBoletimSecao[] = [];
 
@@ -187,7 +199,7 @@ async function buildLegacyBoletimFallback(igrejaId: string) {
       itens: itens.map((item, index) => {
         const tituloItem = item.tipo || `Item ${index + 1}`;
         const nomeCantico = item.cantico_id
-          ? canticosPorId.get(item.cantico_id)
+          ? canticosPorId.get(String(item.cantico_id))
           : null;
         const cantico = nomeCantico
           ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
@@ -316,8 +328,9 @@ export async function GET(request: NextRequest) {
     }));
 
     let message: string | null = null;
+    const secoesComConteudo = boletimSecoes.filter((secao) => secao.itens.length > 0);
 
-    if (boletimSecoes.length === 0) {
+    if (boletimSecoes.length === 0 || secoesComConteudo.length === 0) {
       const fallback = await buildLegacyBoletimFallback(igrejaId);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;

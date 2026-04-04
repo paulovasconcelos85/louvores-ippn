@@ -1012,7 +1012,25 @@ function EditorLiturgia({
                   index={idx}
                   canticos={canticos}
                   onCreate={async (nome: string) => {
-                    const { data }: any = await supabase.from('canticos').insert({ nome }).select().single();
+                    const payload = {
+                      nome: nome.trim(),
+                      letra: '',
+                      referencia: '',
+                      tags: [],
+                      youtube_url: null,
+                      spotify_url: null,
+                    };
+
+                    const { data, error }: any = await supabase
+                      .from('canticos')
+                      .insert(payload)
+                      .select('id, nome')
+                      .single();
+
+                    if (error) {
+                      throw new Error(error.message || 'Nao foi possivel criar o cântico.');
+                    }
+
                     const novo = { ...data, ultima_vez: null };
                     setCanticos((prev: Cantico[]) => [...prev, novo]);
                     return novo;
