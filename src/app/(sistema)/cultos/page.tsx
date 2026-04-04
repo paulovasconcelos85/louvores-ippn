@@ -38,6 +38,7 @@ interface Cantico {
   id: string | number;
   nome: string;
   tipo?: string;
+  numero?: string | null;
   ultima_vez?: string | null;
 }
 
@@ -595,6 +596,10 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
     >
       {filtrados.map(c => {
         const st = getStatusMusica(c.ultima_vez);
+        const titulo =
+          c.tipo === 'hinario' && c.numero
+            ? `Hino ${c.numero} · ${c.nome}`
+            : c.nome;
         return (
           <div
             key={c.id}
@@ -602,7 +607,7 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
             onMouseDown={e => e.preventDefault()}
             onClick={() => { onChange(c); setQuery(c.nome); setOpen(false); }}
           >
-            <div className="text-base font-semibold text-slate-800">{c.nome}</div>
+            <div className="text-base font-semibold text-slate-800">{titulo}</div>
             <div className={`text-xs font-bold mt-0.5 ${st.cor}`}>{st.label} · {st.dataFormatada}</div>
           </div>
         );
