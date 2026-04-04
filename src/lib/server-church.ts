@@ -171,13 +171,17 @@ async function getPrimaryChurchIdForAccess(
     .from('usuarios_igrejas')
     .select('igreja_id, ativo')
     .eq('usuario_id', acesso.id)
-    .eq('ativo', true);
+    .eq('ativo', true)
+    .order('igreja_id', { ascending: true });
 
   if (error) throw error;
 
-  const ids = Array.from(
-    new Set([acesso.igreja_id, ...(vinculos || []).map((vinculo) => vinculo.igreja_id)].filter(Boolean))
-  );
+  const idsOrdenados = [
+    acesso.igreja_id,
+    ...(vinculos || []).map((vinculo) => vinculo.igreja_id),
+  ].filter(Boolean);
+
+  const ids = Array.from(new Set(idsOrdenados));
 
   return ids[0] || null;
 }

@@ -126,6 +126,35 @@ function formatarPais(valor: string | null) {
   return valor;
 }
 
+function parseAgendaBoletimItem(conteudo: string) {
+  const partes = conteudo.split('|');
+  if (partes.length < 3) return null;
+
+  const [data, hora, ...descricaoPartes] = partes;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
+
+  return {
+    data,
+    hora: /^\d{2}:\d{2}$/.test(hora) ? hora : '00:00',
+    descricao: descricaoPartes.join('|').trim(),
+    temHora: hora !== '00:00',
+  };
+}
+
+function formatarDataAgenda(valor: string) {
+  const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return valor;
+
+  const [, ano, mes, dia] = match;
+  const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+  }).format(data);
+}
+
 async function lerJsonSeguro(response: Response) {
   const texto = await response.text();
   const contentType = response.headers.get('content-type') || '';
@@ -231,6 +260,12 @@ export default function Home() {
     for (const [index, secao] of boletimSecoes.entries()) {
       texto += `*${index + 1}. ${secao.titulo}*\n`;
       for (const item of secao.itens) {
+        const agenda = secao.tipo === 'agenda' ? parseAgendaBoletimItem(item.conteudo) : null;
+        if (agenda) {
+          texto += `- ${formatarDataAgenda(agenda.data)}${agenda.temHora ? ` às ${agenda.hora}` : ''} — ${agenda.descricao}\n`;
+          continue;
+        }
+
         texto += `${item.destaque ? '• ' : '- '}${item.conteudo}\n`;
       }
       texto += '\n';
@@ -381,6 +416,7 @@ export default function Home() {
   const isImageSection = (secao: BoletimSecao) => secao.tipo === 'imagem_tema';
   const isLiturgiaSection = (secao: BoletimSecao) => secao.tipo === 'liturgia';
   const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
+  const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
 
@@ -450,6 +486,22 @@ export default function Home() {
   };
 
   const renderItemConteudo = (secao: BoletimSecao, conteudo: string) => {
+    if (isAgendaSection(secao)) {
+      const agenda = parseAgendaBoletimItem(conteudo);
+
+      if (agenda) {
+        return (
+          <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#365c4d]">
+              {formatarDataAgenda(agenda.data)}
+              {agenda.temHora ? ` · ${agenda.hora}` : ''}
+            </p>
+            <p className="mt-2 text-[15px] leading-7 text-slate-700 sm:text-base">{agenda.descricao}</p>
+          </div>
+        );
+      }
+    }
+
     if (!isLiturgiaSection(secao)) {
       return renderBlocoTexto(conteudo, isPastoralSection(secao));
     }

@@ -23,6 +23,16 @@ const TIPOS_LITURGICOS_PADRAO = [
   'Lembretes',
 ];
 
+const TIPOS_SECOES_BOLETIM = [
+  { tipo: 'avisos', titulo: 'Avisos', icone: 'megaphone', emoji: '📢' },
+  { tipo: 'oracao', titulo: 'Pedidos de Oração', icone: 'hands.sparkles', emoji: '🙏' },
+  { tipo: 'agenda', titulo: 'Agenda', icone: 'calendar', emoji: '📅' },
+  { tipo: 'informativo', titulo: 'Informativo', icone: 'info.circle', emoji: 'ℹ️' },
+  { tipo: 'outro', titulo: 'Informações', icone: 'list.bullet', emoji: '📝' },
+] as const;
+
+const TIPOS_SECOES_SISTEMA = new Set(['imagem_tema', 'palavra_pastoral', 'liturgia']);
+
 // --- TIPOS ---
 interface Cantico {
   id: string | number;
@@ -44,6 +54,51 @@ interface LouvorItem {
   descricao: string | null;
   horario: string | null;
   canticos_lista: CanticoNoItem[];
+}
+
+interface BoletimSecaoRow {
+  id: string;
+  igreja_id: string | null;
+  culto_id: number | null;
+  tipo: string;
+  titulo: string;
+  icone: string | null;
+  ordem: number | null;
+  visivel: boolean | null;
+  criado_em: string | null;
+}
+
+interface BoletimItemRow {
+  id: string;
+  secao_id: string | null;
+  conteudo: string;
+  destaque: boolean | null;
+  ordem: number | null;
+  criado_em: string | null;
+}
+
+interface BoletimItemRascunho {
+  id: string;
+  conteudo: string;
+  destaque: boolean;
+}
+
+interface AgendaItemRascunho {
+  id: string;
+  data: string;
+  hora: string;
+  descricao: string;
+  temHora: boolean;
+}
+
+interface BoletimSecaoRascunho {
+  id: string;
+  tipo: string;
+  titulo: string;
+  icone: string | null;
+  visivel: boolean;
+  ordem: number;
+  itens: BoletimItemRascunho[];
 }
 
 interface ModeloLiturgiaConfig {
@@ -269,6 +324,91 @@ function isUuid(value: string | null | undefined) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function createDraftId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function getBoletimTipoConfig(tipo: string) {
+  return TIPOS_SECOES_BOLETIM.find((item) => item.tipo === tipo) || TIPOS_SECOES_BOLETIM[TIPOS_SECOES_BOLETIM.length - 1];
+}
+
+function createEmptyBoletimItem(): BoletimItemRascunho {
+  return {
+    id: createDraftId('boletim-item'),
+    conteudo: '',
+    destaque: false,
+  };
+}
+
+function createEmptyAgendaItem(): AgendaItemRascunho {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+
+  return {
+    id: createDraftId('agenda-item'),
+    data: `${yyyy}-${mm}-${dd}`,
+    hora: '09:00',
+    descricao: '',
+    temHora: true,
+  };
+}
+
+function normalizarSecoesBoletim(secoes: BoletimSecaoRascunho[]) {
+  return secoes.map((secao, index) => ({
+    ...secao,
+    ordem: index,
+  }));
+}
+
+function parseAgendaConteudo(conteudo: string): AgendaItemRascunho {
+  const partes = conteudo.split('|');
+  const [dataRaw, horaRaw, ...descricaoPartes] = partes;
+  const descricao = descricaoPartes.join('|').trim();
+  const data = /^\d{4}-\d{2}-\d{2}$/.test(dataRaw || '') ? (dataRaw as string) : createEmptyAgendaItem().data;
+  const hora = /^\d{2}:\d{2}$/.test(horaRaw || '') ? (horaRaw as string) : '09:00';
+
+  return {
+    id: createDraftId('agenda-item'),
+    data,
+    hora,
+    descricao: descricao || conteudo.trim(),
+    temHora: horaRaw !== '00:00',
+  };
+}
+
+function serializeAgendaConteudo(item: AgendaItemRascunho) {
+  return `${item.data}|${item.temHora ? item.hora : '00:00'}|${item.descricao.trim()}`;
+}
+
+function montarConteudoLiturgiaParaBoletim(item: LouvorItem, index: number, canticos: Cantico[]) {
+  const linhas = [item.tipo || `Item ${index + 1}`];
+  const conteudoPublico = item.conteudo_publico?.trim();
+  const descricao = item.descricao?.trim();
+
+  if (conteudoPublico) {
+    linhas.push(conteudoPublico);
+  }
+
+  if (descricao) {
+    linhas.push(descricao);
+  }
+
+  item.canticos_lista.forEach((canticoNoItem) => {
+    if (!canticoNoItem.cantico_id) return;
+
+    const cantico = canticos.find((entry) => String(entry.id) === String(canticoNoItem.cantico_id));
+    const nome = cantico?.nome?.trim();
+
+    if (!nome) return;
+
+    linhas.push(`Cantico: ${nome}${canticoNoItem.tom ? ` (${canticoNoItem.tom})` : ''}`);
+  });
+
+  return linhas.join('\n');
+}
+
 async function buscarPastorPadrao(igrejaId: string): Promise<string | null> {
   try {
     const { data: vinculosPastor, error: vinculoError } = await supabase
@@ -335,12 +475,13 @@ async function carregarLouvorItensComCanticos(
         .map((value) => String(value))
     )
   );
+  const canticoIdsUuid = canticoIds.filter(isUuid);
 
   const [canticosLegadosResult, canticosUnificadosResult] =
-    canticoIds.length > 0
+    canticoIdsUuid.length > 0
       ? await Promise.all([
-          supabase.from('canticos').select('id, nome').in('id', canticoIds),
-          supabase.from('canticos_unificados').select('id, nome').in('id', canticoIds),
+          supabase.from('canticos').select('id, nome').in('id', canticoIdsUuid),
+          supabase.from('canticos_unificados').select('id, nome').in('id', canticoIdsUuid),
         ])
       : [
           { data: [], error: null },
@@ -472,7 +613,7 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
           onMouseDown={e => e.preventDefault()}
           onClick={async () => { const n = await onCreate(query); onChange(n); setQuery(n.nome); setOpen(false); }}
         >
-          + Cadastrar "{query}"
+          + Cadastrar &ldquo;{query}&rdquo;
         </div>
       )}
     </div>
@@ -653,6 +794,356 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
   );
 }
 
+function EscolherTipoSecaoModal({
+  aberto,
+  onFechar,
+  onEscolher,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  onEscolher: (tipo: string) => void;
+}) {
+  if (!aberto) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[28px] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Boletim</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">Nova seção</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            Fechar
+          </button>
+        </div>
+
+        <div className="space-y-3 px-6 py-6">
+          {TIPOS_SECOES_BOLETIM.map((tipo) => (
+            <button
+              key={tipo.tipo}
+              type="button"
+              onClick={() => onEscolher(tipo.tipo)}
+              className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 px-4 py-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50"
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-2xl">
+                {tipo.emoji}
+              </span>
+              <div className="flex-1">
+                <p className="font-bold text-slate-900">{tipo.titulo}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Adicionar seção do tipo {tipo.titulo.toLowerCase()} ao boletim.
+                </p>
+              </div>
+              <span className="text-lg text-slate-300">›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditorSecaoBoletimModal({
+  aberto,
+  tipo,
+  secaoExistente,
+  onFechar,
+  onSalvar,
+}: {
+  aberto: boolean;
+  tipo: string | null;
+  secaoExistente: BoletimSecaoRascunho | null;
+  onFechar: () => void;
+  onSalvar: (secao: BoletimSecaoRascunho) => void;
+}) {
+  const [titulo, setTitulo] = useState('');
+  const [visivel, setVisivel] = useState(true);
+  const [itens, setItens] = useState<BoletimItemRascunho[]>([]);
+  const [agendaItens, setAgendaItens] = useState<AgendaItemRascunho[]>([]);
+
+  useEffect(() => {
+    if (!aberto || !tipo) return;
+
+    const config = getBoletimTipoConfig(tipo);
+    const itensExistentes = [...(secaoExistente?.itens || [])];
+
+    setTitulo(secaoExistente?.titulo || config.titulo);
+    setVisivel(secaoExistente?.visivel ?? true);
+
+    if (tipo === 'agenda') {
+      const agenda = itensExistentes.map((item) => parseAgendaConteudo(item.conteudo));
+      setAgendaItens([...agenda, createEmptyAgendaItem()]);
+      setItens([]);
+      return;
+    }
+
+    setItens([
+      ...itensExistentes.map((item) => ({
+        id: item.id || createDraftId('boletim-item'),
+        conteudo: item.conteudo,
+        destaque: item.destaque,
+      })),
+      createEmptyBoletimItem(),
+    ]);
+    setAgendaItens([]);
+  }, [aberto, tipo, secaoExistente]);
+
+  if (!aberto || !tipo) return null;
+
+  const config = getBoletimTipoConfig(tipo);
+  const isAgenda = tipo === 'agenda';
+
+  const garantirCampoTextoExtra = (lista: BoletimItemRascunho[]) => {
+    const preenchidos = lista.filter((item) => item.conteudo.trim().length > 0);
+    return [...preenchidos, createEmptyBoletimItem()];
+  };
+
+  const garantirCampoAgendaExtra = (lista: AgendaItemRascunho[]) => {
+    const preenchidos = lista.filter((item) => item.descricao.trim().length > 0);
+    return [...preenchidos, createEmptyAgendaItem()];
+  };
+
+  const salvarSecao = () => {
+    const base: BoletimSecaoRascunho = {
+      id: secaoExistente?.id || createDraftId('secao-boletim'),
+      tipo,
+      titulo: titulo.trim() || config.titulo,
+      icone: config.icone,
+      visivel,
+      ordem: secaoExistente?.ordem || 0,
+      itens: isAgenda
+        ? agendaItens
+            .filter((item) => item.descricao.trim().length > 0)
+            .map((item) => ({
+              id: item.id,
+              conteudo: serializeAgendaConteudo(item),
+              destaque: false,
+            }))
+        : itens
+            .filter((item) => item.conteudo.trim().length > 0)
+            .map((item) => ({
+              id: item.id,
+              conteudo: item.conteudo.trim(),
+              destaque: item.destaque,
+            })),
+    };
+
+    onSalvar(base);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Boletim</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">
+              {secaoExistente ? `Editar ${config.titulo}` : `Nova ${config.titulo}`}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            Cancelar
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-6">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">Título</label>
+            <input
+              value={titulo}
+              onChange={(event) => setTitulo(event.target.value)}
+              placeholder={config.titulo}
+              className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-800 outline-none transition-colors focus:border-emerald-400"
+            />
+            <label className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={visivel}
+                onChange={(event) => setVisivel(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+              />
+              Visível no boletim público
+            </label>
+          </div>
+
+          {isAgenda ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Eventos</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Novos eventos aparecem automaticamente conforme você preenche.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {agendaItens.map((item, index) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="grid gap-3 md:grid-cols-[1fr_180px]">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Data
+                        <input
+                          type="date"
+                          value={item.data}
+                          onChange={(event) => {
+                            const atualizados = agendaItens.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, data: event.target.value } : entry
+                            );
+                            setAgendaItens(atualizados);
+                          }}
+                          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                        />
+                      </label>
+
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={item.temHora}
+                            onChange={(event) => {
+                              const atualizados = agendaItens.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, temHora: event.target.checked } : entry
+                              );
+                              setAgendaItens(atualizados);
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+                          />
+                          Tem horário
+                        </label>
+
+                        {item.temHora ? (
+                          <input
+                            type="time"
+                            value={item.hora}
+                            onChange={(event) => {
+                              const atualizados = agendaItens.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, hora: event.target.value } : entry
+                              );
+                              setAgendaItens(atualizados);
+                            }}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <textarea
+                      value={item.descricao}
+                      onChange={(event) => {
+                        const atualizados = agendaItens.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, descricao: event.target.value } : entry
+                        );
+                        setAgendaItens(garantirCampoAgendaExtra(atualizados));
+                      }}
+                      rows={3}
+                      placeholder="Descrição do evento..."
+                      className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
+                    />
+
+                    {(item.descricao.trim() || agendaItens.length > 1) ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setAgendaItens(garantirCampoAgendaExtra(agendaItens.filter((entry) => entry.id !== item.id)))}
+                          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          Remover evento
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Conteúdo</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Novos campos aparecem automaticamente conforme você digita.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {itens.map((item, index) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <textarea
+                      value={item.conteudo}
+                      onChange={(event) => {
+                        const atualizados = itens.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, conteudo: event.target.value } : entry
+                        );
+                        setItens(garantirCampoTextoExtra(atualizados));
+                      }}
+                      rows={3}
+                      placeholder="Digite aqui..."
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
+                    />
+
+                    {item.conteudo.trim() ? (
+                      <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={item.destaque}
+                          onChange={(event) => {
+                            const atualizados = itens.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, destaque: event.target.checked } : entry
+                            );
+                            setItens(atualizados);
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+                        />
+                        Destaque
+                      </label>
+                    ) : null}
+
+                    {(item.conteudo.trim() || itens.length > 1) ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setItens(garantirCampoTextoExtra(itens.filter((entry) => entry.id !== item.id)))}
+                          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          Remover item
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvarSecao}
+            className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
+          >
+            Aplicar seção
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- EDITOR DE LITURGIA ---
 function EditorLiturgia({
   culto,
@@ -675,12 +1166,19 @@ function EditorLiturgia({
   const [instagramUrl, setInstagramUrl] = useState('');
   const [importando, setImportando] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [boletimSecoes, setBoletimSecoes] = useState<BoletimSecaoRascunho[]>([]);
+  const [loadingBoletim, setLoadingBoletim] = useState(false);
+  const [showEscolherTipo, setShowEscolherTipo] = useState(false);
+  const [tipoNovaSecao, setTipoNovaSecao] = useState<string | null>(null);
+  const [secaoEditandoIndex, setSecaoEditandoIndex] = useState<number | null>(null);
 
   const isLideranca = podeEditarLiturgiaCompleta;
   const podVerTom = isLideranca || podeEditarLouvor;
   const canEditarMusica = isLideranca || podeEditarLouvor;
   const tiposLiturgicos = resolveTiposLiturgicos(configuracaoIgreja);
   const temModeloDaIgreja = (configuracaoIgreja?.modelosLiturgia?.length || 0) > 0;
+  const secaoEditando =
+    secaoEditandoIndex !== null ? boletimSecoes[secaoEditandoIndex] || null : null;
 
   useEffect(() => {
     if (culto) {
@@ -689,6 +1187,15 @@ function EditorLiturgia({
       setItens(modeloPadrao(dia, configuracaoIgreja));
     }
   }, [culto, dia, configuracaoIgreja]);
+
+  useEffect(() => {
+    if (culto) {
+      carregarSecoesBoletim(culto['Culto nr.']);
+      return;
+    }
+
+    setBoletimSecoes([]);
+  }, [culto]);
 
   useEffect(() => {
     if (culto?.palavra_pastoral_autor) return;
@@ -730,6 +1237,79 @@ function EditorLiturgia({
     });
 
     setItens(agrupados);
+  };
+
+  const carregarSecoesBoletim = async (cultoNr: number) => {
+    const igrejaId = getStoredChurchId();
+
+    if (!igrejaId) {
+      setBoletimSecoes([]);
+      return;
+    }
+
+    setLoadingBoletim(true);
+
+    try {
+      const { data: secoesRaw, error: secoesError } = await supabase
+        .from('boletim_secoes')
+        .select('id, igreja_id, culto_id, tipo, titulo, icone, ordem, visivel, criado_em')
+        .eq('culto_id', cultoNr)
+        .eq('igreja_id', igrejaId)
+        .order('ordem', { ascending: true })
+        .order('criado_em', { ascending: true });
+
+      if (secoesError) throw secoesError;
+
+      const secoes = ((secoesRaw || []) as BoletimSecaoRow[]).filter(
+        (secao) => !TIPOS_SECOES_SISTEMA.has(secao.tipo)
+      );
+
+      if (secoes.length === 0) {
+        setBoletimSecoes([]);
+        return;
+      }
+
+      const secaoIds = secoes.map((secao) => secao.id);
+      const { data: itensRaw, error: itensError } = await supabase
+        .from('boletim_itens')
+        .select('id, secao_id, conteudo, destaque, ordem, criado_em')
+        .in('secao_id', secaoIds)
+        .order('ordem', { ascending: true })
+        .order('criado_em', { ascending: true });
+
+      if (itensError) throw itensError;
+
+      const itensPorSecao = new Map<string, BoletimItemRascunho[]>();
+
+      ((itensRaw || []) as BoletimItemRow[]).forEach((item) => {
+        if (!item.secao_id) return;
+
+        const lista = itensPorSecao.get(item.secao_id) || [];
+        lista.push({
+          id: item.id,
+          conteudo: item.conteudo || '',
+          destaque: item.destaque === true,
+        });
+        itensPorSecao.set(item.secao_id, lista);
+      });
+
+      const secoesRascunho = secoes.map((secao, index) => ({
+        id: secao.id,
+        tipo: secao.tipo,
+        titulo: secao.titulo,
+        icone: secao.icone,
+        visivel: secao.visivel !== false,
+        ordem: secao.ordem ?? index,
+        itens: itensPorSecao.get(secao.id) || [],
+      }));
+
+      setBoletimSecoes(normalizarSecoesBoletim(secoesRascunho));
+    } catch (error) {
+      console.warn('Falha ao carregar seções extras do boletim:', error);
+      setBoletimSecoes([]);
+    } finally {
+      setLoadingBoletim(false);
+    }
   };
 
   const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -791,6 +1371,138 @@ function EditorLiturgia({
   const aplicarModeloDaIgreja = () => {
     const baseDia = dia || new Date().toISOString().split('T')[0];
     setItens(modeloPadrao(baseDia, configuracaoIgreja));
+  };
+
+  const salvarBoletim = async (cultoId: number, igrejaId: string, imagemUrl: string | null) => {
+    const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
+      .from('boletim_secoes')
+      .select('id')
+      .eq('culto_id', cultoId)
+      .eq('igreja_id', igrejaId);
+
+    if (secoesExistentesError) throw secoesExistentesError;
+
+    const secaoIdsExistentes = (secoesExistentesRaw || [])
+      .map((item) => item.id)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+    if (secaoIdsExistentes.length > 0) {
+      const { error: deleteItensError } = await supabase
+        .from('boletim_itens')
+        .delete()
+        .in('secao_id', secaoIdsExistentes);
+
+      if (deleteItensError) throw deleteItensError;
+
+      const { error: deleteSecoesError } = await supabase
+        .from('boletim_secoes')
+        .delete()
+        .in('id', secaoIdsExistentes);
+
+      if (deleteSecoesError) throw deleteSecoesError;
+    }
+
+    const secoesParaPersistir: Array<{
+      tipo: string;
+      titulo: string;
+      icone: string | null;
+      visivel: boolean;
+      itens: Array<{ conteudo: string; destaque: boolean; ordem: number }>;
+    }> = [];
+
+    if (imagemUrl) {
+      secoesParaPersistir.push({
+        tipo: 'imagem_tema',
+        titulo: 'Imagem do Boletim',
+        icone: null,
+        visivel: true,
+        itens: [{ conteudo: imagemUrl, destaque: false, ordem: 0 }],
+      });
+    }
+
+    if (palavraPastoral.trim()) {
+      secoesParaPersistir.push({
+        tipo: 'palavra_pastoral',
+        titulo: 'Palavra Pastoral',
+        icone: null,
+        visivel: true,
+        itens: [
+          {
+            conteudo: `${palavraPastoral.trim()}${
+              palavraPastoralAutor.trim() ? `\n\n${palavraPastoralAutor.trim()}` : ''
+            }`,
+            destaque: true,
+            ordem: 0,
+          },
+        ],
+      });
+    }
+
+    const liturgiaItens = itens.map((item, index) => ({
+      conteudo: montarConteudoLiturgiaParaBoletim(item, index, canticos).trim(),
+      destaque: false,
+      ordem: index,
+    }));
+
+    if (liturgiaItens.length > 0) {
+      secoesParaPersistir.push({
+        tipo: 'liturgia',
+        titulo: `Liturgia do culto de ${dia}`,
+        icone: null,
+        visivel: true,
+        itens: liturgiaItens,
+      });
+    }
+
+    normalizarSecoesBoletim(boletimSecoes).forEach((secao) => {
+      const config = getBoletimTipoConfig(secao.tipo);
+      const itensValidos = secao.itens
+        .map((item, index) => ({
+          conteudo: secao.tipo === 'agenda' ? item.conteudo : item.conteudo.trim(),
+          destaque: item.destaque,
+          ordem: index,
+        }))
+        .filter((item) => item.conteudo.length > 0);
+
+      secoesParaPersistir.push({
+        tipo: secao.tipo,
+        titulo: secao.titulo.trim() || config.titulo,
+        icone: secao.icone || config.icone,
+        visivel: secao.visivel,
+        itens: itensValidos,
+      });
+    });
+
+    for (const [index, secao] of secoesParaPersistir.entries()) {
+      const { data: secaoCriada, error: secaoError } = await supabase
+        .from('boletim_secoes')
+        .insert({
+          culto_id: cultoId,
+          igreja_id: igrejaId,
+          tipo: secao.tipo,
+          titulo: secao.titulo,
+          icone: secao.icone,
+          ordem: index,
+          visivel: secao.visivel,
+        })
+        .select('id')
+        .single();
+
+      if (secaoError) throw secaoError;
+
+      if (!secaoCriada?.id || secao.itens.length === 0) continue;
+
+      const { error: itensError } = await supabase.from('boletim_itens').insert(
+        secao.itens.map((item) => ({
+          secao_id: secaoCriada.id,
+          conteudo: item.conteudo,
+          destaque: item.destaque,
+          ordem: item.ordem,
+        }))
+      );
+
+      if (itensError) throw itensError;
+    }
   };
 
   const salvar = async () => {
@@ -859,8 +1571,12 @@ function EditorLiturgia({
         }
       });
 
-      const { error } = await supabase.from('louvor_itens').insert(rows);
-      if (error) throw error;
+      if (rows.length > 0) {
+        const { error } = await supabase.from('louvor_itens').insert(rows);
+        if (error) throw error;
+      }
+
+      await salvarBoletim(cId, igrejaId, imagemUrl);
 
       alert('✅ Salvo com sucesso!');
       onSalvo();
@@ -973,6 +1689,129 @@ function EditorLiturgia({
           </div>
         )}
 
+        {isLideranca && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Seções extras do boletim
+                </h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  Avisos, pedidos de oração, agenda e outros blocos livres que acompanham a liturgia.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEscolherTipo(true)}
+                className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
+              >
+                + Nova seção
+              </button>
+            </div>
+
+            {loadingBoletim ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                Carregando seções extras...
+              </div>
+            ) : boletimSecoes.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                Nenhuma seção extra cadastrada neste boletim.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {boletimSecoes.map((secao, index) => {
+                  const config = getBoletimTipoConfig(secao.tipo);
+
+                  return (
+                    <div
+                      key={secao.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                            {config.emoji}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900">{secao.titulo || config.titulo}</p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {secao.itens.length} item(ns)
+                              {secao.visivel ? ' publicado(s)' : ' em rascunho'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {!secao.visivel ? (
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                              Oculto
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBoletimSecoes(
+                                normalizarSecoesBoletim(
+                                  boletimSecoes.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, visivel: !item.visivel } : item
+                                  )
+                                )
+                              )
+                            }
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                          >
+                            {secao.visivel ? 'Ocultar' : 'Publicar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSecaoEditandoIndex(index)}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (index === 0) return;
+                              const atualizadas = [...boletimSecoes];
+                              [atualizadas[index - 1], atualizadas[index]] = [atualizadas[index], atualizadas[index - 1]];
+                              setBoletimSecoes(normalizarSecoesBoletim(atualizadas));
+                            }}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (index === boletimSecoes.length - 1) return;
+                              const atualizadas = [...boletimSecoes];
+                              [atualizadas[index], atualizadas[index + 1]] = [atualizadas[index + 1], atualizadas[index]];
+                              setBoletimSecoes(normalizarSecoesBoletim(atualizadas));
+                            }}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBoletimSecoes(normalizarSecoesBoletim(boletimSecoes.filter((_, itemIndex) => itemIndex !== index)))
+                            }
+                            className="rounded-xl border border-red-100 px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ITENS DA LITURGIA */}
         <div>
           <div className="mb-3 flex items-start justify-between gap-3">
@@ -1080,6 +1919,39 @@ function EditorLiturgia({
           </button>
         </div>
       )}
+
+      <EscolherTipoSecaoModal
+        aberto={showEscolherTipo}
+        onFechar={() => setShowEscolherTipo(false)}
+        onEscolher={(tipo) => {
+          setShowEscolherTipo(false);
+          setTipoNovaSecao(tipo);
+        }}
+      />
+
+      <EditorSecaoBoletimModal
+        aberto={Boolean(tipoNovaSecao || secaoEditando)}
+        tipo={tipoNovaSecao || secaoEditando?.tipo || null}
+        secaoExistente={tipoNovaSecao ? null : secaoEditando}
+        onFechar={() => {
+          setTipoNovaSecao(null);
+          setSecaoEditandoIndex(null);
+        }}
+        onSalvar={(secao) => {
+          if (secaoEditandoIndex !== null) {
+            setBoletimSecoes(
+              normalizarSecoesBoletim(
+                boletimSecoes.map((item, index) => (index === secaoEditandoIndex ? { ...secao, ordem: item.ordem } : item))
+              )
+            );
+          } else {
+            setBoletimSecoes(normalizarSecoesBoletim([...boletimSecoes, secao]));
+          }
+
+          setTipoNovaSecao(null);
+          setSecaoEditandoIndex(null);
+        }}
+      />
     </div>
   );
 }

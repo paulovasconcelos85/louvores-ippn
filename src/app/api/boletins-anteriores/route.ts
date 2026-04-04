@@ -32,6 +32,11 @@ interface LegacyCultoRow {
   palavra_pastoral_autor: string | null;
 }
 
+function isUuid(value: string | null | undefined) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
   const canticoIds = Array.from(
     new Set(
@@ -45,9 +50,14 @@ async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
     return new Map<string, string | null>();
   }
 
+  const canticoIdsUuid = canticoIds.filter(isUuid);
+  if (canticoIdsUuid.length === 0) {
+    return new Map<string, string | null>();
+  }
+
   const [canticosRawResult, canticosUnificadosResult] = await Promise.all([
-    supabaseAdmin.from('canticos').select('id, nome').in('id', canticoIds),
-    supabaseAdmin.from('canticos_unificados').select('id, nome').in('id', canticoIds),
+    supabaseAdmin.from('canticos').select('id, nome').in('id', canticoIdsUuid),
+    supabaseAdmin.from('canticos_unificados').select('id, nome').in('id', canticoIdsUuid),
   ]);
 
   if (canticosRawResult.error) throw canticosRawResult.error;
