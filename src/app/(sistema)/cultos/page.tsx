@@ -8,7 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { jsPDF } from 'jspdf';
 import { getStoredChurchId } from '@/lib/church-utils';
 
-const TIPOS_LITURGICOS = [
+const TIPOS_LITURGICOS_PADRAO = [
   'Prelúdio',
   'Saudação e Acolhida à Igreja',
   'Cânticos Congregacionais',
@@ -25,7 +25,7 @@ const TIPOS_LITURGICOS = [
 
 // --- TIPOS ---
 interface Cantico {
-  id: string;
+  id: string | number;
   nome: string;
   tipo?: string;
   ultima_vez?: string | null;
@@ -44,6 +44,22 @@ interface LouvorItem {
   descricao: string | null;
   horario: string | null;
   canticos_lista: CanticoNoItem[];
+}
+
+interface ModeloLiturgiaConfig {
+  bloco: string;
+  ordem: number;
+  tipo: string;
+  conteudo_publico_padrao: string;
+  descricao_interna_padrao: string;
+  descricao_padrao: string;
+  tem_cantico: boolean;
+}
+
+interface LiturgiaChurchConfig {
+  tiposLiturgicos: string[];
+  modelosLiturgia: ModeloLiturgiaConfig[];
+  pastorPadrao: string | null;
 }
 
 interface Culto {
@@ -70,13 +86,135 @@ interface LouvorItemRowComCantico extends LouvorItemRow {
   canticos: { nome: string | null } | null;
 }
 
+type ItemAgrupado = {
+  tipo: string;
+  horario: string | null;
+  conteudo_publico: string | null;
+  descricao: string | null;
+  canticos: { nome: string; tom: string | null }[];
+};
+
 // --- HELPERS ---
 function isPrimeirosDomingo(data: Date): boolean {
   const d = new Date(data);
   return d.getDay() === 0 && d.getDate() <= 7;
 }
 
-function modeloPadrao(dia: string): LouvorItem[] {
+function extractTiposLiturgicos(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item.trim();
+      if (!item || typeof item !== 'object') return '';
+      const row = item as Record<string, unknown>;
+      const candidate = row.nome || row.label || row.tipo || row.titulo;
+      return typeof candidate === 'string' ? candidate.trim() : '';
+    })
+    .filter(Boolean);
+}
+
+function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgiaConfig[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null;
+      const row = item as Record<string, unknown>;
+      const bloco = typeof row.bloco === 'string' ? row.bloco.trim() : '';
+      const tipo = typeof row.tipo === 'string' ? row.tipo.trim() : '';
+      const descricao_padrao =
+        typeof row.descricao_padrao === 'string'
+          ? row.descricao_padrao
+          : typeof row.descricao === 'string'
+            ? row.descricao
+            : '';
+      const conteudo_publico_padrao =
+        typeof row.conteudo_publico_padrao === 'string'
+          ? row.conteudo_publico_padrao
+          : typeof row.conteudo_publico === 'string'
+            ? row.conteudo_publico
+            : '';
+      const descricao_interna_padrao =
+        typeof row.descricao_interna_padrao === 'string'
+          ? row.descricao_interna_padrao
+          : descricao_padrao;
+
+      if (!bloco && !tipo && !descricao_padrao && !conteudo_publico_padrao) return null;
+
+      return {
+        bloco,
+        ordem: typeof row.ordem === 'number' ? row.ordem : index + 1,
+        tipo,
+        conteudo_publico_padrao,
+        descricao_interna_padrao,
+        descricao_padrao,
+        tem_cantico: row.tem_cantico === true,
+      };
+    })
+    .filter(Boolean) as ModeloLiturgiaConfig[];
+}
+
+function mergeModelosLiturgia(
+  modelosTabela: ModeloLiturgiaConfig[],
+  modelosFallback: ModeloLiturgiaConfig[]
+): ModeloLiturgiaConfig[] {
+  const merged = new Map<string, ModeloLiturgiaConfig>();
+
+  modelosFallback.forEach((item, index) => {
+    const key = `${item.ordem || index + 1}-${item.tipo}-${item.bloco}`;
+    merged.set(key, {
+      ...item,
+      ordem: item.ordem || index + 1,
+    });
+  });
+
+  modelosTabela.forEach((item, index) => {
+    const key = `${item.ordem || index + 1}-${item.tipo}-${item.bloco}`;
+    const fallback = merged.get(key);
+
+    merged.set(key, {
+      ...fallback,
+      ...item,
+      ordem: item.ordem || fallback?.ordem || index + 1,
+      conteudo_publico_padrao:
+        item.conteudo_publico_padrao || fallback?.conteudo_publico_padrao || '',
+      descricao_interna_padrao:
+        item.descricao_interna_padrao || fallback?.descricao_interna_padrao || item.descricao_padrao || '',
+      descricao_padrao:
+        item.descricao_padrao || fallback?.descricao_padrao || item.descricao_interna_padrao || '',
+      tem_cantico: item.tem_cantico ?? fallback?.tem_cantico ?? false,
+    });
+  });
+
+  return [...merged.values()].sort((a, b) => a.ordem - b.ordem);
+}
+
+function resolveTiposLiturgicos(config?: LiturgiaChurchConfig | null) {
+  return config?.tiposLiturgicos?.length ? config.tiposLiturgicos : TIPOS_LITURGICOS_PADRAO;
+}
+
+function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null): LouvorItem[] {
+  const modelos = [...(config?.modelosLiturgia || [])].sort((a, b) => a.ordem - b.ordem);
+
+  return modelos.map((item, index) => {
+    const tipo = item.tipo || item.bloco || `Item ${index + 1}`;
+
+    return {
+      tipo,
+      ordem: index + 1,
+      conteudo_publico: item.conteudo_publico_padrao || null,
+      descricao: item.descricao_interna_padrao || item.descricao_padrao || null,
+      horario: null,
+      canticos_lista: item.tem_cantico ? [{ cantico_id: null, tom: null }] : [],
+    };
+  });
+}
+
+function modeloPadrao(dia: string, config?: LiturgiaChurchConfig | null): LouvorItem[] {
+  const modeloConfigurado = modeloPadraoDaConfiguracao(config);
+  if (modeloConfigurado.length > 0) return modeloConfigurado;
+
   const data = new Date(dia + 'T00:00:00');
   const primeiroDomingo = isPrimeirosDomingo(data);
 
@@ -115,7 +253,71 @@ function getStatusMusica(dataStr: string | null | undefined) {
   return { label: 'HÁ MUITO', cor: 'text-red-600', bg: 'bg-red-50', dias, dataFormatada: fmt };
 }
 
-async function carregarLouvorItensComCanticos(cultoId: number): Promise<LouvorItemRowComCantico[]> {
+function formatCultoDateLabel(dateValue: string) {
+  const formatted = new Date(dateValue + 'T00:00:00').toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function isUuid(value: string | null | undefined) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function buscarPastorPadrao(igrejaId: string): Promise<string | null> {
+  try {
+    const { data: vinculosPastor, error: vinculoError } = await supabase
+      .from('pessoas_igrejas')
+      .select('pessoa_id')
+      .eq('igreja_id', igrejaId)
+      .eq('cargo', 'pastor')
+      .eq('ativo', true)
+      .limit(10);
+
+    if (!vinculoError) {
+      const pessoaIds = (vinculosPastor || [])
+        .map((item) => item.pessoa_id)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+      if (pessoaIds.length > 0) {
+        const { data: pessoasData, error: pessoasError } = await supabase
+          .from('pessoas')
+          .select('id, nome')
+          .in('id', pessoaIds)
+          .order('nome', { ascending: true })
+          .limit(1);
+
+        if (!pessoasError) {
+          const nomeVinculado =
+            typeof pessoasData?.[0]?.nome === 'string' ? pessoasData[0].nome.trim() : '';
+
+          if (nomeVinculado) {
+            return nomeVinculado;
+          }
+        } else {
+          console.warn('Falha ao buscar nomes dos pastores vinculados:', pessoasError);
+        }
+      }
+    } else {
+      console.warn('Falha ao buscar pastor por vínculo da igreja:', vinculoError);
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Falha inesperada ao buscar pastor padrão da igreja:', error);
+    return null;
+  }
+}
+
+async function carregarLouvorItensComCanticos(
+  cultoId: number,
+  canticosFallback: Cantico[] = []
+): Promise<LouvorItemRowComCantico[]> {
   const { data: itens, error: itensError } = await supabase
     .from('louvor_itens')
     .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
@@ -126,29 +328,85 @@ async function carregarLouvorItensComCanticos(cultoId: number): Promise<LouvorIt
 
   const itemRows = (itens || []) as LouvorItemRow[];
   const canticoIds = Array.from(
-    new Set(itemRows.map((item) => item.cantico_id).filter(Boolean))
-  ) as string[];
-
-  const { data: canticosData, error: canticosError } =
-    canticoIds.length > 0
-      ? await supabase.from('canticos').select('id, nome').in('id', canticoIds)
-      : { data: [], error: null };
-
-  if (canticosError) throw canticosError;
-
-  const canticosPorId = new Map(
-    ((canticosData || []) as Array<{ id: string; nome: string | null }>).map((cantico) => [
-      cantico.id,
-      cantico.nome,
-    ])
+    new Set(
+      itemRows
+        .map((item) => item.cantico_id)
+        .filter(Boolean)
+        .map((value) => String(value))
+    )
   );
+
+  const [canticosLegadosResult, canticosUnificadosResult] =
+    canticoIds.length > 0
+      ? await Promise.all([
+          supabase.from('canticos').select('id, nome').in('id', canticoIds),
+          supabase.from('canticos_unificados').select('id, nome').in('id', canticoIds),
+        ])
+      : [
+          { data: [], error: null },
+          { data: [], error: null },
+        ];
+
+  if (canticosLegadosResult.error) throw canticosLegadosResult.error;
+  if (canticosUnificadosResult.error) throw canticosUnificadosResult.error;
+
+  const canticosPorId = new Map<string, string | null>();
+
+  canticosFallback.forEach((cantico) => {
+    canticosPorId.set(String(cantico.id), cantico.nome);
+  });
+
+  ((canticosLegadosResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
+    const canticoId = String(cantico.id);
+    if (!canticosPorId.has(canticoId) || !canticosPorId.get(canticoId)) {
+      canticosPorId.set(canticoId, cantico.nome);
+    }
+  });
+
+  ((canticosUnificadosResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
+    const canticoId = String(cantico.id);
+    if (!canticosPorId.has(canticoId) || !canticosPorId.get(canticoId)) {
+      canticosPorId.set(canticoId, cantico.nome);
+    }
+  });
 
   return itemRows.map((item) => ({
     ...item,
     canticos: item.cantico_id
-      ? { nome: canticosPorId.get(item.cantico_id) || null }
+      ? { nome: canticosPorId.get(String(item.cantico_id)) || null }
       : null,
   }));
+}
+
+function agruparItensLiturgia(data: LouvorItemRowComCantico[]): ItemAgrupado[] {
+  const agrupados: ItemAgrupado[] = [];
+
+  for (const it of data) {
+    const ultimo = agrupados[agrupados.length - 1];
+
+    if (
+      ultimo &&
+      ultimo.tipo === (it.tipo || '') &&
+      ultimo.horario === it.horario &&
+      ultimo.conteudo_publico === it.conteudo_publico &&
+      ultimo.descricao === it.descricao
+    ) {
+      if (it.canticos?.nome) {
+        ultimo.canticos.push({ nome: it.canticos.nome, tom: it.tom });
+      }
+      continue;
+    }
+
+    agrupados.push({
+      tipo: it.tipo || '',
+      horario: it.horario,
+      conteudo_publico: it.conteudo_publico,
+      descricao: it.descricao,
+      canticos: it.canticos?.nome ? [{ nome: it.canticos.nome, tom: it.tom }] : [],
+    });
+  }
+
+  return agrupados;
 }
 
 // --- AUTOCOMPLETE DE CÂNTICO ---
@@ -239,14 +497,15 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
 
 // --- LINHA DE CÂNTICO ---
 function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreate, canEditarMusica }: any) {
-  const cantico = canticos.find((c: Cantico) => c.id === musica.cantico_id) || null;
+  const cantico =
+    canticos.find((c: Cantico) => String(c.id) === String(musica.cantico_id || '')) || null;
 
   return (
     <div className="flex items-center gap-2 mt-3 pl-3 border-l-2 border-emerald-300">
       <span className="text-emerald-500 text-base flex-shrink-0">🎵</span>
       <CanticoAutocomplete
         value={cantico}
-        onChange={c => onChange({ ...musica, cantico_id: c?.id || null })}
+        onChange={c => onChange({ ...musica, cantico_id: c?.id ? String(c.id) : null })}
         canticos={canticos}
         onCreate={onCreate}
         disabled={!canEditarMusica}
@@ -302,7 +561,7 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
             onChange={e => onUpdate({ ...item, tipo: e.target.value })}
             className="flex-1 font-bold text-slate-800 text-base bg-transparent border-none focus:outline-none cursor-pointer min-w-0"
           >
-            {TIPOS_LITURGICOS.map(t => <option key={t} value={t}>{t}</option>)}
+            {(item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO).map((t: string) => <option key={t} value={t}>{t}</option>)}
           </select>
         ) : (
           <span className="flex-1 font-bold text-slate-800 text-base min-w-0">{item.tipo}</span>
@@ -395,11 +654,22 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
 }
 
 // --- EDITOR DE LITURGIA ---
-function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, podeEditarLiturgiaCompleta, podeEditarLouvor }: any) {
+function EditorLiturgia({
+  culto,
+  onSalvo,
+  onCancelar,
+  canticos,
+  setCanticos,
+  podeEditarLiturgiaCompleta,
+  podeEditarLouvor,
+  configuracaoIgreja,
+}: any) {
   const [dia, setDia] = useState<string>(culto?.Dia || '');
   const [itens, setItens] = useState<LouvorItem[]>([]);
   const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
-  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(culto?.palavra_pastoral_autor || 'Rev. Rosther Guimarães Lopes');
+  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(
+    culto?.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
+  );
   const [imagemUpload, setImagemUpload] = useState<File | null>(null);
   const [imagemPreview, setImagemPreview] = useState<string | null>(culto?.imagem_url || null);
   const [instagramUrl, setInstagramUrl] = useState('');
@@ -409,17 +679,28 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
   const isLideranca = podeEditarLiturgiaCompleta;
   const podVerTom = isLideranca || podeEditarLouvor;
   const canEditarMusica = isLideranca || podeEditarLouvor;
+  const tiposLiturgicos = resolveTiposLiturgicos(configuracaoIgreja);
+  const temModeloDaIgreja = (configuracaoIgreja?.modelosLiturgia?.length || 0) > 0;
 
   useEffect(() => {
     if (culto) {
       carregarItens(culto['Culto nr.']);
     } else if (dia) {
-      setItens(modeloPadrao(dia));
+      setItens(modeloPadrao(dia, configuracaoIgreja));
     }
-  }, []);
+  }, [culto, dia, configuracaoIgreja]);
+
+  useEffect(() => {
+    if (culto?.palavra_pastoral_autor) return;
+    if (!configuracaoIgreja?.pastorPadrao) return;
+
+    setPalavraPastoralAutor((current: string) => (
+      current.trim() ? current : configuracaoIgreja.pastorPadrao || ''
+    ));
+  }, [culto?.palavra_pastoral_autor, configuracaoIgreja]);
 
   const carregarItens = async (cultoNr: number) => {
-    const data = await carregarLouvorItensComCanticos(cultoNr);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
 
     if (!data) return;
 
@@ -495,7 +776,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
 
   const adicionarItem = (posicao: number) => {
     const novo: LouvorItem = {
-      tipo: 'Cânticos Congregacionais',
+      tipo: tiposLiturgicos[0] || TIPOS_LITURGICOS_PADRAO[0],
       ordem: posicao + 1,
       conteudo_publico: null,
       descricao: null,
@@ -505,6 +786,11 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
     const novos = [...itens];
     novos.splice(posicao, 0, novo);
     setItens(novos.map((it, i) => ({ ...it, ordem: i + 1 })));
+  };
+
+  const aplicarModeloDaIgreja = () => {
+    const baseDia = dia || new Date().toISOString().split('T')[0];
+    setItens(modeloPadrao(baseDia, configuracaoIgreja));
   };
 
   const salvar = async () => {
@@ -608,7 +894,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
             value={dia}
             onChange={e => {
               setDia(e.target.value);
-              if (!culto && e.target.value) setItens(modeloPadrao(e.target.value));
+              if (!culto && e.target.value) setItens(modeloPadrao(e.target.value, configuracaoIgreja));
             }}
             disabled={!isLideranca}
             className="text-2xl font-black text-emerald-800 border-none focus:outline-none bg-transparent w-full py-1"
@@ -689,15 +975,32 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
 
         {/* ITENS DA LITURGIA */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Liturgia</h3>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Liturgia</h3>
+              {isLideranca && temModeloDaIgreja && (
+                <p className="mt-2 text-sm text-slate-500">
+                  Use o modelo da igreja para preencher esta liturgia com a ordem configurada no ambiente da igreja.
+                </p>
+              )}
+            </div>
             {isLideranca && (
-              <button
-                onClick={() => adicionarItem(0)}
-                className="text-sm font-bold text-emerald-600 hover:bg-emerald-50 px-4 py-2 rounded-xl transition-colors active:bg-emerald-100"
-              >
-                + item no início
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {temModeloDaIgreja && (
+                  <button
+                    onClick={aplicarModeloDaIgreja}
+                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100 active:bg-emerald-200"
+                  >
+                    Usar modelo da igreja
+                  </button>
+                )}
+                <button
+                  onClick={() => adicionarItem(0)}
+                  className="text-sm font-bold text-emerald-600 hover:bg-emerald-50 px-4 py-2 rounded-xl transition-colors active:bg-emerald-100"
+                >
+                  + item no início
+                </button>
+              </div>
             )}
           </div>
 
@@ -705,7 +1008,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
             {itens.map((it, idx) => (
               <div key={idx}>
                 <ItemLiturgia
-                  item={it}
+                  item={{ ...it, tiposLiturgicosDisponiveis: tiposLiturgicos }}
                   index={idx}
                   canticos={canticos}
                   onCreate={async (nome: string) => {
@@ -765,9 +1068,7 @@ function EditorLiturgia({ culto, onSalvo, onCancelar, canticos, setCanticos, pod
 
 // --- CARD DE CULTO NA LISTAGEM ---
 function CultoCard({ culto, onEditar, onWhatsApp, onPDF, podeEditar }: any) {
-  const dataFormatada = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR', {
-    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
-  });
+  const dataFormatada = formatCultoDateLabel(culto.Dia);
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-all shadow-sm">
@@ -777,7 +1078,7 @@ function CultoCard({ culto, onEditar, onWhatsApp, onPDF, podeEditar }: any) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-xs font-black text-slate-400 uppercase tracking-widest">#{culto['Culto nr.']}</p>
-          <h3 className="font-bold text-slate-800 text-base capitalize truncate mt-0.5">{dataFormatada}</h3>
+          <h3 className="font-bold text-slate-800 text-base truncate mt-0.5">{dataFormatada}</h3>
           {culto.palavra_pastoral && (
             <p className="text-sm text-emerald-600 truncate mt-1">✝️ Palavra pastoral disponível</p>
           )}
@@ -810,6 +1111,7 @@ export default function CultosPage() {
   const { loading: permLoading, permissoes } = usePermissions();
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<Culto[]>([]);
+  const [configuracaoIgreja, setConfiguracaoIgreja] = useState<LiturgiaChurchConfig | null>(null);
   const [editando, setEditando] = useState<Culto | null | 'novo'>(null);
   const [loading, setLoading] = useState(true);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
@@ -834,22 +1136,75 @@ export default function CultosPage() {
     if (!igrejaId) {
       setCanticos([]);
       setCultos([]);
+      setConfiguracaoIgreja(null);
       setLoading(false);
       return;
     }
 
-    const { data: todosCanticos } = await supabase
-      .from('canticos_unificados')
-      .select('id, nome, tipo, numero')
-      .order('nome');
-    if (todosCanticos) setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
+    const [
+      { data: todosCanticos },
+      { data: cultosData },
+      { data: igrejaRaw },
+      { data: modelosLiturgiaRaw },
+    ] = await Promise.all([
+      supabase
+        .from('canticos_unificados')
+        .select('id, nome, tipo, numero')
+        .order('nome'),
+      supabase
+        .from('Louvores IPPN')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .order('Dia', { ascending: false }),
+      supabase
+        .from('igrejas')
+        .select('tipos_liturgicos, modelo_liturgico_padrao')
+        .eq('id', igrejaId)
+        .maybeSingle(),
+      supabase
+        .from('modelos_liturgia')
+        .select('bloco, ordem, tipo, descricao_padrao, tem_cantico')
+        .eq('igreja_id', igrejaId)
+        .order('ordem', { ascending: true }),
+    ]);
 
-    const { data: cultosData } = await supabase
-      .from('Louvores IPPN')
-      .select('*')
-      .eq('igreja_id', igrejaId)
-      .order('Dia', { ascending: false });
-    if (cultosData) setCultos(cultosData);
+    const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
+
+    setCanticos((todosCanticos || []).map(c => ({ ...c, ultima_vez: null })));
+    setCultos(cultosData || []);
+    const modelosFallback = extractModeloLiturgicoPadrao(igrejaRaw?.modelo_liturgico_padrao);
+    const fallbackPorChave = new Map(
+      modelosFallback.map((item) => [`${item.ordem}-${item.tipo}-${item.bloco}`, item] as const)
+    );
+    const modelosTabela = (modelosLiturgiaRaw || []).map((item) => ({
+      bloco: typeof item.bloco === 'string' ? item.bloco : '',
+      ordem: typeof item.ordem === 'number' ? item.ordem : 0,
+      tipo: typeof item.tipo === 'string' ? item.tipo : '',
+      descricao_padrao: typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '',
+      conteudo_publico_padrao:
+        fallbackPorChave.get(
+          `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+        )?.conteudo_publico_padrao || '',
+      descricao_interna_padrao:
+        fallbackPorChave.get(
+          `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+        )?.descricao_interna_padrao || (typeof item.descricao_padrao === 'string' ? item.descricao_padrao : ''),
+      tem_cantico: item.tem_cantico === true,
+    }));
+    const tiposDaIgreja = extractTiposLiturgicos(igrejaRaw?.tipos_liturgicos);
+    const tiposDerivadosDoModelo = [...new Set(
+      modelosTabela
+        .map((item) => item.tipo.trim())
+        .filter(Boolean)
+    )];
+
+    const modelosMesclados = mergeModelosLiturgia(modelosTabela, modelosFallback);
+
+    setConfiguracaoIgreja({
+      tiposLiturgicos: tiposDaIgreja.length > 0 ? tiposDaIgreja : tiposDerivadosDoModelo,
+      modelosLiturgia: modelosMesclados,
+      pastorPadrao,
+    });
 
     // Buscar últimas datas dos cânticos
     if (todosCanticos) {
@@ -886,8 +1241,10 @@ export default function CultosPage() {
       .maybeSingle();
     if (!cultoValido) return;
 
-    const data = await carregarLouvorItensComCanticos(cultoNr);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
     if (!data) return;
+
+    const agrupados = agruparItensLiturgia(data);
 
     const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
     let texto = `LITURGIA DO CULTO DE *${dataFmt}*\n\n`;
@@ -896,12 +1253,14 @@ export default function CultosPage() {
       texto += `✝️ *PALAVRA PASTORAL*\n${culto.palavra_pastoral}\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
     }
 
-    data.forEach((it: any) => {
-      texto += `*${it.tipo.toUpperCase()}*`;
+    agrupados.forEach((it, index) => {
+      texto += `*${index + 1}. ${it.tipo.toUpperCase()}*`;
       if (it.horario) texto += ` _(${it.horario})_`;
       texto += '\n';
-      if (it.conteudo_publico) texto += `${it.conteudo_publico}\n`;
-      if (it.canticos?.nome) texto += `🎵 ${it.canticos.nome}${it.tom ? ` (${it.tom})` : ''}\n`;
+      if (it.conteudo_publico) texto += `${it.conteudo_publico.trim()}\n`;
+      it.canticos.forEach((cantico) => {
+        texto += `- ${cantico.nome}${cantico.tom ? ` (${cantico.tom})` : ''}\n`;
+      });
       texto += '\n';
     });
 
@@ -919,173 +1278,232 @@ export default function CultosPage() {
       .maybeSingle();
     if (!cultoValido) return;
 
-    const data = await carregarLouvorItensComCanticos(cultoNr);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
     if (!data) return;
-
-    // Agrupar itens consecutivos do mesmo tipo/horario/conteudo
-    type ItemAgrupado = {
-      tipo: string;
-      horario: string | null;
-      conteudo_publico: string | null;
-      descricao: string | null;
-      canticos: { nome: string; tom: string | null }[];
-    };
-    const agrupados: ItemAgrupado[] = [];
-    for (const it of data) {
-      const ultimo = agrupados[agrupados.length - 1];
-      if (
-        ultimo &&
-        ultimo.tipo === it.tipo &&
-        ultimo.horario === it.horario &&
-        ultimo.conteudo_publico === it.conteudo_publico &&
-        ultimo.descricao === it.descricao
-      ) {
-        if (it.canticos?.nome) {
-          ultimo.canticos.push({ nome: it.canticos.nome, tom: it.tom });
-        }
-      } else {
-        agrupados.push({
-          tipo: it.tipo,
-          horario: it.horario,
-          conteudo_publico: it.conteudo_publico,
-          descricao: it.descricao,
-          canticos: it.canticos?.nome ? [{ nome: it.canticos.nome, tom: it.tom }] : [],
-        });
-      }
-    }
-
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pw = doc.internal.pageSize.getWidth();
-    const ph = doc.internal.pageSize.getHeight();
-    const m = 14;
-    const contentWidth = pw - m * 2;
-    const lineH = 5.5;
-    const titleH = 6.5;
-    const headerBottom = 34;
-    const contentBottom = ph - 14;
+    const agrupados = agruparItensLiturgia(data);
 
     const dataFmt = new Date(culto.Dia + 'T00:00:00')
       .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
       .toUpperCase();
 
-    const drawHeader = () => {
-      doc.setFillColor(16, 60, 48);
-      doc.rect(0, 0, pw, headerBottom - 4, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('LITURGIA DO CULTO', pw / 2, 13, { align: 'center' });
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.text(dataFmt, pw / 2, 21, { align: 'center' });
-      doc.setFontSize(7.5);
-      doc.text('Documento gerado por igreja selecionada no OIKOS Hub', pw / 2, 28, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-      doc.setDrawColor(16, 60, 48);
-      doc.line(m, headerBottom, pw - m, headerBottom);
-    };
+    const renderPdf = (scale: number) => {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pw = doc.internal.pageSize.getWidth();
+      const ph = doc.internal.pageSize.getHeight();
+      const marginX = 12;
+      const headerBottom = 30;
+      const topY = headerBottom + 6;
+      const bottomY = ph - 10;
+      const titleSize = 13 * scale;
+      const subtitleSize = 8.2 * scale;
+      const metaSize = 7 * scale;
+      const itemTitleSize = 11.8 * scale;
+      const publicSize = 10.2 * scale;
+      const internalSize = 8.3 * scale;
+      const songSize = 10 * scale;
+      const lineH = 5 * scale;
+      const titleH = 6.1 * scale;
+      const blockGap = 4.2 * scale;
+      const innerIndent = 3;
+      const contentWidth = pw - marginX * 2;
 
-    const calcAlturaItem = (it: ItemAgrupado): number => {
-      doc.setFontSize(11);
-      const tituloTxt = `${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
-      const tituloLinhas = doc.splitTextToSize(tituloTxt, contentWidth);
-      let h = tituloLinhas.length * titleH + 2;
-      if (it.conteudo_publico) {
-        doc.setFontSize(10);
-        h += doc.splitTextToSize(it.conteudo_publico, contentWidth - 4).length * lineH;
-      }
-      if (it.descricao) {
-        doc.setFontSize(9);
-        h += doc.splitTextToSize(it.descricao, contentWidth - 4).length * lineH;
-      }
-      for (const c of it.canticos) {
-        doc.setFontSize(10);
-        h += doc.splitTextToSize(`${c.nome}${c.tom ? ` (${c.tom})` : ''}`, contentWidth - 4).length * lineH;
-      }
-      return h + 6;
-    };
+      const drawHeader = (page: number) => {
+        if (page > 1) {
+          doc.addPage();
+        }
 
-    const renderItem = (it: ItemAgrupado, num: number, yPos: number): number => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      const tituloTxt = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
-      const tituloLinhas = doc.splitTextToSize(tituloTxt, contentWidth);
-      doc.text(tituloLinhas, m, yPos);
-      yPos += tituloLinhas.length * titleH + 2;
-
-      if (it.conteudo_publico) {
+        doc.setFillColor(16, 60, 48);
+        doc.rect(0, 0, pw, headerBottom - 4, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(titleSize);
+        doc.text('LITURGIA DO CULTO', pw / 2, 11, { align: 'center' });
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.setTextColor(55, 55, 55);
-        const cl = doc.splitTextToSize(it.conteudo_publico, contentWidth - 4);
-        doc.text(cl, m + 3, yPos);
-        yPos += cl.length * lineH;
-      }
+        doc.setFontSize(subtitleSize);
+        doc.text(dataFmt, pw / 2, 17, { align: 'center' });
+        doc.setFontSize(metaSize);
+        doc.text(`Pagina ${page} de 2`, pw / 2, 23, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(16, 60, 48);
+        doc.line(marginX, headerBottom, pw - marginX, headerBottom);
+      };
 
-      if (it.descricao) {
+      const calcPastoralHeight = () => {
+        let h = titleH + blockGap;
+        doc.setFontSize(publicSize);
+        h += doc.splitTextToSize(culto.palavra_pastoral || '', contentWidth - 4).length * lineH;
+        if (culto.palavra_pastoral_autor) {
+          h += lineH + 2;
+        }
+        return h + blockGap;
+      };
+
+      const calcItemHeight = (it: ItemAgrupado, num: number) => {
+        doc.setFontSize(itemTitleSize);
+        const titulo = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
+        let h = doc.splitTextToSize(titulo, contentWidth).length * titleH + 1.5;
+
+        if (it.conteudo_publico) {
+          doc.setFontSize(publicSize);
+          h += doc.splitTextToSize(it.conteudo_publico, contentWidth - 4).length * lineH;
+        }
+
+        if (it.descricao) {
+          doc.setFontSize(internalSize);
+          h += doc.splitTextToSize(it.descricao, contentWidth - 4).length * lineH;
+        }
+
+        for (const cantico of it.canticos) {
+          doc.setFontSize(songSize);
+          h += doc.splitTextToSize(`${cantico.nome}${cantico.tom ? ` (${cantico.tom})` : ''}`, contentWidth - 4).length * lineH;
+        }
+
+        return h + blockGap;
+      };
+
+      const renderPastoral = (x: number, y: number) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(itemTitleSize);
+        doc.setTextColor(0, 0, 0);
+        doc.text('PALAVRA PASTORAL', x, y);
+        y += titleH;
+
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(120, 120, 120);
-        const dl = doc.splitTextToSize(it.descricao, contentWidth - 4);
-        doc.text(dl, m + 3, yPos);
-        yPos += dl.length * lineH;
+        doc.setFontSize(publicSize);
+        const palavraLinhas = doc.splitTextToSize(culto.palavra_pastoral || '', contentWidth - 4);
+        doc.text(palavraLinhas, x, y);
+        y += palavraLinhas.length * lineH;
+
+        if (culto.palavra_pastoral_autor) {
+          y += 1.5;
+          doc.setFont('helvetica', 'italic');
+          doc.text(`- ${culto.palavra_pastoral_autor}`, x + contentWidth, y, { align: 'right' });
+        }
+      };
+
+      const renderItem = (it: ItemAgrupado, num: number, x: number, y: number) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(itemTitleSize);
+        doc.setTextColor(0, 0, 0);
+        const titulo = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
+        const tituloLinhas = doc.splitTextToSize(titulo, contentWidth);
+        doc.text(tituloLinhas, x, y);
+        y += tituloLinhas.length * titleH;
+
+        if (it.conteudo_publico) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(publicSize);
+          doc.setTextColor(55, 55, 55);
+          const linhas = doc.splitTextToSize(it.conteudo_publico, contentWidth - 4);
+          doc.text(linhas, x + innerIndent, y);
+          y += linhas.length * lineH;
+        }
+
+        if (it.descricao) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(internalSize);
+          doc.setTextColor(120, 120, 120);
+          const linhas = doc.splitTextToSize(it.descricao, contentWidth - 4);
+          doc.text(linhas, x + innerIndent, y);
+          y += linhas.length * lineH;
+        }
+
+        for (const cantico of it.canticos) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(songSize);
+          doc.setTextColor(16, 90, 60);
+          const linhas = doc.splitTextToSize(
+            `${cantico.nome}${cantico.tom ? ` (${cantico.tom})` : ''}`,
+            contentWidth - 4
+          );
+          doc.text(linhas, x + innerIndent, y);
+          y += linhas.length * lineH;
+        }
+      };
+
+      const blocos: Array<
+        | { kind: 'pastoral'; altura: number }
+        | { kind: 'item'; altura: number; item: ItemAgrupado; numero: number }
+      > = [];
+
+      if (culto.palavra_pastoral) {
+        blocos.push({ kind: 'pastoral', altura: calcPastoralHeight() });
       }
 
-      for (const c of it.canticos) {
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(10);
-        doc.setTextColor(16, 90, 60);
-        const nomeTxt = `${c.nome}${c.tom ? ' (' + c.tom + ')' : ''}`;
-        const cl = doc.splitTextToSize(nomeTxt, contentWidth - 4);
-        doc.text(cl, m + 3, yPos);
-        yPos += cl.length * lineH;
+      agrupados.forEach((item, index) => {
+        blocos.push({
+          kind: 'item',
+          item,
+          numero: index + 1,
+          altura: calcItemHeight(item, index + 1),
+        });
+      });
+
+      const placements: Array<{ page: number; y: number; blockIndex: number }> = [];
+      let page = 1;
+      let y = topY;
+
+      for (let i = 0; i < blocos.length; i += 1) {
+        const bloco = blocos[i];
+        if (y + bloco.altura > bottomY) {
+          page += 1;
+          y = topY;
+        }
+
+        if (page > 2) {
+          return null;
+        }
+
+        placements.push({
+          page,
+          y,
+          blockIndex: i,
+        });
+
+        y += bloco.altura;
       }
 
-      return yPos + 6;
+      const totalPages = Math.max(...placements.map((item) => item.page), 1);
+
+      for (let page = 1; page <= totalPages; page += 1) {
+        drawHeader(page);
+      }
+
+      placements.forEach((placement) => {
+        const bloco = blocos[placement.blockIndex];
+        doc.setPage(placement.page);
+        const x = marginX;
+
+        if (bloco.kind === 'pastoral') {
+          renderPastoral(x, placement.y);
+          return;
+        }
+
+        renderItem(bloco.item, bloco.numero, x, placement.y);
+      });
+
+      return doc;
     };
 
-    drawHeader();
-    let y = headerBottom + 8;
-    let num = 1;
+    const doc =
+      renderPdf(1.18) ||
+      renderPdf(1.12) ||
+      renderPdf(1.06) ||
+      renderPdf(1) ||
+      renderPdf(0.95) ||
+      renderPdf(0.9) ||
+      renderPdf(0.85) ||
+      renderPdf(0.8) ||
+      renderPdf(0.75) ||
+      renderPdf(0.7);
 
-    if (culto.palavra_pastoral) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.text('PALAVRA PASTORAL', m, y);
-      y += 7;
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      const palavraLinhas = doc.splitTextToSize(culto.palavra_pastoral, contentWidth);
-      doc.text(palavraLinhas, m, y);
-      y += palavraLinhas.length * lineH + 2;
-
-      if (culto.palavra_pastoral_autor) {
-        doc.setFont('helvetica', 'italic');
-        doc.text(`- ${culto.palavra_pastoral_autor}`, pw - m, y, { align: 'right' });
-        y += 8;
-      }
-
-      doc.setDrawColor(220, 220, 220);
-      doc.line(m, y, pw - m, y);
-      y += 7;
+    if (!doc) {
+      alert('Nao foi possivel montar o PDF em ate duas paginas.');
+      return;
     }
 
-    for (const it of agrupados) {
-      const altura = calcAlturaItem(it);
-      if (y + altura > contentBottom) {
-        doc.addPage();
-        drawHeader();
-        y = headerBottom + 8;
-      }
-      y = renderItem(it, num, y);
-      num++;
-    }
-
-    const nomeArquivo = `liturgia-${culto.Dia}.pdf`;
-    doc.save(nomeArquivo);
+    const blobUrl = doc.output('bloburl');
+    window.open(blobUrl, '_blank', 'noopener,noreferrer');
   };
 
   if (totalLoading) return (
@@ -1102,6 +1520,7 @@ export default function CultosPage() {
       culto={editando === 'novo' ? null : editando}
       canticos={canticos}
       setCanticos={setCanticos}
+      configuracaoIgreja={configuracaoIgreja}
       podeEditarLiturgiaCompleta={permissoes.podeEditarLiturgiaCompleta}
       podeEditarLouvor={permissoes.podeEditarLouvor}
       onSalvo={() => { setEditando(null); carregarTudo(); }}

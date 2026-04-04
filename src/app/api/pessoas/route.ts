@@ -43,10 +43,7 @@ export async function GET(request: NextRequest) {
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaParam, request);
 
     if (!igrejaId) {
-      return NextResponse.json(
-        { error: 'Nenhuma igreja selecionada.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ pessoas: [], warning: 'Nenhuma igreja selecionada.' });
     }
 
     let query = supabaseAdmin

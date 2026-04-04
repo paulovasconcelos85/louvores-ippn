@@ -54,6 +54,8 @@ type ModeloLiturgia = {
   bloco: string;
   ordem: number;
   tipo: string;
+  conteudo_publico_padrao: string;
+  descricao_interna_padrao: string;
   descricao_padrao: string;
   tem_cantico: boolean;
 };
@@ -101,6 +103,40 @@ const DIAS_SEMANA = [
   'sabado',
 ];
 
+const PAISES_DISPONIVEIS = [
+  { value: 'BR', label: 'Brasil' },
+  { value: 'PT', label: 'Portugal' },
+  { value: 'US', label: 'Estados Unidos' },
+  { value: 'CA', label: 'Canadá' },
+];
+
+const MODOS_REPERTORIO = [
+  { value: 'livre', label: 'Contemporâneo' },
+  { value: 'hinario', label: 'Hinário' },
+  { value: 'misto', label: 'Misto' },
+];
+
+const TIMEZONES_DISPONIVEIS = [
+  { value: 'America/Manaus', label: 'America/Manaus' },
+  { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo' },
+  { value: 'Europe/Lisbon', label: 'Europe/Lisbon' },
+  { value: 'America/Toronto', label: 'America/Toronto' },
+  { value: 'America/Vancouver', label: 'America/Vancouver' },
+  { value: 'America/New_York', label: 'America/New_York' },
+  { value: 'America/Chicago', label: 'America/Chicago' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
+];
+
+const DIAS_PUBLICACAO = [
+  { value: '0', label: 'Domingo' },
+  { value: '1', label: 'Segunda-feira' },
+  { value: '2', label: 'Terça-feira' },
+  { value: '3', label: 'Quarta-feira' },
+  { value: '4', label: 'Quinta-feira' },
+  { value: '5', label: 'Sexta-feira' },
+  { value: '6', label: 'Sábado' },
+];
+
 const TIPOS_REDE = ['instagram', 'youtube', 'facebook', 'spotify', 'site', 'outro'];
 
 const TIPOS_LITURGICOS_SUGERIDOS = [
@@ -126,7 +162,7 @@ function criarFormularioVazio(): IgrejaForm {
     nome_completo: '',
     ativo: true,
     visivel_publico: true,
-    pais: 'Brasil',
+    pais: 'BR',
     regiao: '',
     cidade: '',
     uf: '',
@@ -162,6 +198,22 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, '');
 }
 
+function normalizePais(value: unknown) {
+  if (typeof value !== 'string') return 'BR';
+
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'BR' || normalized === 'BRASIL') return 'BR';
+  if (normalized === 'PT' || normalized === 'PORTUGAL') return 'PT';
+  if (normalized === 'US' || normalized === 'USA' || normalized === 'ESTADOS UNIDOS') return 'US';
+  if (normalized === 'CA' || normalized === 'CANADA' || normalized === 'CANADÁ') return 'CA';
+
+  return 'BR';
+}
+
+function getPaisLabel(pais: string) {
+  return PAISES_DISPONIVEIS.find((item) => item.value === pais)?.label || 'Brasil';
+}
+
 function extractTiposLiturgicos(value: unknown) {
   if (!Array.isArray(value)) return [];
 
@@ -193,13 +245,25 @@ function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgia[] {
           : typeof row.descricao === 'string'
             ? row.descricao
             : '';
+      const conteudo_publico_padrao =
+        typeof row.conteudo_publico_padrao === 'string'
+          ? row.conteudo_publico_padrao
+          : typeof row.conteudo_publico === 'string'
+            ? row.conteudo_publico
+            : '';
+      const descricao_interna_padrao =
+        typeof row.descricao_interna_padrao === 'string'
+          ? row.descricao_interna_padrao
+          : descricao_padrao;
 
-      if (!bloco && !tipo && !descricao_padrao) return null;
+      if (!bloco && !tipo && !descricao_padrao && !conteudo_publico_padrao) return null;
 
       return {
         bloco,
         ordem: typeof row.ordem === 'number' ? row.ordem : index + 1,
         tipo,
+        conteudo_publico_padrao,
+        descricao_interna_padrao,
         descricao_padrao,
         tem_cantico: row.tem_cantico === true,
       };
@@ -213,6 +277,8 @@ function buildModelosFromTipos(tipos: string[]): ModeloLiturgia[] {
       bloco: tipo,
       ordem: index + 1,
       tipo,
+      conteudo_publico_padrao: '',
+      descricao_interna_padrao: '',
       descricao_padrao: '',
       tem_cantico: /cantico|cântico|adora|louvor/i.test(tipo),
     }))
@@ -227,16 +293,52 @@ function normalizeModelosLiturgia(modelos: ModeloLiturgia[]) {
   }));
 }
 
+function mergeModelosLiturgia(modelosTabela: ModeloLiturgia[], modelosFallback: ModeloLiturgia[]) {
+  const merged = new Map<string, ModeloLiturgia>();
+
+  modelosFallback.forEach((item, index) => {
+    const key = `${item.ordem || index + 1}-${item.tipo}-${item.bloco}`;
+    merged.set(key, {
+      ...item,
+      ordem: item.ordem || index + 1,
+    });
+  });
+
+  modelosTabela.forEach((item, index) => {
+    const key = `${item.ordem || index + 1}-${item.tipo}-${item.bloco}`;
+    const fallback = merged.get(key);
+
+    merged.set(key, {
+      ...fallback,
+      ...item,
+      ordem: item.ordem || fallback?.ordem || index + 1,
+      conteudo_publico_padrao:
+        item.conteudo_publico_padrao || fallback?.conteudo_publico_padrao || '',
+      descricao_interna_padrao:
+        item.descricao_interna_padrao || fallback?.descricao_interna_padrao || item.descricao_padrao || '',
+      descricao_padrao:
+        item.descricao_padrao || fallback?.descricao_padrao || item.descricao_interna_padrao || '',
+      tem_cantico: item.tem_cantico ?? fallback?.tem_cantico ?? false,
+    });
+  });
+
+  return [...merged.values()].sort((a, b) => a.ordem - b.ordem);
+}
+
 function mapDetailToForm(payload: any): IgrejaForm {
   const igreja = payload?.igreja || {};
   const modelosTabela = (payload?.modelosLiturgia || []).map((item: any, index: number) => ({
     bloco: item.bloco || '',
     ordem: item.ordem ?? index + 1,
     tipo: item.tipo || '',
-    descricao_padrao: item.descricao_padrao || '',
+    conteudo_publico_padrao: item.conteudo_publico_padrao || item.conteudo_publico || '',
+    descricao_interna_padrao: item.descricao_interna_padrao || item.descricao_padrao || '',
+    descricao_padrao: item.descricao_padrao || item.descricao_interna_padrao || '',
     tem_cantico: item.tem_cantico ?? false,
   }));
   const modelosFallback = extractModeloLiturgicoPadrao(igreja.modelo_liturgico_padrao);
+
+  const modelosMesclados = mergeModelosLiturgia(modelosTabela, modelosFallback);
 
   return {
     nome: igreja.nome || '',
@@ -245,7 +347,7 @@ function mapDetailToForm(payload: any): IgrejaForm {
     nome_completo: igreja.nome_completo || '',
     ativo: igreja.ativo ?? true,
     visivel_publico: igreja.visivel_publico ?? true,
-    pais: igreja.pais || 'Brasil',
+    pais: normalizePais(igreja.pais),
     regiao: igreja.regiao || '',
     cidade: igreja.cidade || '',
     uf: igreja.uf || '',
@@ -262,7 +364,7 @@ function mapDetailToForm(payload: any): IgrejaForm {
     youtube: igreja.youtube || '',
     permite_cadastro_canticos: igreja.permite_cadastro_canticos ?? true,
     modo_repertorio: igreja.modo_repertorio || '',
-    horario_publicacao_boletim: igreja.horario_publicacao_boletim || '',
+    horario_publicacao_boletim: normalizeHorarioToHHMM(igreja.horario_publicacao_boletim || ''),
     dia_publicacao_boletim:
       igreja.dia_publicacao_boletim === null || igreja.dia_publicacao_boletim === undefined
         ? ''
@@ -283,7 +385,7 @@ function mapDetailToForm(payload: any): IgrejaForm {
       ativo: item.ativo ?? true,
       ordem: item.ordem ?? index + 1,
     })),
-    modelosLiturgia: modelosTabela.length > 0 ? modelosTabela : modelosFallback,
+    modelosLiturgia: modelosMesclados,
   };
 }
 
@@ -336,6 +438,78 @@ function Textarea({
       />
     </label>
   );
+}
+
+function getSubdivisionLabel(pais: string) {
+  switch (pais) {
+    case 'BR':
+      return 'UF';
+    case 'US':
+      return 'Estado';
+    case 'CA':
+      return 'Província';
+    case 'PT':
+      return 'Distrito';
+    default:
+      return 'Região';
+  }
+}
+
+function getSubdivisionPlaceholder(pais: string) {
+  switch (pais) {
+    case 'BR':
+      return 'Ex.: AM, SP, RJ';
+    case 'US':
+      return 'Ex.: Florida, Texas, California';
+    case 'CA':
+      return 'Ex.: Ontario, Quebec, Alberta';
+    case 'PT':
+      return 'Ex.: Lisboa, Porto, Braga';
+    default:
+      return 'Informe a região';
+  }
+}
+
+function buildEnderecoCompletoIgreja(form: IgrejaForm) {
+  return [
+    form.logradouro.trim(),
+    form.complemento.trim(),
+    form.bairro.trim(),
+    form.cidade.trim(),
+    form.uf.trim(),
+    form.pais.trim() && form.pais.trim() !== 'BR' ? getPaisLabel(form.pais.trim()) : '',
+    form.cep.trim(),
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function safeTrim(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeHorarioToHHMM(value: string) {
+  const match = value.match(/^(\d{2}):(\d{2})/);
+  if (!match) return '';
+  return `${match[1]}:${match[2]}`;
+}
+
+function getHorarioParts(value: string) {
+  const normalized = normalizeHorarioToHHMM(value);
+  if (!normalized) return { hora: '', minuto: '' };
+
+  const [hora, minuto] = normalized.split(':');
+  return { hora, minuto };
+}
+
+function buildHorarioPublicacao(hora: string, minuto: string) {
+  if (!hora || !minuto) return '';
+  return `${hora}:${minuto}`;
+}
+
+function formatHorarioPublicacaoLabel(hora: string, minuto: string) {
+  if (!hora || !minuto) return 'Selecione hora e minuto';
+  return minuto === '00' ? `${Number(hora)}h` : `${Number(hora)}h${minuto}`;
 }
 
 export default function AdminIgrejasPage() {
@@ -435,9 +609,12 @@ export default function AdminIgrejasPage() {
     [igrejas, igrejaSelecionadaId]
   );
 
-  const tiposLiturgicosDisponiveis = useMemo(
-    () => [...form.tiposLiturgicos].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [form.tiposLiturgicos]
+  const subdivisionLabel = useMemo(() => getSubdivisionLabel(form.pais), [form.pais]);
+  const subdivisionPlaceholder = useMemo(() => getSubdivisionPlaceholder(form.pais), [form.pais]);
+  const enderecoCompletoPreview = useMemo(() => buildEnderecoCompletoIgreja(form), [form]);
+  const horarioParts = useMemo(
+    () => getHorarioParts(form.horario_publicacao_boletim),
+    [form.horario_publicacao_boletim]
   );
 
   function updateForm<K extends keyof IgrejaForm>(field: K, value: IgrejaForm[K]) {
@@ -448,6 +625,27 @@ export default function AdminIgrejasPage() {
     updateForm('modelosLiturgia', normalizeModelosLiturgia(nextModelos));
   }
 
+  function addTipoLiturgico(tipoInicial: string) {
+    const tipo = tipoInicial.trim();
+    if (!tipo) return;
+
+    const jaExiste = form.tiposLiturgicos.some((item) => item.toLowerCase() === tipo.toLowerCase());
+    if (jaExiste) return;
+
+    updateForm('tiposLiturgicos', [...form.tiposLiturgicos, tipo]);
+    addModeloLiturgia(tipo);
+  }
+
+  function removeTipoLiturgico(tipoRemovido: string) {
+    updateForm(
+      'tiposLiturgicos',
+      form.tiposLiturgicos.filter((item) => item !== tipoRemovido)
+    );
+    updateModelosLiturgia(
+      form.modelosLiturgia.filter((modelo) => modelo.tipo !== tipoRemovido)
+    );
+  }
+
   function addModeloLiturgia(tipoInicial = '') {
     updateModelosLiturgia([
       ...form.modelosLiturgia,
@@ -455,6 +653,8 @@ export default function AdminIgrejasPage() {
         bloco: tipoInicial,
         ordem: form.modelosLiturgia.length + 1,
         tipo: tipoInicial,
+        conteudo_publico_padrao: '',
+        descricao_interna_padrao: '',
         descricao_padrao: '',
         tem_cantico: /cantico|cântico|adora|louvor/i.test(tipoInicial),
       },
@@ -510,12 +710,14 @@ export default function AdminIgrejasPage() {
     const modelosOrdenados = baseModelos
       .map((item, index) => ({
         ...item,
-        bloco: item.bloco.trim(),
-        tipo: item.tipo.trim(),
-        descricao_padrao: item.descricao_padrao.trim(),
+        bloco: safeTrim(item.bloco),
+        tipo: safeTrim(item.tipo),
+        conteudo_publico_padrao: safeTrim(item.conteudo_publico_padrao),
+        descricao_interna_padrao: safeTrim(item.descricao_interna_padrao),
+        descricao_padrao: safeTrim(item.descricao_interna_padrao),
         ordem: item.ordem || index + 1,
       }))
-      .filter((item) => item.bloco || item.tipo || item.descricao_padrao)
+      .filter((item) => item.bloco || item.tipo || item.conteudo_publico_padrao || item.descricao_interna_padrao)
       .sort((a, b) => a.ordem - b.ordem);
 
     return {
@@ -525,7 +727,7 @@ export default function AdminIgrejasPage() {
       nome_completo: form.nome_completo,
       ativo: form.ativo,
       visivel_publico: form.visivel_publico,
-      pais: form.pais,
+      pais: normalizePais(form.pais),
       regiao: form.regiao,
       cidade: form.cidade,
       uf: form.uf,
@@ -533,7 +735,7 @@ export default function AdminIgrejasPage() {
       complemento: form.complemento,
       bairro: form.bairro,
       cep: form.cep,
-      endereco_completo: form.endereco_completo,
+      endereco_completo: buildEnderecoCompletoIgreja(form),
       telefone: form.telefone,
       whatsapp: form.whatsapp,
       email: form.email,
@@ -596,8 +798,8 @@ export default function AdminIgrejasPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <main className="w-full px-6 py-8 xl:px-8 2xl:px-10">
+        <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-900">
               <Church className="h-8 w-8 text-emerald-700" />
@@ -608,7 +810,7 @@ export default function AdminIgrejasPage() {
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex shrink-0 gap-3">
             <button
               onClick={() => {
                 setErro(null);
@@ -643,8 +845,8 @@ export default function AdminIgrejasPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]">
+          <aside className="sticky top-6 self-start rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Igrejas</h2>
               {loadingList && <span className="text-xs text-slate-400">Carregando...</span>}
@@ -692,8 +894,8 @@ export default function AdminIgrejasPage() {
             </div>
           </aside>
 
-          <section className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="min-w-0 space-y-6">
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm 2xl:p-10">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">
@@ -715,32 +917,47 @@ export default function AdminIgrejasPage() {
                 </button>
               </div>
 
-              <div className="space-y-8">
-                <section className="space-y-4">
+              <div className="space-y-10">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-emerald-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Identidade</h3>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input label="Nome" value={form.nome} onChange={(value) => updateForm('nome', value)} />
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                    <p className="font-semibold">Como preencher os nomes da igreja</p>
+                    <p className="mt-1">
+                      Use o <strong>nome de exibição</strong> como nome principal no sistema. O <strong>slug</strong> é o identificador da URL.
+                      O <strong>nome curto</strong> aparece em listas, seletores e espaços pequenos. O <strong>nome jurídico/oficial</strong>
+                      só é necessário quando houver um nome formal maior para documentos ou apresentação institucional.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
                     <Input
-                      label="Slug"
+                      label="Nome de exibição"
+                      value={form.nome}
+                      onChange={(value) => updateForm('nome', value)}
+                      placeholder="Nome principal que o sistema vai mostrar"
+                    />
+                    <Input
+                      label="Identificador da URL"
                       value={form.slug}
                       onChange={(value) => updateForm('slug', slugify(value))}
-                      placeholder="ip-manaus-centro"
+                      placeholder="Ex.: ip-manaus-centro"
                     />
                     <Input
-                      label="Nome abreviado"
+                      label="Nome curto"
                       value={form.nome_abreviado}
                       onChange={(value) => updateForm('nome_abreviado', value)}
+                      placeholder="Versão resumida para listas, menus e cabeçalhos"
                     />
                     <Input
-                      label="Nome completo"
+                      label="Nome jurídico ou oficial"
                       value={form.nome_completo}
                       onChange={(value) => updateForm('nome_completo', value)}
+                      placeholder="Use só se existir um nome formal maior que o de exibição"
                     />
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-5 xl:grid-cols-2">
                     <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
                       <span className="text-sm font-medium text-slate-700">Igreja ativa</span>
                       <input
@@ -762,80 +979,170 @@ export default function AdminIgrejasPage() {
                   </div>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <MapPinned className="h-4 w-4 text-blue-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Localização</h3>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-4">
-                    <Input label="País" value={form.pais} onChange={(value) => updateForm('pais', value)} />
-                    <Input label="Região" value={form.regiao} onChange={(value) => updateForm('regiao', value)} />
+                  <div className="grid gap-5 xl:grid-cols-3">
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">País</span>
+                      <select
+                        value={form.pais}
+                        onChange={(event) => updateForm('pais', event.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        {PAISES_DISPONIVEIS.map((pais) => (
+                          <option key={pais.value} value={pais.value}>
+                            {pais.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <Input label="Cidade" value={form.cidade} onChange={(value) => updateForm('cidade', value)} />
-                    <Input label="UF" value={form.uf} onChange={(value) => updateForm('uf', value)} />
+                    <Input
+                      label={subdivisionLabel}
+                      value={form.uf}
+                      onChange={(value) => updateForm('uf', value)}
+                      placeholder={subdivisionPlaceholder}
+                    />
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-5 xl:grid-cols-2">
                     <Input label="Logradouro" value={form.logradouro} onChange={(value) => updateForm('logradouro', value)} />
                     <Input label="Complemento" value={form.complemento} onChange={(value) => updateForm('complemento', value)} />
                     <Input label="Bairro" value={form.bairro} onChange={(value) => updateForm('bairro', value)} />
                     <Input label="CEP" value={form.cep} onChange={(value) => updateForm('cep', value)} />
                   </div>
-                  <Textarea
-                    label="Endereço completo"
-                    value={form.endereco_completo}
-                    onChange={(value) => updateForm('endereco_completo', value)}
-                    rows={3}
-                  />
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="text-sm font-medium text-slate-700">Endereço completo gerado automaticamente</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Montado a partir de logradouro, complemento, bairro, cidade, {subdivisionLabel.toLowerCase()} e país.
+                    </p>
+                    <div className="mt-3 min-h-16 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                      {enderecoCompletoPreview || 'Preencha os campos acima para gerar o endereço completo.'}
+                    </div>
+                  </div>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4 text-violet-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Contato e presença digital</h3>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-900">
+                    <p className="font-semibold">Redes sociais não ficam limitadas aqui.</p>
+                    <p className="mt-1">
+                      Neste bloco ficam os contatos principais da igreja. Para cadastrar uma ou várias redes sociais,
+                      use a seção <strong>Redes sociais</strong> logo abaixo.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 xl:grid-cols-3 2xl:grid-cols-4">
                     <Input label="Telefone" value={form.telefone} onChange={(value) => updateForm('telefone', value)} />
                     <Input label="WhatsApp" value={form.whatsapp} onChange={(value) => updateForm('whatsapp', value)} />
                     <Input label="E-mail" value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
-                    <Input
-                      label="Instagram"
-                      value={form.instagram}
-                      onChange={(value) => updateForm('instagram', value)}
-                    />
-                    <Input label="YouTube" value={form.youtube} onChange={(value) => updateForm('youtube', value)} />
                   </div>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Settings2 className="h-4 w-4 text-amber-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Configurações da igreja</h3>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input
-                      label="Modo de repertório"
-                      value={form.modo_repertorio}
-                      onChange={(value) => updateForm('modo_repertorio', value)}
-                    />
-                    <Input
-                      label="Timezone do boletim"
-                      value={form.timezone_boletim}
-                      onChange={(value) => updateForm('timezone_boletim', value)}
-                      placeholder="America/Manaus"
-                    />
-                    <Input
-                      label="Horário de publicação do boletim"
-                      value={form.horario_publicacao_boletim}
-                      onChange={(value) => updateForm('horario_publicacao_boletim', value)}
-                      placeholder="08:00"
-                    />
-                    <Input
-                      label="Dia de publicação do boletim"
-                      value={form.dia_publicacao_boletim}
-                      onChange={(value) => updateForm('dia_publicacao_boletim', value)}
-                      placeholder="0-6"
-                      type="number"
-                    />
+                  <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">Modo de repertório</span>
+                      <select
+                        value={form.modo_repertorio}
+                        onChange={(event) => updateForm('modo_repertorio', event.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        <option value="">Selecione</option>
+                        {MODOS_REPERTORIO.map((modo) => (
+                          <option key={modo.value} value={modo.value}>
+                            {modo.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">Timezone do boletim</span>
+                      <select
+                        value={form.timezone_boletim}
+                        onChange={(event) => updateForm('timezone_boletim', event.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        <option value="">Selecione</option>
+                        {TIMEZONES_DISPONIVEIS.map((timezone) => (
+                          <option key={timezone.value} value={timezone.value}>
+                            {timezone.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">Dia de publicação do boletim</span>
+                      <select
+                        value={form.dia_publicacao_boletim}
+                        onChange={(event) => updateForm('dia_publicacao_boletim', event.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        <option value="">Selecione</option>
+                        {DIAS_PUBLICACAO.map((dia) => (
+                          <option key={dia.value} value={dia.value}>
+                            {dia.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid gap-5 xl:grid-cols-[220px_220px_minmax(0,1fr)]">
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">Hora de publicação</span>
+                      <select
+                        value={horarioParts.hora}
+                        onChange={(event) =>
+                          updateForm(
+                            'horario_publicacao_boletim',
+                            buildHorarioPublicacao(event.target.value, horarioParts.minuto)
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        <option value="">Hora</option>
+                        {Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0')).map((hora) => (
+                          <option key={hora} value={hora}>
+                            {hora}h
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-sm font-medium text-slate-700">Minutos</span>
+                      <select
+                        value={horarioParts.minuto}
+                        onChange={(event) =>
+                          updateForm(
+                            'horario_publicacao_boletim',
+                            buildHorarioPublicacao(horarioParts.hora, event.target.value)
+                          )
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      >
+                        <option value="">Min</option>
+                        {Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')).map((minuto) => (
+                          <option key={minuto} value={minuto}>
+                            {minuto}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-sm font-medium text-slate-700">Formato exibido</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {formatHorarioPublicacaoLabel(horarioParts.hora, horarioParts.minuto)}
+                      </p>
+                    </div>
                   </div>
                   <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
                     <span className="text-sm font-medium text-slate-700">Permite cadastro de cânticos</span>
@@ -848,14 +1155,14 @@ export default function AdminIgrejasPage() {
                   </label>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <CalendarClock className="h-4 w-4 text-rose-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Agenda de cultos</h3>
                   </div>
                   <div className="space-y-3">
                     {form.cultos.map((culto, index) => (
-                      <div key={`culto-${index}`} className="rounded-2xl border border-slate-200 p-4">
+                      <div key={`culto-${index}`} className="rounded-2xl border border-slate-200 p-5">
                         <div className="mb-3 flex items-center justify-between">
                           <p className="text-sm font-semibold text-slate-700">Culto {index + 1}</p>
                           <button
@@ -872,7 +1179,7 @@ export default function AdminIgrejasPage() {
                             Remover
                           </button>
                         </div>
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
                           <Input
                             label="Nome"
                             value={culto.nome}
@@ -935,7 +1242,7 @@ export default function AdminIgrejasPage() {
                             type="number"
                           />
                         </div>
-                        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
+                        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_240px]">
                           <Textarea
                             label="Descrição"
                             value={culto.descricao}
@@ -993,14 +1300,14 @@ export default function AdminIgrejasPage() {
                   </button>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Link2 className="h-4 w-4 text-cyan-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Redes sociais</h3>
                   </div>
                   <div className="space-y-3">
                     {form.redesSociais.map((rede, index) => (
-                      <div key={`rede-${index}`} className="grid gap-4 rounded-2xl border border-slate-200 p-4 md:grid-cols-[180px_1fr_110px_auto]">
+                      <div key={`rede-${index}`} className="grid gap-5 rounded-2xl border border-slate-200 p-5 xl:grid-cols-[220px_minmax(0,1fr)_130px_180px]">
                         <label className="block space-y-1">
                           <span className="text-sm font-medium text-slate-700">Tipo</span>
                           <select
@@ -1097,18 +1404,27 @@ export default function AdminIgrejasPage() {
                   </button>
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Church className="h-4 w-4 text-indigo-700" />
                     <h3 className="text-lg font-semibold text-slate-900">Liturgia da igreja</h3>
                   </div>
 
-                  <div className="grid gap-6 xl:grid-cols-[0.95fr_1.35fr]">
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 xl:p-6">
+                    <div className="mb-5 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4">
+                      <p className="text-sm font-semibold text-indigo-950">Fluxo simples para configurar a liturgia</p>
+                      <p className="mt-1 text-sm text-indigo-900">
+                        1. Adicione os tipos que a igreja usa. 2. Cada tipo entra automaticamente na ordem do culto.
+                        3. Depois, só reorganize e ajuste os textos padrão.
+                      </p>
+                    </div>
+
+                    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.45fr)]">
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6">
                       <p className="mb-2 text-sm font-semibold text-slate-900">1. Tipos disponíveis</p>
                       <p className="mb-4 text-sm text-slate-500">
-                        Cadastre aqui as peças que a igreja usa na liturgia. Depois, na coluna ao lado, você monta a
-                        ordem padrão do culto usando esses tipos.
+                        Adicione aqui as partes que a igreja usa na liturgia. Ao adicionar um tipo, ele já entra
+                        automaticamente na ordem padrão do culto.
                       </p>
 
                       <div className="mb-4 flex flex-wrap gap-2">
@@ -1123,15 +1439,7 @@ export default function AdminIgrejasPage() {
                             {tipo}
                             <button
                               type="button"
-                              onClick={() => {
-                                updateForm(
-                                  'tiposLiturgicos',
-                                  form.tiposLiturgicos.filter((item) => item !== tipo)
-                                );
-                                updateModelosLiturgia(
-                                  form.modelosLiturgia.filter((modelo) => modelo.tipo !== tipo)
-                                );
-                              }}
+                              onClick={() => removeTipoLiturgico(tipo)}
                               className="text-emerald-700 hover:text-emerald-900"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -1140,7 +1448,7 @@ export default function AdminIgrejasPage() {
                         ))}
                       </div>
 
-                      <div className="flex flex-col gap-3 sm:flex-row">
+                      <div className="flex gap-3">
                         <input
                           value={novoTipoLiturgico}
                           onChange={(event) => setNovoTipoLiturgico(event.target.value)}
@@ -1150,13 +1458,7 @@ export default function AdminIgrejasPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const tipo = novoTipoLiturgico.trim();
-                            if (!tipo) return;
-                            if (form.tiposLiturgicos.some((item) => item.toLowerCase() === tipo.toLowerCase())) {
-                              setNovoTipoLiturgico('');
-                              return;
-                            }
-                            updateForm('tiposLiturgicos', [...form.tiposLiturgicos, tipo]);
+                            addTipoLiturgico(novoTipoLiturgico);
                             setNovoTipoLiturgico('');
                           }}
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
@@ -1181,7 +1483,7 @@ export default function AdminIgrejasPage() {
                                 key={tipo}
                                 type="button"
                                 disabled={ativo}
-                                onClick={() => updateForm('tiposLiturgicos', [...form.tiposLiturgicos, tipo])}
+                                onClick={() => addTipoLiturgico(tipo)}
                                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                                   ativo
                                     ? 'cursor-not-allowed bg-slate-200 text-slate-400'
@@ -1196,13 +1498,12 @@ export default function AdminIgrejasPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6">
                       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">2. Ordem padrão do culto</p>
                           <p className="mt-1 text-sm text-slate-500">
-                            Aqui você define a sequência em que os tipos aparecem no culto. Cada linha abaixo é um
-                            item da ordem.
+                            Aqui você só organiza a sequência e define o texto padrão de cada parte do culto.
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -1222,61 +1523,40 @@ export default function AdminIgrejasPage() {
                             className="inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             <Plus className="h-4 w-4" />
-                            Adicionar item manualmente
+                            Adicionar item extra
                           </button>
                         </div>
                       </div>
 
-                      {tiposLiturgicosDisponiveis.length > 0 && (
-                        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Adicionar tipo na ordem
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {tiposLiturgicosDisponiveis.map((tipo) => (
-                              <button
-                                key={`add-modelo-${tipo}`}
-                                type="button"
-                                onClick={() => addModeloLiturgia(tipo)}
-                                className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                                {tipo}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {form.modelosLiturgia.length === 0 && form.tiposLiturgicos.length === 0 && (
                           <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-400">
-                            Cadastre alguns tipos litúrgicos e depois monte a ordem do culto aqui.
+                            Adicione os tipos litúrgicos na coluna à esquerda para começar.
                           </div>
                         )}
 
                         {form.modelosLiturgia.length === 0 && form.tiposLiturgicos.length > 0 && (
                           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
                             Você já tem tipos cadastrados. Clique em <strong>Gerar ordem inicial</strong> para montar
-                            uma primeira sequência automática, ou use os botões acima para montar a ordem do seu jeito.
+                            a sequência automaticamente.
                           </div>
                         )}
 
                         {form.modelosLiturgia.map((modelo, index) => (
-                          <div key={`modelo-${index}`} className="rounded-2xl border border-slate-200 p-4">
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3">
+                          <div key={`modelo-${index}`} className="min-w-0 rounded-2xl border border-slate-200 p-5">
+                            <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0 flex items-center gap-3">
                                 <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-emerald-100 px-2 text-sm font-bold text-emerald-900">
                                   {index + 1}
                                 </span>
-                                <div>
+                                <div className="min-w-0">
                                   <p className="text-sm font-semibold text-slate-900">Item da ordem</p>
                                   <p className="text-xs text-slate-500">
                                     Use as setas ou escolha a nova posição para reorganizar a sequência.
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex shrink-0 items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => moveModeloLiturgia(index, -1)}
@@ -1304,7 +1584,7 @@ export default function AdminIgrejasPage() {
                               </div>
                             </div>
 
-                            <div className="grid gap-4 md:grid-cols-3">
+                            <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_160px] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_180px]">
                               <label className="block space-y-1">
                                 <span className="text-sm font-medium text-slate-700">Tipo litúrgico</span>
                                 <select
@@ -1329,10 +1609,10 @@ export default function AdminIgrejasPage() {
                               </label>
 
                               <Input
-                                label="Título exibido"
+                                label="Título exibido no culto"
                                 value={modelo.bloco}
                                 onChange={(value) => patchModeloLiturgia(index, { bloco: value })}
-                                placeholder="Se vazio, usa o nome do tipo"
+                                placeholder="Opcional. Se não mudar, pode repetir o tipo"
                               />
 
                               <label className="block space-y-1">
@@ -1353,13 +1633,26 @@ export default function AdminIgrejasPage() {
                               </label>
                             </div>
 
-                            <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
-                              <Textarea
-                                label="Descrição padrão"
-                                value={modelo.descricao_padrao}
-                                onChange={(value) => patchModeloLiturgia(index, { descricao_padrao: value })}
-                                rows={2}
-                              />
+                            <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+                              <div className="grid min-w-0 gap-4">
+                                <Textarea
+                                  label="Texto público"
+                                  value={modelo.conteudo_publico_padrao}
+                                  onChange={(value) => patchModeloLiturgia(index, { conteudo_publico_padrao: value })}
+                                  rows={2}
+                                />
+                                <Textarea
+                                  label="Texto interno"
+                                  value={modelo.descricao_interna_padrao}
+                                  onChange={(value) =>
+                                    patchModeloLiturgia(index, {
+                                      descricao_interna_padrao: value,
+                                      descricao_padrao: value,
+                                    })
+                                  }
+                                  rows={2}
+                                />
+                              </div>
                               <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
                                 <span className="text-sm font-medium text-slate-700">Tem cântico</span>
                                 <input
@@ -1375,6 +1668,7 @@ export default function AdminIgrejasPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
                     </div>
                   </div>
                 </section>

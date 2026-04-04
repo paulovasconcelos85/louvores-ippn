@@ -40,6 +40,16 @@ function sanitizeNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function normalizePais(value: unknown) {
+  const sanitized = sanitizeString(value)?.toUpperCase();
+  if (!sanitized) return 'BR';
+  if (sanitized === 'BR' || sanitized === 'BRASIL') return 'BR';
+  if (sanitized === 'PT' || sanitized === 'PORTUGAL') return 'PT';
+  if (sanitized === 'US' || sanitized === 'USA' || sanitized === 'ESTADOS UNIDOS') return 'US';
+  if (sanitized === 'CA' || sanitized === 'CANADA' || sanitized === 'CANADÁ') return 'CA';
+  return sanitized;
+}
+
 function normalizeChurchPayload(body: Record<string, unknown>) {
   return {
     nome: sanitizeString(body.nome),
@@ -64,7 +74,7 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     modelo_liturgico_padrao: body.modelo_liturgico_padrao ?? null,
     modo_repertorio: sanitizeString(body.modo_repertorio),
     permite_cadastro_canticos: sanitizeBoolean(body.permite_cadastro_canticos, true),
-    pais: sanitizeString(body.pais) || 'Brasil',
+    pais: normalizePais(body.pais),
     regiao: sanitizeString(body.regiao),
     email: sanitizeString(body.email)?.toLowerCase() || null,
     horario_publicacao_boletim: sanitizeString(body.horario_publicacao_boletim),
@@ -128,7 +138,11 @@ function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
       const row = item as Record<string, unknown>;
       const bloco = sanitizeString(row.bloco);
       const tipo = sanitizeString(row.tipo);
-      const descricao_padrao = sanitizeString(row.descricao_padrao);
+      const conteudo_publico_padrao =
+        sanitizeString(row.conteudo_publico_padrao) || sanitizeString(row.conteudo_publico);
+      const descricao_interna_padrao =
+        sanitizeString(row.descricao_interna_padrao) || sanitizeString(row.descricao_padrao);
+      const descricao_padrao = descricao_interna_padrao || conteudo_publico_padrao;
 
       if (!bloco || !tipo || !descricao_padrao) return null;
 
@@ -144,6 +158,20 @@ function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
     .filter(Boolean);
 }
 
+function sortByOrdem<T extends { ordem?: number | null; horario?: string | null }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const ordemA = typeof a.ordem === 'number' ? a.ordem : Number.MAX_SAFE_INTEGER;
+    const ordemB = typeof b.ordem === 'number' ? b.ordem : Number.MAX_SAFE_INTEGER;
+
+    if (ordemA !== ordemB) return ordemA - ordemB;
+
+    const horarioA = typeof a.horario === 'string' ? a.horario : '';
+    const horarioB = typeof b.horario === 'string' ? b.horario : '';
+
+    return horarioA.localeCompare(horarioB);
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -156,43 +184,39 @@ export async function GET(
 
     const [
       { data: igreja, error: igrejaError },
-      { data: cultos, error: cultosError },
-      { data: redes, error: redesError },
-      { data: modelosLiturgia, error: modelosError },
+      cultosResult,
+      redesResult,
+      modelosResult,
     ] = await Promise.all([
       supabaseAdmin.from('igrejas').select('*').eq('id', id).maybeSingle(),
-      supabaseAdmin
-        .from('igreja_cultos')
-        .select('*')
-        .eq('igreja_id', id)
-        .order('ordem', { ascending: true })
-        .order('horario', { ascending: true }),
-      supabaseAdmin
-        .from('igreja_redes_sociais')
-        .select('*')
-        .eq('igreja_id', id)
-        .order('ordem', { ascending: true }),
-      supabaseAdmin
-        .from('modelos_liturgia')
-        .select('*')
-        .eq('igreja_id', id)
-        .order('ordem', { ascending: true }),
+      supabaseAdmin.from('igreja_cultos').select('*').eq('igreja_id', id),
+      supabaseAdmin.from('igreja_redes_sociais').select('*').eq('igreja_id', id),
+      supabaseAdmin.from('modelos_liturgia').select('*').eq('igreja_id', id),
     ]);
 
     if (igrejaError) throw igrejaError;
-    if (cultosError) throw cultosError;
-    if (redesError) throw redesError;
-    if (modelosError) throw modelosError;
 
     if (!igreja) {
       return NextResponse.json({ error: 'Igreja não encontrada.' }, { status: 404 });
     }
 
+    if (cultosResult.error) {
+      console.warn('Falha ao carregar cultos da igreja no admin:', cultosResult.error);
+    }
+
+    if (redesResult.error) {
+      console.warn('Falha ao carregar redes sociais da igreja no admin:', redesResult.error);
+    }
+
+    if (modelosResult.error) {
+      console.warn('Falha ao carregar modelos de liturgia da igreja no admin:', modelosResult.error);
+    }
+
     return NextResponse.json({
       igreja,
-      cultos: cultos || [],
-      redesSociais: redes || [],
-      modelosLiturgia: modelosLiturgia || [],
+      cultos: sortByOrdem(cultosResult.data || []),
+      redesSociais: sortByOrdem(redesResult.data || []),
+      modelosLiturgia: sortByOrdem(modelosResult.data || []),
     });
   } catch (error: any) {
     console.error('Erro ao carregar igreja admin:', error);

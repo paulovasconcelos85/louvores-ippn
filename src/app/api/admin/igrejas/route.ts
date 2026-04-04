@@ -59,6 +59,16 @@ type IgrejaPayload = {
   timezone_boletim?: string | null;
 };
 
+function normalizePais(value?: string | null) {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) return 'BR';
+  if (normalized === 'BR' || normalized === 'BRASIL') return 'BR';
+  if (normalized === 'PT' || normalized === 'PORTUGAL') return 'PT';
+  if (normalized === 'US' || normalized === 'USA' || normalized === 'ESTADOS UNIDOS') return 'US';
+  if (normalized === 'CA' || normalized === 'CANADA' || normalized === 'CANADÁ') return 'CA';
+  return normalized;
+}
+
 function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
   return {
     nome: body.nome?.trim(),
@@ -83,7 +93,7 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
     modelo_liturgico_padrao: body.modelo_liturgico_padrao ?? null,
     modo_repertorio: body.modo_repertorio?.trim() || null,
     permite_cadastro_canticos: body.permite_cadastro_canticos ?? true,
-    pais: body.pais?.trim() || 'Brasil',
+    pais: normalizePais(body.pais),
     regiao: body.regiao?.trim() || null,
     email: body.email?.trim()?.toLowerCase() || null,
     horario_publicacao_boletim: body.horario_publicacao_boletim?.trim() || null,
@@ -99,12 +109,25 @@ export async function GET(request: NextRequest) {
   try {
     const { data, error } = await supabaseAdmin
       .from('igrejas')
-      .select('id, nome, slug, nome_abreviado, cidade, uf, regiao, pais, ativo, visivel_publico')
+      .select('*')
       .order('nome', { ascending: true });
 
     if (error) throw error;
 
-    return NextResponse.json({ igrejas: data || [] });
+    const igrejas = (data || []).map((igreja: any) => ({
+      id: igreja.id,
+      nome: igreja.nome,
+      slug: igreja.slug,
+      nome_abreviado: igreja.nome_abreviado ?? null,
+      cidade: igreja.cidade ?? null,
+      uf: igreja.uf ?? null,
+      regiao: igreja.regiao ?? null,
+      pais: igreja.pais ?? null,
+      ativo: igreja.ativo ?? true,
+      visivel_publico: igreja.visivel_publico ?? true,
+    }));
+
+    return NextResponse.json({ igrejas });
   } catch (error: any) {
     console.error('Erro ao listar igrejas admin:', error);
     return NextResponse.json({ error: error.message || 'Erro ao listar igrejas.' }, { status: 500 });
