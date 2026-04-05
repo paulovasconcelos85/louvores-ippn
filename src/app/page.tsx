@@ -176,6 +176,15 @@ function getMensagemErro(error: unknown, fallback: string) {
   return fallback;
 }
 
+function extrairPartesLiturgicas(conteudo: string) {
+  const [titulo, ...restante] = conteudo.split('\n');
+
+  return {
+    titulo: titulo.trim(),
+    corpo: restante.join('\n').trim(),
+  };
+}
+
 export default function Home() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -526,6 +535,32 @@ export default function Home() {
     return secao.titulo.match(/(\d{4}-\d{2}-\d{2})/) ? 'Liturgia' : secao.titulo;
   };
 
+  const agruparItensLiturgicos = (itens: BoletimItem[]) => {
+    const grupos: Array<{
+      id: string;
+      titulo: string;
+      corpos: string[];
+    }> = [];
+
+    for (const item of itens) {
+      const partes = extrairPartesLiturgicas(item.conteudo);
+      const ultimoGrupo = grupos[grupos.length - 1];
+
+      if (ultimoGrupo && ultimoGrupo.titulo === partes.titulo) {
+        ultimoGrupo.corpos.push(partes.corpo);
+        continue;
+      }
+
+      grupos.push({
+        id: item.id,
+        titulo: partes.titulo,
+        corpos: [partes.corpo],
+      });
+    }
+
+    return grupos;
+  };
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
       <header className="bg-[#17352b] text-white">
@@ -667,22 +702,44 @@ export default function Home() {
                         }`}
                       >
                         <div className="space-y-0">
-                          {secao.itens.map((item, itemIndex) => (
-                            <div
-                              key={item.id}
-                              className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
-                            >
-                              {isImageSection(secao) ? (
-                                <img
-                                  src={item.conteudo}
-                                  alt={secao.titulo}
-                                  className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
-                                />
-                              ) : (
-                                renderItemConteudo(secao, item.conteudo)
-                              )}
-                            </div>
-                          ))}
+                          {(isLiturgiaSection(secao)
+                            ? agruparItensLiturgicos(secao.itens).map((grupo, itemIndex) => (
+                                <div
+                                  key={grupo.id}
+                                  className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                                >
+                                  <div className="space-y-1.5">
+                                    <p className="text-[15px] font-semibold text-slate-900 leading-6 sm:text-base">
+                                      {grupo.titulo}
+                                    </p>
+                                    <div className="space-y-2">
+                                      {grupo.corpos.map((corpo, corpoIndex) =>
+                                        corpo ? (
+                                          <div key={`${grupo.id}-${corpoIndex}`}>
+                                            {renderBlocoTexto(corpo)}
+                                          </div>
+                                        ) : null
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            : secao.itens.map((item, itemIndex) => (
+                                <div
+                                  key={item.id}
+                                  className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                                >
+                                  {isImageSection(secao) ? (
+                                    <img
+                                      src={item.conteudo}
+                                      alt={secao.titulo}
+                                      className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
+                                    />
+                                  ) : (
+                                    renderItemConteudo(secao, item.conteudo)
+                                  )}
+                                </div>
+                              )))}
                         </div>
                       </div>
                     )}

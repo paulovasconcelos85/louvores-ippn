@@ -1,17 +1,26 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 // Remove o componente EnderecoAutocomplete que está dentro do arquivo
 // Adiciona no topo:
 import EnderecoAutocomplete from '@/components/EnderecoAutocomplete';
 import type { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import {
-  User, Phone, MapPin, Heart, Church, BookOpen, Home,
+  User, MapPin, Heart, Church, BookOpen, Home,
   Briefcase, GraduationCap, Users, Check, ChevronRight,
-  ChevronLeft, AlertCircle, Shield, Info, Search, X, UserCheck,
+  ChevronLeft, AlertCircle, Shield, Info, UserCheck,
 } from 'lucide-react';
+
+type IgrejaCadastro = {
+  id: string;
+  nome: string;
+  nome_abreviado?: string | null;
+  slug?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+};
 
 type StatusMembro = 'ativo' | 'congregado' | 'visitante';
 type OpcaoCongregado = 'batizado_outra' | 'transferencia_ipb' | 'interesse_batismo' | '';
@@ -59,12 +68,32 @@ function CheckOption({ checked, onChange, children }: { checked: boolean; onChan
   );
 }
 
-export default function CadastroPublicoPage() {
+function formatarNomeFallbackDaIgreja(slug: string | null) {
+  if (!slug) return 'Igreja Presbiteriana';
+
+  const valor = slug.trim();
+  if (!valor) return 'Igreja Presbiteriana';
+
+  if (/^[a-z0-9]{2,6}$/i.test(valor)) {
+    return valor.toUpperCase();
+  }
+
+  return valor
+    .split('-')
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function CadastroPublicoContent() {
+  const searchParams = useSearchParams();
   const [etapa, setEtapa] = useState(1);
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState('');
   const [nomeEnviado, setNomeEnviado] = useState('');
+  const [igrejaSelecionada, setIgrejaSelecionada] = useState<IgrejaCadastro | null>(null);
+  const [loadingIgreja, setLoadingIgreja] = useState(true);
 
   // Etapa 1
   const [nome, setNome] = useState('');
@@ -111,13 +140,60 @@ export default function CadastroPublicoPage() {
   const etapaVisualIdx = ehVisitante ? (etapa === 1 ? 0 : 1) : etapa - 1;
   const isUltima = ehVisitante ? etapa === 4 : etapa === 5;
   const scroll = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const igrejaIdParam = searchParams.get('igreja_id');
+  const igrejaSlugParam = searchParams.get('igreja_slug');
+  const nomeIgreja =
+    igrejaSelecionada?.nome_abreviado ||
+    igrejaSelecionada?.nome ||
+    formatarNomeFallbackDaIgreja(igrejaSlugParam);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarIgreja() {
+      try {
+        setLoadingIgreja(true);
+        const params = new URLSearchParams();
+
+        if (igrejaIdParam) {
+          params.set('igreja_id', igrejaIdParam);
+        }
+
+        if (!igrejaIdParam && igrejaSlugParam) {
+          params.set('igreja_slug', igrejaSlugParam);
+        }
+
+        const response = await fetch(`/api/cadastro-publico?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Não foi possível carregar a igreja do cadastro.');
+        }
+
+        if (!ativo) return;
+        setIgrejaSelecionada((data.igreja || null) as IgrejaCadastro | null);
+      } catch (error: any) {
+        if (!ativo) return;
+        setErro(error.message || 'Não foi possível carregar a igreja do cadastro.');
+        setIgrejaSelecionada(null);
+      } finally {
+        if (ativo) setLoadingIgreja(false);
+      }
+    }
+
+    void carregarIgreja();
+
+    return () => {
+      ativo = false;
+    };
+  }, [igrejaIdParam, igrejaSlugParam]);
 
   const avancar = () => {
     setErro('');
     if (etapa === 1) {
       if (!nome.trim()) { setErro('Preencha seu nome completo.'); return; }
       if (!telefone || unformatPhoneNumber(telefone).length < 10) { setErro('Preencha um telefone válido com DDD.'); return; }
-      if (!statusMembro) { setErro('Selecione como você frequenta a IPPN.'); return; }
+      if (!statusMembro) { setErro(`Selecione como você frequenta ${igrejaSelecionada?.nome_abreviado || 'esta igreja'}.`); return; }
       if (ehVisitante) { setEtapa(4); scroll(); return; }
     }
     setEtapa(e => e + 1); scroll();
@@ -135,13 +211,19 @@ export default function CadastroPublicoPage() {
   const salvar = async () => {
     setSalvando(true); setErro('');
     try {
+      if (!igrejaSelecionada?.id) {
+        throw new Error('Nenhuma igreja foi selecionada para este cadastro.');
+      }
+
       const fone = unformatPhoneNumber(telefone);
       const batizado = statusMembro === 'ativo' || opcaoCongregado === 'batizado_outra' || opcaoCongregado === 'transferencia_ipb';
       const payload: Record<string, any> = {
+        igreja_id: igrejaSelecionada.id,
+        igreja_slug: !igrejaIdParam && igrejaSlugParam ? igrejaSlugParam : null,
         nome: nome.trim(), telefone: fone, sexo: sexo || null, status_membro: statusMembro,
         data_nascimento: dataNascimento || null, email: email.trim() || null,
         logradouro: endereco.logradouro || null, bairro: endereco.bairro || null,
-        cep: endereco.cep || null, cidade: endereco.cidade || 'Manaus', uf: endereco.uf || 'AM',
+        cep: endereco.cep || null, cidade: endereco.cidade || igrejaSelecionada.cidade || 'Manaus', uf: endereco.uf || igrejaSelecionada.uf || 'AM',
         latitude: endereco.latitude, longitude: endereco.longitude, google_place_id: endereco.google_place_id,
         endereco_completo: complemento ? `${endereco.endereco_completo}, ${complemento}` : endereco.endereco_completo || null,
         nome_pai: nomePai.trim() || null, nome_mae: nomeMae.trim() || null,
@@ -158,30 +240,30 @@ export default function CadastroPublicoPage() {
         situacao_saude: situacaoSaude.trim() || null, observacoes: observacoes.trim() || null,
         ativo: true, cargo: 'membro', atualizado_em: new Date().toISOString(),
       };
-      let existente: { id: string } | null = null;
-      const { data: porTel } = await supabase.from('pessoas').select('id').eq('telefone', fone).maybeSingle();
-      if (porTel) existente = porTel;
-      if (!existente) {
-        const { data: porNome } = await supabase.from('pessoas').select('id').ilike('nome', nome.trim()).maybeSingle();
-        if (porNome) existente = porNome;
-      }
-      console.log('Payload:', JSON.stringify(payload, null, 2));
+      const response = await fetch('/api/cadastro-publico', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (existente) {
-        const { error } = await supabase.from('pessoas').update(payload).eq('id', existente.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('pessoas').insert(payload);
-        if (error) throw error;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw Object.assign(new Error(data.error || 'Erro ao enviar cadastro.'), {
+          code: response.status,
+        });
       }
+
       setNomeEnviado(nome.trim().split(' ')[0]); setSucesso(true); scroll();
     } catch (err: any) {
       console.error(err);
-      if (err.code === '23505' && err.message?.includes('telefone'))
+      if (err.message?.includes('telefone'))
         setErro('Este telefone já está cadastrado. Fale com a liderança para atualizá-lo.');
-      else if (err.code === '23505')
+      else if (err.message?.includes('e-mail'))
         setErro('Já existe um cadastro com este e-mail. Tente com outro ou deixe em branco.');
-      else setErro('Ocorreu um erro ao enviar. Tente novamente em instantes.');
+      else setErro(err.message || 'Ocorreu um erro ao enviar. Tente novamente em instantes.');
     } finally { setSalvando(false); }
   };
 
@@ -193,12 +275,12 @@ export default function CadastroPublicoPage() {
         </div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">Obrigado, {nomeEnviado}! 🙏</h2>
         <p className="text-slate-600 leading-relaxed mb-5">
-          Seus dados foram recebidos com sucesso.<br />Que o Senhor abençoe você e sua família!
+          Seus dados foram recebidos com sucesso por {nomeIgreja}.<br />Que o Senhor abençoe você e sua família!
         </p>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left">
           <p className="text-sm text-emerald-900 flex items-start gap-2">
             <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-700" />
-            Suas informações são sigilosas e acessadas apenas pela liderança pastoral da IPPN.
+            Suas informações são sigilosas e acessadas apenas pela liderança pastoral da igreja selecionada.
           </p>
         </div>
       </div>
@@ -213,13 +295,31 @@ export default function CadastroPublicoPage() {
             <Church className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-tight">Igreja Presbiteriana Ponta Negra</h1>
+            <h1 className="text-sm font-bold text-white leading-tight">{nomeIgreja}</h1>
             <p className="text-xs text-emerald-300">Formulário de Cadastro</p>
           </div>
         </div>
       </header>
 
       <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
+        {loadingIgreja && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4 flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-600">Carregando dados da igreja...</p>
+          </div>
+        )}
+
+        {!loadingIgreja && igrejaSelecionada && (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
+            <p className="text-sm text-sky-900 leading-relaxed">
+              <strong>Cadastro vinculado a:</strong> {nomeIgreja}
+              {(igrejaSelecionada.cidade || igrejaSelecionada.uf) && (
+                <> · {[igrejaSelecionada.cidade, igrejaSelecionada.uf].filter(Boolean).join(' / ')}</>
+              )}
+            </p>
+          </div>
+        )}
+
         {etapa === 1 && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
             <p className="text-sm text-emerald-900 leading-relaxed">
@@ -301,7 +401,7 @@ export default function CadastroPublicoPage() {
                 <p className="mt-1.5 text-xs text-slate-400">Usado para contato pela liderança. Não compartilhamos com terceiros.</p>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Como você frequenta a IPPN? <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Como você frequenta {igrejaSelecionada?.nome_abreviado || 'esta igreja'}? <span className="text-red-500">*</span></label>
                 <p className="text-xs text-slate-400 mb-3">Isso ajuda a liderança a saber como cuidar de você da melhor forma.</p>
                 <div className="space-y-2">
                   {STATUS_OPTIONS.map(op => (
@@ -480,7 +580,7 @@ export default function CadastroPublicoPage() {
                   <div className="space-y-2">
                     {([
                       { v: 'batizado_outra' as OpcaoCongregado, titulo: '✝️  Fui batizado(a) em outra denominação', sub: 'Tenho batismo válido, mas ainda não transferi minha carta.' },
-                      { v: 'transferencia_ipb' as OpcaoCongregado, titulo: '📋  Quero transferência de outra Igreja Presbiteriana', sub: 'Sou membro de outra IPB e quero transferir minha carta para a IPPN.' },
+                      { v: 'transferencia_ipb' as OpcaoCongregado, titulo: '📋  Quero transferência de outra Igreja Presbiteriana', sub: `Sou membro de outra IPB e quero transferir minha carta para ${igrejaSelecionada?.nome_abreviado || 'esta igreja'}.` },
                       { v: 'interesse_batismo' as OpcaoCongregado, titulo: '🌱  Tenho interesse em me batizar', sub: 'Ainda não fui batizado(a) e gostaria de dar esse passo.' },
                     ]).map(op => (
                       <button key={op.v} type="button" onClick={() => setOpcaoCongregado(op.v)}
@@ -574,11 +674,11 @@ export default function CadastroPublicoPage() {
               </button>
             )}
             {!isUltima ? (
-              <button type="button" onClick={avancar} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm text-base">
+              <button type="button" onClick={avancar} disabled={loadingIgreja || !igrejaSelecionada} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm text-base disabled:opacity-50">
                 Continuar <ChevronRight className="w-5 h-5" />
               </button>
             ) : (
-              <button type="button" onClick={salvar} disabled={salvando} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm disabled:opacity-50 text-base">
+              <button type="button" onClick={salvar} disabled={salvando || loadingIgreja || !igrejaSelecionada} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm disabled:opacity-50 text-base">
                 {salvando ? <><span className="animate-spin inline-block w-5 h-5 border-b-2 border-white rounded-full" /> Enviando...</> : <><Check className="w-5 h-5" /> Enviar Cadastro</>}
               </button>
             )}
@@ -609,5 +709,22 @@ export default function CadastroPublicoPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function CadastroPublicoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-600">Carregando formulário de cadastro...</p>
+          </div>
+        </div>
+      }
+    >
+      <CadastroPublicoContent />
+    </Suspense>
   );
 }

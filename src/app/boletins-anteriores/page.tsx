@@ -50,6 +50,15 @@ async function lerJsonSeguro(response: Response) {
   }
 }
 
+function extrairPartesLiturgicas(conteudo: string) {
+  const [titulo, ...restante] = conteudo.split('\n');
+
+  return {
+    titulo: titulo.trim(),
+    corpo: restante.join('\n').trim(),
+  };
+}
+
 export default function BoletinsAnterioresPage() {
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
   const [igrejaAtualId, setIgrejaAtualId] = useState<string | null>(null);
@@ -67,6 +76,34 @@ export default function BoletinsAnterioresPage() {
     () => boletins.find((boletim) => boletim.id === boletimSelecionadoId) || boletins[0] || null,
     [boletins, boletimSelecionadoId]
   );
+
+  const itensAgrupadosBoletimSelecionado = useMemo(() => {
+    if (!boletimSelecionado) return [];
+
+    const grupos: Array<{
+      id: string;
+      titulo: string;
+      corpos: string[];
+    }> = [];
+
+    for (const item of boletimSelecionado.itens) {
+      const partes = extrairPartesLiturgicas(item.conteudo);
+      const ultimoGrupo = grupos[grupos.length - 1];
+
+      if (ultimoGrupo && ultimoGrupo.titulo === partes.titulo) {
+        ultimoGrupo.corpos.push(partes.corpo);
+        continue;
+      }
+
+      grupos.push({
+        id: item.id,
+        titulo: partes.titulo,
+        corpos: [partes.corpo],
+      });
+    }
+
+    return grupos;
+  }, [boletimSelecionado]);
 
   useEffect(() => {
     let active = true;
@@ -262,24 +299,26 @@ export default function BoletinsAnterioresPage() {
                   )}
 
                   <div className="mt-5 space-y-0">
-                    {boletimSelecionado.itens.map((item, index) => {
-                      const [titulo, ...restante] = item.conteudo.split('\n');
-                      const corpo = restante.join('\n').trim();
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={`py-4 ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                        >
-                          <p className="text-[15px] font-semibold text-slate-900 leading-6">{titulo}</p>
-                          {corpo ? (
-                            <p className="mt-1.5 whitespace-pre-line text-[15px] leading-7 text-slate-600">
-                              {corpo}
-                            </p>
-                          ) : null}
+                    {itensAgrupadosBoletimSelecionado.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className={`py-4 ${index > 0 ? 'border-t border-slate-100' : ''}`}
+                      >
+                        <p className="text-[15px] font-semibold text-slate-900 leading-6">{item.titulo}</p>
+                        <div className="space-y-1.5 mt-1.5">
+                          {item.corpos.map((corpo, corpoIndex) =>
+                            corpo ? (
+                              <p
+                                key={`${item.id}-${corpoIndex}`}
+                                className="whitespace-pre-line text-[15px] leading-7 text-slate-600"
+                              >
+                                {corpo}
+                              </p>
+                            ) : null
+                          )}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </article>
               )}
