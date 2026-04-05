@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, Clock3, MapPin } from 'lucide-react';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 
@@ -120,7 +121,9 @@ export default function BoletinsAnterioresPage() {
         setLoading(true);
         setErro(null);
         const params = new URLSearchParams({ igreja_id: igrejaAtualId });
-        const response = await fetch(`/api/boletins-anteriores?${params.toString()}`);
+        const response = await fetch(`/api/boletins-anteriores?${params.toString()}`, {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const data = await lerJsonSeguro(response);
 
         if (!response.ok) {

@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 
@@ -337,7 +338,9 @@ export default function Home() {
         setLoadingBoletim(true);
 
         const params = new URLSearchParams({ igreja_id: igrejaAtualId });
-        const response = await fetch(`/api/boletins-home?${params.toString()}`);
+        const response = await fetch(`/api/boletins-home?${params.toString()}`, {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const data = await lerJsonSeguro(response);
 
         if (!response.ok) {

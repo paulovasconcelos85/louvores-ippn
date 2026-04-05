@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,8 +79,30 @@ async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
   return canticosPorId;
 }
 
+function buildLegacyLiturgiaConteudo(
+  item: LegacyLouvorItemRow,
+  index: number,
+  nomeCantico: string | null | undefined,
+  includeInternal: boolean
+) {
+  const tituloItem = item.tipo || `Item ${index + 1}`;
+  const cantico = nomeCantico
+    ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
+    : '';
+  const conteudoBase = item.conteudo_publico?.trim() || '';
+  const descricao = includeInternal ? item.descricao?.trim() || '' : '';
+
+  return `${tituloItem}${
+    conteudoBase ? `\n${conteudoBase}` : ''
+  }${
+    descricao ? `\n${descricao}` : ''
+  }${cantico}`;
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthenticatedUserFromServerCookies(request);
+    const includeInternal = Boolean(user?.id);
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
 
     if (!igrejaId) {
@@ -124,21 +147,16 @@ export async function GET(request: NextRequest) {
 
     const boletins = cultos.map((culto) => {
       const itensCulto = (itensPorCulto.get(culto['Culto nr.']) || []).map((item, index) => {
-        const tituloItem = item.tipo || `Item ${index + 1}`;
         const nomeCantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
-        const cantico = nomeCantico
-          ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
-          : '';
-        const conteudoBase = item.conteudo_publico?.trim() || '';
-        const descricao = item.descricao?.trim() || '';
 
         return {
           id: item.id,
-          conteudo: `${tituloItem}${
-            conteudoBase ? `\n${conteudoBase}` : ''
-          }${
-            descricao ? `\n${descricao}` : ''
-          }${cantico}`,
+          conteudo: buildLegacyLiturgiaConteudo(
+            item,
+            index,
+            nomeCantico,
+            includeInternal
+          ),
           ordem: item.ordem ?? index,
         };
       });
