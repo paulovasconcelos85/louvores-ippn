@@ -32,6 +32,7 @@ const TIPOS_SECOES_BOLETIM = [
 ] as const;
 
 const TIPOS_SECOES_SISTEMA = new Set(['imagem_tema', 'palavra_pastoral', 'liturgia']);
+const HABILITAR_BOLETIM_SECOES_NEXT = false;
 
 // --- TIPOS ---
 interface Cantico {
@@ -714,7 +715,7 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
         )}
 
         {/* Horário (interno) */}
-        {isLideranca && (
+        {HABILITAR_BOLETIM_SECOES_NEXT && isLideranca && (
           <input
             value={item.horario || ''}
             onChange={e => onUpdate({ ...item, horario: e.target.value })}
@@ -1194,6 +1195,11 @@ function EditorLiturgia({
   }, [culto, dia, configuracaoIgreja]);
 
   useEffect(() => {
+    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
+      setBoletimSecoes([]);
+      return;
+    }
+
     if (culto) {
       carregarSecoesBoletim(culto['Culto nr.']);
       return;
@@ -1245,6 +1251,11 @@ function EditorLiturgia({
   };
 
   const carregarSecoesBoletim = async (cultoNr: number) => {
+    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
+      setBoletimSecoes([]);
+      return;
+    }
+
     const igrejaId = getStoredChurchId();
 
     if (!igrejaId) {
@@ -1379,6 +1390,8 @@ function EditorLiturgia({
   };
 
   const salvarBoletim = async (cultoId: number, igrejaId: string, imagemUrl: string | null) => {
+    if (!HABILITAR_BOLETIM_SECOES_NEXT) return;
+
     const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
       .from('boletim_secoes')
       .select('id')
@@ -1581,7 +1594,9 @@ function EditorLiturgia({
         if (error) throw error;
       }
 
-      await salvarBoletim(cId, igrejaId, imagemUrl);
+      if (HABILITAR_BOLETIM_SECOES_NEXT) {
+        await salvarBoletim(cId, igrejaId, imagemUrl);
+      }
 
       alert('✅ Salvo com sucesso!');
       onSalvo();
@@ -1623,7 +1638,7 @@ function EditorLiturgia({
         </div>
 
         {/* PALAVRA PASTORAL */}
-        {isLideranca && (
+        {HABILITAR_BOLETIM_SECOES_NEXT && isLideranca && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5">
             <label className="text-xs font-black text-emerald-600 uppercase tracking-widest block mb-3">
               ✝️ Palavra Pastoral
@@ -1925,38 +1940,42 @@ function EditorLiturgia({
         </div>
       )}
 
-      <EscolherTipoSecaoModal
-        aberto={showEscolherTipo}
-        onFechar={() => setShowEscolherTipo(false)}
-        onEscolher={(tipo) => {
-          setShowEscolherTipo(false);
-          setTipoNovaSecao(tipo);
-        }}
-      />
+      {HABILITAR_BOLETIM_SECOES_NEXT ? (
+        <>
+          <EscolherTipoSecaoModal
+            aberto={showEscolherTipo}
+            onFechar={() => setShowEscolherTipo(false)}
+            onEscolher={(tipo) => {
+              setShowEscolherTipo(false);
+              setTipoNovaSecao(tipo);
+            }}
+          />
 
-      <EditorSecaoBoletimModal
-        aberto={Boolean(tipoNovaSecao || secaoEditando)}
-        tipo={tipoNovaSecao || secaoEditando?.tipo || null}
-        secaoExistente={tipoNovaSecao ? null : secaoEditando}
-        onFechar={() => {
-          setTipoNovaSecao(null);
-          setSecaoEditandoIndex(null);
-        }}
-        onSalvar={(secao) => {
-          if (secaoEditandoIndex !== null) {
-            setBoletimSecoes(
-              normalizarSecoesBoletim(
-                boletimSecoes.map((item, index) => (index === secaoEditandoIndex ? { ...secao, ordem: item.ordem } : item))
-              )
-            );
-          } else {
-            setBoletimSecoes(normalizarSecoesBoletim([...boletimSecoes, secao]));
-          }
+          <EditorSecaoBoletimModal
+            aberto={Boolean(tipoNovaSecao || secaoEditando)}
+            tipo={tipoNovaSecao || secaoEditando?.tipo || null}
+            secaoExistente={tipoNovaSecao ? null : secaoEditando}
+            onFechar={() => {
+              setTipoNovaSecao(null);
+              setSecaoEditandoIndex(null);
+            }}
+            onSalvar={(secao) => {
+              if (secaoEditandoIndex !== null) {
+                setBoletimSecoes(
+                  normalizarSecoesBoletim(
+                    boletimSecoes.map((item, index) => (index === secaoEditandoIndex ? { ...secao, ordem: item.ordem } : item))
+                  )
+                );
+              } else {
+                setBoletimSecoes(normalizarSecoesBoletim([...boletimSecoes, secao]));
+              }
 
-          setTipoNovaSecao(null);
-          setSecaoEditandoIndex(null);
-        }}
-      />
+              setTipoNovaSecao(null);
+              setSecaoEditandoIndex(null);
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
