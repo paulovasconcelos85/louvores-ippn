@@ -32,6 +32,7 @@ import { usePessoas, Pessoa } from '@/hooks/usePessoas';
 import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
+import { UsuariosHubPanel } from '@/components/UsuariosHubPanel';
 
 interface Tag {
   id: string;
@@ -74,6 +75,7 @@ export default function GerenciarPessoas() {
   const [mostrarInativos, setMostrarInativos] = useState(true);
   const [filtroAcesso, setFiltroAcesso] = useState<'todos' | 'com_acesso' | 'sem_acesso'>('todos');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [modoPainel, setModoPainel] = useState<'cadastros' | 'hub_macro'>('cadastros');
 
   const [novoEmail, setNovoEmail] = useState('');
   const [novoNome, setNovoNome] = useState('');
@@ -458,6 +460,38 @@ export default function GerenciarPessoas() {
             </div>
           )}
 
+          {permissoes.isSuperAdmin && (
+            <div className="bg-white rounded-xl border border-slate-200 p-2 inline-flex gap-2 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setModoPainel('cadastros')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  modoPainel === 'cadastros'
+                    ? 'bg-emerald-700 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Cadastros da igreja
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoPainel('hub_macro')}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  modoPainel === 'hub_macro'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Hub macro
+              </button>
+            </div>
+          )}
+
+          {permissoes.isSuperAdmin && modoPainel === 'hub_macro' ? (
+            <UsuariosHubPanel />
+          ) : (
+            <>
+
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-slate-200 p-4">
@@ -819,10 +853,8 @@ export default function GerenciarPessoas() {
               </div>
             </div>
           </div>
-        </div>
-
         {/* Modal Edição */}
-        {pessoaEditando && (
+          {pessoaEditando && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
               <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10">
@@ -932,6 +964,10 @@ export default function GerenciarPessoas() {
           </div>
         )}
 
+            </>
+          )}
+
+        </div>
       </main>
     </div>
   );

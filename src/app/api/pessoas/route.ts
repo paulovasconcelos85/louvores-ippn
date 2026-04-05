@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
 
       const { data: pessoaExistente, error: pessoaExistenteError } = await supabaseAdmin
         .from('pessoas')
-        .select('id, nome, cargo, ativo, status_membro, igreja_id')
+        .select('id, nome, cargo, ativo, status_membro, igreja_id, usuario_id')
         .eq('email', emailNormalizado)
         .maybeSingle();
 
