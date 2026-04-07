@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -28,11 +28,12 @@ const TIPOS_SECOES_BOLETIM = [
   { tipo: 'oracao', titulo: 'Pedidos de Oração', icone: 'hands.sparkles', emoji: '🙏' },
   { tipo: 'agenda', titulo: 'Agenda', icone: 'calendar', emoji: '📅' },
   { tipo: 'informativo', titulo: 'Informativo', icone: 'info.circle', emoji: 'ℹ️' },
-  { tipo: 'outro', titulo: 'Informações', icone: 'list.bullet', emoji: '📝' },
+  { tipo: 'outro', titulo: 'Outros', icone: 'list.bullet', emoji: '📝' },
 ] as const;
 
-const TIPOS_SECOES_SISTEMA = new Set(['imagem_tema', 'palavra_pastoral', 'liturgia']);
-const HABILITAR_BOLETIM_SECOES_NEXT = false;
+const HABILITAR_BOLETIM_SECOES_NEXT = true;
+const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
+const LITURGIA_META_TIPO = '__liturgia__:nome';
 
 // --- TIPOS ---
 interface Cantico {
@@ -58,27 +59,6 @@ interface LouvorItem {
   canticos_lista: CanticoNoItem[];
 }
 
-interface BoletimSecaoRow {
-  id: string;
-  igreja_id: string | null;
-  culto_id: number | null;
-  tipo: string;
-  titulo: string;
-  icone: string | null;
-  ordem: number | null;
-  visivel: boolean | null;
-  criado_em: string | null;
-}
-
-interface BoletimItemRow {
-  id: string;
-  secao_id: string | null;
-  conteudo: string;
-  destaque: boolean | null;
-  ordem: number | null;
-  criado_em: string | null;
-}
-
 interface BoletimItemRascunho {
   id: string;
   conteudo: string;
@@ -91,6 +71,13 @@ interface AgendaItemRascunho {
   hora: string;
   descricao: string;
   temHora: boolean;
+}
+
+interface AvisoItemRascunho {
+  id: string;
+  titulo: string;
+  corpo: string;
+  destaque: boolean;
 }
 
 interface BoletimSecaoRascunho {
@@ -125,6 +112,7 @@ interface Culto {
   imagem_url?: string | null;
   palavra_pastoral?: string | null;
   palavra_pastoral_autor?: string | null;
+  nome_liturgia?: string | null;
 }
 
 interface LouvorItemRow {
@@ -143,6 +131,15 @@ interface LouvorItemRowComCantico extends LouvorItemRow {
   canticos: { nome: string | null } | null;
 }
 
+interface BoletimFallbackMeta {
+  secaoTitulo: string;
+  secaoIcone: string | null;
+  secaoVisivel: boolean;
+  secaoOrdem: number;
+  itemDestaque: boolean;
+  itemOrdem: number;
+}
+
 type ItemAgrupado = {
   tipo: string;
   horario: string | null;
@@ -155,6 +152,28 @@ type ItemAgrupado = {
 function isPrimeirosDomingo(data: Date): boolean {
   const d = new Date(data);
   return d.getDay() === 0 && d.getDate() <= 7;
+}
+
+function isBoletimFallbackTipo(tipo: string | null | undefined) {
+  return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
+}
+
+function isLiturgiaMetaTipo(tipo: string | null | undefined) {
+  return tipo === LITURGIA_META_TIPO;
+}
+
+function extrairTipoBoletimFallback(tipo: string | null | undefined) {
+  if (!isBoletimFallbackTipo(tipo)) return null;
+  return tipo.slice(BOLETIM_FALLBACK_TIPO_PREFIX.length) || null;
+}
+
+function getCultoNomeLiturgia(culto: Culto | null | undefined) {
+  const nome = typeof culto?.nome_liturgia === 'string' ? culto.nome_liturgia.trim() : '';
+  return nome || null;
+}
+
+function getCultoTituloExibicao(culto: Culto | null | undefined, fallback: string) {
+  return getCultoNomeLiturgia(culto) || fallback;
 }
 
 function extractTiposLiturgicos(value: unknown): string[] {
@@ -251,6 +270,24 @@ function resolveTiposLiturgicos(config?: LiturgiaChurchConfig | null) {
   return config?.tiposLiturgicos?.length ? config.tiposLiturgicos : TIPOS_LITURGICOS_PADRAO;
 }
 
+function normalizarTiposLiturgicosDisponiveis(baseTipos: string[], itens: LouvorItem[]) {
+  const vistos = new Set<string>();
+  const tipos = [...baseTipos, ...itens.map((item) => item.tipo)];
+
+  const resultado = tipos.filter((tipo) => {
+    const valor = typeof tipo === 'string' ? tipo.trim() : '';
+    if (!valor) return false;
+
+    const chave = valor.toLocaleLowerCase('pt-BR');
+    if (vistos.has(chave)) return false;
+
+    vistos.add(chave);
+    return true;
+  });
+
+  return resultado.length > 0 ? resultado : TIPOS_LITURGICOS_PADRAO;
+}
+
 function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null): LouvorItem[] {
   const modelos = [...(config?.modelosLiturgia || [])].sort((a, b) => a.ordem - b.ordem);
 
@@ -321,6 +358,49 @@ function formatCultoDateLabel(dateValue: string) {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
+function getCultoDateKey(dateValue: string) {
+  return String(dateValue).slice(0, 10);
+}
+
+function isDomingoDate(dateValue: string) {
+  return new Date(`${getCultoDateKey(dateValue)}T00:00:00`).getDay() === 0;
+}
+
+function buildCultoDayGroups(cultos: Culto[]) {
+  const groups = new Map<string, { dia: string; cultos: Culto[] }>();
+
+  cultos.forEach((culto) => {
+    const key = getCultoDateKey(culto.Dia);
+    const current = groups.get(key);
+
+    if (current) {
+      current.cultos.push(culto);
+      return;
+    }
+
+    groups.set(key, {
+      dia: key,
+      cultos: [culto],
+    });
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      isDomingo: isDomingoDate(group.dia),
+      cultos: [...group.cultos].sort((a, b) => a['Culto nr.'] - b['Culto nr.']),
+    }))
+    .sort((a, b) => b.dia.localeCompare(a.dia));
+}
+
+function getCultoBoletimReferencia(cultos: Culto[]) {
+  return (
+    cultos.find((culto) => culto.palavra_pastoral?.trim() || culto.imagem_url) ||
+    cultos[0] ||
+    null
+  );
+}
+
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -357,6 +437,15 @@ function createEmptyAgendaItem(): AgendaItemRascunho {
   };
 }
 
+function createEmptyAvisoItem(): AvisoItemRascunho {
+  return {
+    id: createDraftId('aviso-item'),
+    titulo: '',
+    corpo: '',
+    destaque: false,
+  };
+}
+
 function normalizarSecoesBoletim(secoes: BoletimSecaoRascunho[]) {
   return secoes.map((secao, index) => ({
     ...secao,
@@ -384,31 +473,106 @@ function serializeAgendaConteudo(item: AgendaItemRascunho) {
   return `${item.data}|${item.temHora ? item.hora : '00:00'}|${item.descricao.trim()}`;
 }
 
-function montarConteudoLiturgiaParaBoletim(item: LouvorItem, index: number, canticos: Cantico[]) {
-  const linhas = [item.tipo || `Item ${index + 1}`];
-  const conteudoPublico = item.conteudo_publico?.trim();
-  const descricao = item.descricao?.trim();
+function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
+  const texto = conteudo.trim();
 
-  if (conteudoPublico) {
-    linhas.push(conteudoPublico);
+  if (!texto) {
+    return createEmptyAvisoItem();
   }
 
-  if (descricao) {
-    linhas.push(descricao);
+  const separadorDuplo = texto.indexOf('\n\n');
+
+  if (separadorDuplo >= 0) {
+    const titulo = texto.slice(0, separadorDuplo).trim();
+    const corpo = texto.slice(separadorDuplo + 2).trim();
+
+    return {
+      id: createDraftId('aviso-item'),
+      titulo,
+      corpo,
+      destaque: false,
+    };
   }
 
-  item.canticos_lista.forEach((canticoNoItem) => {
-    if (!canticoNoItem.cantico_id) return;
+  const [titulo, ...restante] = texto.split('\n');
 
-    const cantico = canticos.find((entry) => String(entry.id) === String(canticoNoItem.cantico_id));
-    const nome = cantico?.nome?.trim();
+  return {
+    id: createDraftId('aviso-item'),
+    titulo: titulo.trim(),
+    corpo: restante.join('\n').trim(),
+    destaque: false,
+  };
+}
 
-    if (!nome) return;
+function serializeAvisoConteudo(item: AvisoItemRascunho) {
+  return `${item.titulo.trim()}\n\n${item.corpo.trim()}`;
+}
 
-    linhas.push(`Cantico: ${nome}${canticoNoItem.tom ? ` (${canticoNoItem.tom})` : ''}`);
+function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallbackMeta | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<BoletimFallbackMeta>;
+
+    if (typeof parsed.secaoTitulo !== 'string') return null;
+    if (typeof parsed.secaoOrdem !== 'number') return null;
+    if (typeof parsed.itemOrdem !== 'number') return null;
+
+    return {
+      secaoTitulo: parsed.secaoTitulo,
+      secaoIcone: typeof parsed.secaoIcone === 'string' ? parsed.secaoIcone : null,
+      secaoVisivel: parsed.secaoVisivel !== false,
+      secaoOrdem: parsed.secaoOrdem,
+      itemDestaque: parsed.itemDestaque === true,
+      itemOrdem: parsed.itemOrdem,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[]) {
+  const sections = new Map<string, BoletimSecaoRascunho>();
+  const itemOrders = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const tipo = extrairTipoBoletimFallback(row.tipo);
+    const meta = parseBoletimFallbackMeta(row.descricao);
+    const conteudo = row.conteudo_publico?.trim() || '';
+
+    if (!tipo || !meta || !conteudo) return;
+
+    const config = getBoletimTipoConfig(tipo);
+    const key = `${meta.secaoOrdem}:${tipo}:${meta.secaoTitulo}`;
+
+    if (!sections.has(key)) {
+      sections.set(key, {
+        id: key,
+        tipo,
+        titulo: meta.secaoTitulo || config.titulo,
+        icone: meta.secaoIcone || config.icone,
+        visivel: meta.secaoVisivel,
+        ordem: meta.secaoOrdem,
+        itens: [],
+      });
+    }
+
+    sections.get(key)?.itens.push({
+      id: row.id,
+      conteudo,
+      destaque: meta.itemDestaque,
+    });
+    itemOrders.set(row.id, meta.itemOrdem);
   });
 
-  return linhas.join('\n');
+  return [...sections.values()]
+    .map((secao) => ({
+      ...secao,
+      itens: [...secao.itens].sort(
+        (a, b) => (itemOrders.get(a.id) || 0) - (itemOrders.get(b.id) || 0)
+      ),
+    }))
+    .sort((a, b) => a.ordem - b.ordem);
 }
 
 async function buscarPastorPadrao(igrejaId: string): Promise<string | null> {
@@ -521,10 +685,83 @@ async function carregarLouvorItensComCanticos(
   }));
 }
 
+function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: number) {
+  const rows: Array<{
+    ordem: number;
+    tipo: string;
+    conteudo_publico: string | null;
+    descricao: string | null;
+    horario: string | null;
+    cantico_id: null;
+    tom: null;
+  }> = [];
+
+  let ordem = ordemInicial;
+
+  normalizarSecoesBoletim(secoes).forEach((secao) => {
+    const config = getBoletimTipoConfig(secao.tipo);
+
+    secao.itens
+      .map((item, index) => ({
+        item,
+        index,
+      }))
+      .filter(({ item }) => item.conteudo.trim().length > 0)
+      .forEach(({ item, index }) => {
+        const meta: BoletimFallbackMeta = {
+          secaoTitulo: secao.titulo.trim() || config.titulo,
+          secaoIcone: secao.icone || config.icone,
+          secaoVisivel: secao.visivel,
+          secaoOrdem: secao.ordem,
+          itemDestaque: item.destaque,
+          itemOrdem: index,
+        };
+
+        rows.push({
+          ordem: ordem++,
+          tipo: `${BOLETIM_FALLBACK_TIPO_PREFIX}${secao.tipo}`,
+          conteudo_publico: item.conteudo.trim(),
+          descricao: JSON.stringify(meta),
+          horario: null,
+          cantico_id: null,
+          tom: null,
+        });
+      });
+  });
+
+  return rows;
+}
+
+function buildLiturgiaMetaRow(nomeLiturgia: string) {
+  const nome = nomeLiturgia.trim();
+  if (!nome) return null;
+
+  return {
+    ordem: 0,
+    tipo: LITURGIA_META_TIPO,
+    conteudo_publico: nome,
+    descricao: null,
+    horario: null,
+    cantico_id: null,
+    tom: null,
+  };
+}
+
+async function uploadImagemTema(file: File, cultoNr: number): Promise<string | null> {
+  const ext = file.name.split('.').pop();
+  const nome = `culto-${cultoNr}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('liturgias_thumbnails').upload(nome, file, { upsert: false });
+  if (error) return null;
+  const { data } = supabase.storage.from('liturgias_thumbnails').getPublicUrl(nome);
+  return data.publicUrl;
+}
+
 function agruparItensLiturgia(data: LouvorItemRowComCantico[]): ItemAgrupado[] {
   const agrupados: ItemAgrupado[] = [];
 
   for (const it of data) {
+    if (isBoletimFallbackTipo(it.tipo) || isLiturgiaMetaTipo(it.tipo)) continue;
+
     const ultimo = agrupados[agrupados.length - 1];
 
     if (
@@ -642,6 +879,43 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
   );
 }
 
+function AutoResizeTextarea({
+  value,
+  onChange,
+  className,
+  style,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const ajustarAltura = () => {
+    const element = textareaRef.current;
+    if (!element) return;
+
+    element.style.height = '0px';
+    element.style.height = `${element.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    ajustarAltura();
+  }, [value]);
+
+  return (
+    <textarea
+      {...props}
+      ref={textareaRef}
+      value={value}
+      onChange={(event) => {
+        ajustarAltura();
+        onChange?.(event);
+      }}
+      rows={1}
+      style={{ ...style, overflow: 'hidden' }}
+      className={className}
+    />
+  );
+}
+
 // --- LINHA DE CÂNTICO ---
 function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreate, canEditarMusica }: any) {
   const cantico =
@@ -680,6 +954,9 @@ function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreat
 // --- ITEM DA LITURGIA (linha) ---
 function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onMove, isLideranca, podVerTom, canEditarMusica }: any) {
   const [expandido, setExpandido] = useState(true);
+  const tiposDisponiveis = item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO;
+  const tipoInputId = `tipo-liturgico-${index}`;
+  const tituloItem = item.tipo?.trim() || `Item ${index + 1}`;
 
   const adicionarCantico = () => {
     onUpdate({ ...item, canticos_lista: [...item.canticos_lista, { cantico_id: null, tom: null }] });
@@ -696,83 +973,132 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
   };
 
   return (
-    <div className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-all">
+    <div className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition-all hover:border-emerald-200 hover:shadow-[0_20px_50px_-30px_rgba(5,150,105,0.35)]">
       {/* Cabeçalho do item */}
-      <div className="flex items-center gap-3 px-4 py-4 bg-slate-50/80">
-        <span className="text-sm font-black text-slate-400 w-6 text-center flex-shrink-0">{index + 1}</span>
+      <div className="flex items-start gap-4 border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.95),rgba(255,255,255,0.98))] px-5 py-5">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-black text-emerald-700 shadow-inner">
+          {index + 1}
+        </div>
 
-        {/* Tipo litúrgico */}
-        {isLideranca ? (
-          <select
-            value={item.tipo}
-            onChange={e => onUpdate({ ...item, tipo: e.target.value })}
-            className="flex-1 font-bold text-slate-800 text-base bg-transparent border-none focus:outline-none cursor-pointer min-w-0"
-          >
-            {(item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO).map((t: string) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        ) : (
-          <span className="flex-1 font-bold text-slate-800 text-base min-w-0">{item.tipo}</span>
-        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+            Momento da liturgia
+          </p>
+          <h3 className="mt-1 truncate text-lg font-black text-slate-900">{tituloItem}</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Edite abaixo o nome desta etapa, o texto que vai aparecer no boletim e as observações internas.
+          </p>
+        </div>
 
-        {/* Horário (interno) */}
-        {HABILITAR_BOLETIM_SECOES_NEXT && isLideranca && (
-          <input
-            value={item.horario || ''}
-            onChange={e => onUpdate({ ...item, horario: e.target.value })}
-            placeholder="horário"
-            className="w-24 text-sm text-slate-500 border border-slate-200 rounded-xl px-2 py-2.5 bg-white focus:outline-none focus:border-slate-400 text-center flex-shrink-0"
-          />
-        )}
+        <div className="flex items-center gap-1.5 self-start">
+          {isLideranca && (
+            <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+              <button onClick={() => onMove('cima')} className="flex h-10 w-10 items-center justify-center rounded-xl text-base text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200">↑</button>
+              <button onClick={() => onMove('baixo')} className="flex h-10 w-10 items-center justify-center rounded-xl text-base text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:bg-slate-200">↓</button>
+              <button onClick={onRemove} className="flex h-10 w-10 items-center justify-center rounded-xl text-base text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500 active:bg-red-100">🗑</button>
+            </div>
+          )}
 
-        {/* Ações */}
-        {isLideranca && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-            <button onClick={() => onMove('cima')} className="w-9 h-9 hover:bg-slate-200 rounded-xl text-slate-400 text-base flex items-center justify-center active:bg-slate-300">↑</button>
-            <button onClick={() => onMove('baixo')} className="w-9 h-9 hover:bg-slate-200 rounded-xl text-slate-400 text-base flex items-center justify-center active:bg-slate-300">↓</button>
-            <button onClick={onRemove} className="w-9 h-9 hover:bg-red-50 rounded-xl text-slate-300 hover:text-red-400 text-base flex items-center justify-center active:bg-red-100">🗑</button>
-          </div>
-        )}
-
-        <button onClick={() => setExpandido(!expandido)} className="text-slate-400 hover:text-slate-600 w-9 h-9 flex items-center justify-center rounded-xl flex-shrink-0 active:bg-slate-100">
+          <button onClick={() => setExpandido(!expandido)} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:bg-slate-100">
           {expandido ? '▲' : '▼'}
-        </button>
+          </button>
+        </div>
       </div>
 
       {expandido && (
-        <div className="px-4 py-4 space-y-4">
+        <div className="space-y-5 px-5 py-5">
+          <div className={`grid gap-4 ${HABILITAR_BOLETIM_SECOES_NEXT && isLideranca ? 'xl:grid-cols-[minmax(0,1fr)_240px]' : ''}`}>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+              <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                Nome da etapa
+              </label>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Dê o nome deste momento do culto. Você pode digitar livremente ou aproveitar uma sugestão já usada pela igreja.
+              </p>
+              {isLideranca ? (
+                <>
+                  <input
+                    list={tipoInputId}
+                    value={item.tipo}
+                    onChange={e => onUpdate({ ...item, tipo: e.target.value })}
+                    onBlur={e => onUpdate({ ...item, tipo: e.target.value.trim() || `Item ${index + 1}` })}
+                    placeholder="Ex.: Pregação da Palavra"
+                    className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-800 outline-none transition-colors focus:border-emerald-400"
+                  />
+                  <datalist id={tipoInputId}>
+                    {tiposDisponiveis.map((t: string) => <option key={t} value={t} />)}
+                  </datalist>
+                </>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-800">
+                  {tituloItem}
+                </div>
+              )}
+            </div>
+
+            {HABILITAR_BOLETIM_SECOES_NEXT && isLideranca && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  Horário interno
+                </label>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Esse campo ajuda a equipe a se organizar. Você pode usar formatos como <code>09:30</code> ou <code>9h30-9h40</code>.
+                </p>
+                <input
+                  value={item.horario || ''}
+                  onChange={e => onUpdate({ ...item, horario: e.target.value })}
+                  placeholder="Ex.: 9h30-9h40"
+                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-700 outline-none transition-colors focus:border-emerald-400"
+                />
+              </div>
+            )}
+          </div>
+
           {/* Campo público */}
-          <div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
             <label className="flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
               <span>📢</span> Público
             </label>
-            <textarea
+            <p className="mb-3 text-sm leading-6 text-emerald-900/70">
+              Escreva aqui somente o que pode aparecer para a igreja no boletim ou na publicação. Se não precisar mostrar nada neste item, deixe em branco.
+            </p>
+            <AutoResizeTextarea
               value={item.conteudo_publico || ''}
               onChange={e => onUpdate({ ...item, conteudo_publico: e.target.value })}
               disabled={!isLideranca}
-              placeholder="Visível para todos..."
-              rows={2}
-              className="w-full text-base text-slate-700 border border-emerald-100 rounded-xl px-4 py-3 bg-emerald-50/30 focus:outline-none focus:border-emerald-300 resize-none disabled:cursor-default disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:py-0 placeholder:text-slate-300"
+              placeholder="Ex.: Tema da mensagem, leitura bíblica, chamada para a igreja..."
+              className="w-full rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-base text-slate-700 outline-none transition-colors focus:border-emerald-400 resize-none disabled:cursor-default disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:py-0 placeholder:text-slate-300"
             />
           </div>
 
           {/* Campo interno */}
           {isLideranca && (
-            <div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
               <label className="flex items-center gap-1.5 text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
                 <span>🔒</span> Interno
               </label>
-              <textarea
+              <p className="mb-3 text-sm leading-6 text-slate-500">
+                Use este espaço para instruções da equipe, lembretes, nomes de pessoas, observações de condução e tudo o que não deve ir para o público.
+              </p>
+              <AutoResizeTextarea
                 value={item.descricao || ''}
                 onChange={e => onUpdate({ ...item, descricao: e.target.value })}
-                placeholder="Observações internas (só liderança vê)..."
-                rows={2}
-                className="w-full text-base text-slate-600 border border-slate-100 rounded-xl px-4 py-3 bg-slate-50/50 focus:outline-none focus:border-slate-300 resize-none placeholder:text-slate-300"
+                placeholder="Ex.: Quem conduz, qual salmo será lido, orientação para a equipe..."
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-600 outline-none transition-colors focus:border-slate-400 resize-none placeholder:text-slate-300"
               />
             </div>
           )}
 
           {/* Cânticos */}
-          <div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="mb-3">
+              <label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-slate-400">
+                <span>🎵</span> Cânticos
+              </label>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Adicione aqui os cânticos ligados a esta etapa. Você pode buscar um já cadastrado, criar um novo e, se precisar, informar o tom.
+              </p>
+            </div>
             {item.canticos_lista.map((m: CanticoNoItem, idx: number) => (
               <LinhaCantico
                 key={idx}
@@ -871,6 +1197,7 @@ function EditorSecaoBoletimModal({
   const [visivel, setVisivel] = useState(true);
   const [itens, setItens] = useState<BoletimItemRascunho[]>([]);
   const [agendaItens, setAgendaItens] = useState<AgendaItemRascunho[]>([]);
+  const [avisoItens, setAvisoItens] = useState<AvisoItemRascunho[]>([]);
 
   useEffect(() => {
     if (!aberto || !tipo) return;
@@ -885,6 +1212,22 @@ function EditorSecaoBoletimModal({
       const agenda = itensExistentes.map((item) => parseAgendaConteudo(item.conteudo));
       setAgendaItens([...agenda, createEmptyAgendaItem()]);
       setItens([]);
+      setAvisoItens([]);
+      return;
+    }
+
+    if (tipo === 'avisos') {
+      const avisos = itensExistentes.map((item) => {
+        const aviso = parseAvisoConteudo(item.conteudo);
+        return {
+          ...aviso,
+          id: item.id || aviso.id,
+          destaque: item.destaque,
+        };
+      });
+      setAvisoItens([...avisos, createEmptyAvisoItem()]);
+      setItens([]);
+      setAgendaItens([]);
       return;
     }
 
@@ -897,12 +1240,14 @@ function EditorSecaoBoletimModal({
       createEmptyBoletimItem(),
     ]);
     setAgendaItens([]);
+    setAvisoItens([]);
   }, [aberto, tipo, secaoExistente]);
 
   if (!aberto || !tipo) return null;
 
   const config = getBoletimTipoConfig(tipo);
   const isAgenda = tipo === 'agenda';
+  const isAvisos = tipo === 'avisos';
 
   const garantirCampoTextoExtra = (lista: BoletimItemRascunho[]) => {
     const preenchidos = lista.filter((item) => item.conteudo.trim().length > 0);
@@ -912,6 +1257,13 @@ function EditorSecaoBoletimModal({
   const garantirCampoAgendaExtra = (lista: AgendaItemRascunho[]) => {
     const preenchidos = lista.filter((item) => item.descricao.trim().length > 0);
     return [...preenchidos, createEmptyAgendaItem()];
+  };
+
+  const garantirCampoAvisoExtra = (lista: AvisoItemRascunho[]) => {
+    const preenchidos = lista.filter(
+      (item) => item.titulo.trim().length > 0 || item.corpo.trim().length > 0
+    );
+    return [...preenchidos, createEmptyAvisoItem()];
   };
 
   const salvarSecao = () => {
@@ -930,6 +1282,14 @@ function EditorSecaoBoletimModal({
               conteudo: serializeAgendaConteudo(item),
               destaque: false,
             }))
+        : isAvisos
+          ? avisoItens
+              .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
+              .map((item) => ({
+                id: item.id,
+                conteudo: serializeAvisoConteudo(item),
+                destaque: item.destaque,
+              }))
         : itens
             .filter((item) => item.conteudo.trim().length > 0)
             .map((item) => ({
@@ -1069,6 +1429,84 @@ function EditorSecaoBoletimModal({
                 ))}
               </div>
             </div>
+          ) : isAvisos ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Avisos</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Cada aviso precisa de um título e um corpo de texto. O boletim só publica avisos completos.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {avisoItens.map((item, index) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Título do aviso
+                      <input
+                        value={item.titulo}
+                        onChange={(event) => {
+                          const atualizados = avisoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, titulo: event.target.value } : entry
+                          );
+                          setAvisoItens(garantirCampoAvisoExtra(atualizados));
+                        }}
+                        placeholder="Ex.: Reunião de membros"
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
+                      Corpo do aviso
+                      <AutoResizeTextarea
+                        value={item.corpo}
+                        onChange={(event) => {
+                          const atualizados = avisoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, corpo: event.target.value } : entry
+                          );
+                          setAvisoItens(garantirCampoAvisoExtra(atualizados));
+                        }}
+                        placeholder="Descreva aqui o aviso completo..."
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    {(item.titulo.trim() && item.corpo.trim()) ? (
+                      <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={item.destaque}
+                          onChange={(event) => {
+                            const atualizados = avisoItens.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, destaque: event.target.checked } : entry
+                            );
+                            setAvisoItens(atualizados);
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+                        />
+                        Destacar este aviso
+                      </label>
+                    ) : null}
+
+                    {(item.titulo.trim() || item.corpo.trim() || avisoItens.length > 1) ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAvisoItens(
+                              garantirCampoAvisoExtra(avisoItens.filter((entry) => entry.id !== item.id))
+                            )
+                          }
+                          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          Remover aviso
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="mb-4">
@@ -1129,7 +1567,11 @@ function EditorSecaoBoletimModal({
           )}
         </div>
 
-        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-4">
+          <p className="max-w-md text-sm leading-6 text-slate-500">
+            Aplicar seção guarda as mudanças neste editor. Para publicar no boletim e aparecer na home, ainda é preciso clicar em <strong>Salvar Liturgia</strong>.
+          </p>
+          <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onFechar}
@@ -1144,196 +1586,120 @@ function EditorSecaoBoletimModal({
           >
             Aplicar seção
           </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// --- EDITOR DE LITURGIA ---
-function EditorLiturgia({
-  culto,
+function EditorBoletimDoDiaModal({
+  aberto,
+  dia,
+  cultos,
+  onFechar,
   onSalvo,
-  onCancelar,
-  canticos,
-  setCanticos,
-  podeEditarLiturgiaCompleta,
-  podeEditarLouvor,
-  configuracaoIgreja,
-}: any) {
-  const [dia, setDia] = useState<string>(culto?.Dia || '');
-  const [itens, setItens] = useState<LouvorItem[]>([]);
-  const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
-  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(
-    culto?.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
-  );
+  inline = false,
+}: {
+  aberto: boolean;
+  dia: string;
+  cultos: Culto[];
+  onFechar: () => void;
+  onSalvo: () => void;
+  inline?: boolean;
+}) {
+  const [palavraPastoral, setPalavraPastoral] = useState('');
+  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState('');
   const [imagemUpload, setImagemUpload] = useState<File | null>(null);
-  const [imagemPreview, setImagemPreview] = useState<string | null>(culto?.imagem_url || null);
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null);
   const [instagramUrl, setInstagramUrl] = useState('');
   const [importando, setImportando] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [boletimSecoes, setBoletimSecoes] = useState<BoletimSecaoRascunho[]>([]);
   const [loadingBoletim, setLoadingBoletim] = useState(false);
   const [showEscolherTipo, setShowEscolherTipo] = useState(false);
   const [tipoNovaSecao, setTipoNovaSecao] = useState<string | null>(null);
   const [secaoEditandoIndex, setSecaoEditandoIndex] = useState<number | null>(null);
 
-  const isLideranca = podeEditarLiturgiaCompleta;
-  const podVerTom = isLideranca || podeEditarLouvor;
-  const canEditarMusica = isLideranca || podeEditarLouvor;
-  const tiposLiturgicos = resolveTiposLiturgicos(configuracaoIgreja);
-  const temModeloDaIgreja = (configuracaoIgreja?.modelosLiturgia?.length || 0) > 0;
+  const referencia = useMemo(() => getCultoBoletimReferencia(cultos), [cultos]);
+  const cultoIds = cultos.map((culto) => culto['Culto nr.']);
+  const cultoIdsKey = useMemo(() => cultoIds.join(','), [cultoIds]);
   const secaoEditando =
     secaoEditandoIndex !== null ? boletimSecoes[secaoEditandoIndex] || null : null;
 
   useEffect(() => {
-    if (culto) {
-      carregarItens(culto['Culto nr.']);
-    } else if (dia) {
-      setItens(modeloPadrao(dia, configuracaoIgreja));
-    }
-  }, [culto, dia, configuracaoIgreja]);
+    if (!aberto) return;
 
-  useEffect(() => {
-    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
-      setBoletimSecoes([]);
-      return;
-    }
+    setPalavraPastoral(referencia?.palavra_pastoral || '');
+    setPalavraPastoralAutor(referencia?.palavra_pastoral_autor || '');
+    setImagemPreview(referencia?.imagem_url || null);
+    setImagemUpload(null);
+    setInstagramUrl('');
 
-    if (culto) {
-      carregarSecoesBoletim(culto['Culto nr.']);
-      return;
-    }
-
-    setBoletimSecoes([]);
-  }, [culto]);
-
-  useEffect(() => {
-    if (culto?.palavra_pastoral_autor) return;
-    if (!configuracaoIgreja?.pastorPadrao) return;
-
-    setPalavraPastoralAutor((current: string) => (
-      current.trim() ? current : configuracaoIgreja.pastorPadrao || ''
-    ));
-  }, [culto?.palavra_pastoral_autor, configuracaoIgreja]);
-
-  const carregarItens = async (cultoNr: number) => {
-    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
-
-    if (!data) return;
-
-    // Agrupar linhas do mesmo item
-    const agrupados: LouvorItem[] = [];
-    data.forEach((linha: any) => {
-      const ultimo = agrupados[agrupados.length - 1];
-      if (
-        ultimo &&
-        ultimo.tipo === linha.tipo &&
-        ultimo.conteudo_publico === linha.conteudo_publico &&
-        ultimo.descricao === linha.descricao &&
-        ultimo.horario === linha.horario
-      ) {
-        ultimo.canticos_lista.push({ cantico_id: linha.cantico_id, tom: linha.tom });
-      } else {
-        agrupados.push({
-          id: linha.id,
-          tipo: linha.tipo,
-          ordem: linha.ordem,
-          conteudo_publico: linha.conteudo_publico,
-          descricao: linha.descricao,
-          horario: linha.horario,
-          canticos_lista: linha.cantico_id ? [{ cantico_id: linha.cantico_id, tom: linha.tom }] : [],
-        });
-      }
-    });
-
-    setItens(agrupados);
-  };
-
-  const carregarSecoesBoletim = async (cultoNr: number) => {
-    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
-      setBoletimSecoes([]);
-      return;
-    }
-
-    const igrejaId = getStoredChurchId();
-
-    if (!igrejaId) {
-      setBoletimSecoes([]);
-      return;
-    }
-
-    setLoadingBoletim(true);
-
-    try {
-      const { data: secoesRaw, error: secoesError } = await supabase
-        .from('boletim_secoes')
-        .select('id, igreja_id, culto_id, tipo, titulo, icone, ordem, visivel, criado_em')
-        .eq('culto_id', cultoNr)
-        .eq('igreja_id', igrejaId)
-        .order('ordem', { ascending: true })
-        .order('criado_em', { ascending: true });
-
-      if (secoesError) throw secoesError;
-
-      const secoes = ((secoesRaw || []) as BoletimSecaoRow[]).filter(
-        (secao) => !TIPOS_SECOES_SISTEMA.has(secao.tipo)
-      );
-
-      if (secoes.length === 0) {
+    const carregar = async () => {
+      if (cultoIds.length === 0) {
         setBoletimSecoes([]);
         return;
       }
 
-      const secaoIds = secoes.map((secao) => secao.id);
-      const { data: itensRaw, error: itensError } = await supabase
-        .from('boletim_itens')
-        .select('id, secao_id, conteudo, destaque, ordem, criado_em')
-        .in('secao_id', secaoIds)
-        .order('ordem', { ascending: true })
-        .order('criado_em', { ascending: true });
+      setLoadingBoletim(true);
+      try {
+        const { data, error } = await supabase
+          .from('louvor_itens')
+          .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+          .in('culto_id', cultoIds)
+          .order('ordem', { ascending: true });
 
-      if (itensError) throw itensError;
+        if (error) throw error;
 
-      const itensPorSecao = new Map<string, BoletimItemRascunho[]>();
+        const rows = (data || []) as LouvorItemRow[];
+        let secoes: BoletimSecaoRascunho[] = [];
 
-      ((itensRaw || []) as BoletimItemRow[]).forEach((item) => {
-        if (!item.secao_id) return;
+        for (const cultoId of cultoIds) {
+          const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
+          const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto);
+          if (secoesDoCulto.length > 0) {
+            secoes = secoesDoCulto;
+            break;
+          }
+        }
 
-        const lista = itensPorSecao.get(item.secao_id) || [];
-        lista.push({
-          id: item.id,
-          conteudo: item.conteudo || '',
-          destaque: item.destaque === true,
-        });
-        itensPorSecao.set(item.secao_id, lista);
-      });
+        setBoletimSecoes(normalizarSecoesBoletim(secoes));
+      } catch (error) {
+        console.warn('Falha ao carregar boletim do dia:', error);
+        setBoletimSecoes([]);
+      } finally {
+        setLoadingBoletim(false);
+      }
+    };
 
-      const secoesRascunho = secoes.map((secao, index) => ({
-        id: secao.id,
-        tipo: secao.tipo,
-        titulo: secao.titulo,
-        icone: secao.icone,
-        visivel: secao.visivel !== false,
-        ordem: secao.ordem ?? index,
-        itens: itensPorSecao.get(secao.id) || [],
-      }));
+    carregar();
+  }, [aberto, referencia, cultoIdsKey]);
 
-      setBoletimSecoes(normalizarSecoesBoletim(secoesRascunho));
-    } catch (error) {
-      console.warn('Falha ao carregar seções extras do boletim:', error);
-      setBoletimSecoes([]);
-    } finally {
-      setLoadingBoletim(false);
-    }
-  };
+  if (!aberto) return null;
+
+  const containerClassName = inline
+    ? 'rounded-[28px] border border-emerald-200 bg-white shadow-sm'
+    : 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm';
+
+  const surfaceClassName = inline
+    ? 'w-full'
+    : 'max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-[30px] bg-white shadow-2xl';
+
+  const headerClassName = inline
+    ? 'flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5'
+    : 'sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5';
+
+  const footerClassName = inline
+    ? 'flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4'
+    : 'sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4';
 
   const handleImagemChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImagemUpload(file);
     const reader = new FileReader();
-    reader.onload = e => setImagemPreview(e.target?.result as string);
+    reader.onload = event => setImagemPreview(event.target?.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -1353,377 +1719,203 @@ function EditorLiturgia({
       const file = new File([blob], `instagram-${postId}.jpg`, { type: 'image/jpeg' });
       setImagemUpload(file);
       const reader = new FileReader();
-      reader.onload = e => setImagemPreview(e.target?.result as string);
+      reader.onload = event => setImagemPreview(event.target?.result as string);
       reader.readAsDataURL(file);
       setInstagramUrl('');
       alert('✅ Imagem importada!');
-    } catch { alert('❌ Erro ao importar'); }
-    finally { setImportando(false); }
+    } catch {
+      alert('❌ Erro ao importar');
+    } finally {
+      setImportando(false);
+    }
   };
 
-  const uploadImagem = async (file: File, cultoNr: number): Promise<string | null> => {
-    const ext = file.name.split('.').pop();
-    const nome = `culto-${cultoNr}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('liturgias_thumbnails').upload(nome, file, { upsert: false });
-    if (error) return null;
-    const { data } = supabase.storage.from('liturgias_thumbnails').getPublicUrl(nome);
-    return data.publicUrl;
-  };
-
-  const adicionarItem = (posicao: number) => {
-    const novo: LouvorItem = {
-      tipo: tiposLiturgicos[0] || TIPOS_LITURGICOS_PADRAO[0],
-      ordem: posicao + 1,
-      conteudo_publico: null,
-      descricao: null,
-      horario: null,
-      canticos_lista: [],
-    };
-    const novos = [...itens];
-    novos.splice(posicao, 0, novo);
-    setItens(novos.map((it, i) => ({ ...it, ordem: i + 1 })));
-  };
-
-  const aplicarModeloDaIgreja = () => {
-    const baseDia = dia || new Date().toISOString().split('T')[0];
-    setItens(modeloPadrao(baseDia, configuracaoIgreja));
-  };
-
-  const salvarBoletim = async (cultoId: number, igrejaId: string, imagemUrl: string | null) => {
-    if (!HABILITAR_BOLETIM_SECOES_NEXT) return;
-
-    const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
-      .from('boletim_secoes')
-      .select('id')
-      .eq('culto_id', cultoId)
-      .eq('igreja_id', igrejaId);
-
-    if (secoesExistentesError) throw secoesExistentesError;
-
-    const secaoIdsExistentes = (secoesExistentesRaw || [])
-      .map((item) => item.id)
-      .filter((value): value is string => typeof value === 'string' && value.length > 0);
-
-    if (secaoIdsExistentes.length > 0) {
-      const { error: deleteItensError } = await supabase
-        .from('boletim_itens')
-        .delete()
-        .in('secao_id', secaoIdsExistentes);
-
-      if (deleteItensError) throw deleteItensError;
-
-      const { error: deleteSecoesError } = await supabase
-        .from('boletim_secoes')
-        .delete()
-        .in('id', secaoIdsExistentes);
-
-      if (deleteSecoesError) throw deleteSecoesError;
+  const salvarBoletim = async () => {
+    if (cultoIds.length === 0) {
+      alert('Crie pelo menos uma liturgia neste dia antes de editar o boletim.');
+      return;
     }
 
-    const secoesParaPersistir: Array<{
-      tipo: string;
-      titulo: string;
-      icone: string | null;
-      visivel: boolean;
-      itens: Array<{ conteudo: string; destaque: boolean; ordem: number }>;
-    }> = [];
+    setSalvando(true);
+    try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar o boletim.');
 
-    if (imagemUrl) {
-      secoesParaPersistir.push({
-        tipo: 'imagem_tema',
-        titulo: 'Imagem do Boletim',
-        icone: null,
-        visivel: true,
-        itens: [{ conteudo: imagemUrl, destaque: false, ordem: 0 }],
-      });
-    }
+      let imagemUrlFinal =
+        imagemPreview === null && !imagemUpload
+          ? null
+          : referencia?.imagem_url || null;
 
-    if (palavraPastoral.trim()) {
-      secoesParaPersistir.push({
-        tipo: 'palavra_pastoral',
-        titulo: 'Palavra Pastoral',
-        icone: null,
-        visivel: true,
-        itens: [
-          {
-            conteudo: `${palavraPastoral.trim()}${
-              palavraPastoralAutor.trim() ? `\n\n${palavraPastoralAutor.trim()}` : ''
-            }`,
-            destaque: true,
-            ordem: 0,
-          },
-        ],
-      });
-    }
+      if (imagemUpload) {
+        const url = await uploadImagemTema(imagemUpload, cultoIds[0]);
+        if (url) {
+          imagemUrlFinal = url;
+        }
+      } else if (typeof imagemPreview === 'string' && !imagemPreview.startsWith('data:')) {
+        imagemUrlFinal = imagemPreview;
+      }
 
-    const liturgiaItens = itens.map((item, index) => ({
-      conteudo: montarConteudoLiturgiaParaBoletim(item, index, canticos).trim(),
-      destaque: false,
-      ordem: index,
-    }));
-
-    if (liturgiaItens.length > 0) {
-      secoesParaPersistir.push({
-        tipo: 'liturgia',
-        titulo: `Liturgia do culto de ${dia}`,
-        icone: null,
-        visivel: true,
-        itens: liturgiaItens,
-      });
-    }
-
-    normalizarSecoesBoletim(boletimSecoes).forEach((secao) => {
-      const config = getBoletimTipoConfig(secao.tipo);
-      const itensValidos = secao.itens
-        .map((item, index) => ({
-          conteudo: secao.tipo === 'agenda' ? item.conteudo : item.conteudo.trim(),
-          destaque: item.destaque,
-          ordem: index,
-        }))
-        .filter((item) => item.conteudo.length > 0);
-
-      secoesParaPersistir.push({
-        tipo: secao.tipo,
-        titulo: secao.titulo.trim() || config.titulo,
-        icone: secao.icone || config.icone,
-        visivel: secao.visivel,
-        itens: itensValidos,
-      });
-    });
-
-    for (const [index, secao] of secoesParaPersistir.entries()) {
-      const { data: secaoCriada, error: secaoError } = await supabase
-        .from('boletim_secoes')
-        .insert({
-          culto_id: cultoId,
-          igreja_id: igrejaId,
-          tipo: secao.tipo,
-          titulo: secao.titulo,
-          icone: secao.icone,
-          ordem: index,
-          visivel: secao.visivel,
+      const { error: syncBoletimError } = await supabase
+        .from('Louvores IPPN')
+        .update({
+          palavra_pastoral: palavraPastoral || null,
+          palavra_pastoral_autor: palavraPastoralAutor || null,
+          imagem_url: imagemUrlFinal,
         })
-        .select('id')
-        .single();
+        .in('"Culto nr."', cultoIds)
+        .eq('igreja_id', igrejaId);
 
-      if (secaoError) throw secaoError;
+      if (syncBoletimError) throw syncBoletimError;
 
-      if (!secaoCriada?.id || secao.itens.length === 0) continue;
+      const { error: deleteFallbackError } = await supabase
+        .from('louvor_itens')
+        .delete()
+        .in('culto_id', cultoIds)
+        .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
 
-      const { error: itensError } = await supabase.from('boletim_itens').insert(
-        secao.itens.map((item) => ({
-          secao_id: secaoCriada.id,
-          conteudo: item.conteudo,
-          destaque: item.destaque,
-          ordem: item.ordem,
+      if (deleteFallbackError) throw deleteFallbackError;
+
+      const fallbackRows = cultoIds.flatMap((cultoId) =>
+        buildBoletimFallbackRows(boletimSecoes, 1000).map((row) => ({
+          culto_id: cultoId,
+          ...row,
         }))
       );
 
-      if (itensError) throw itensError;
-    }
-  };
-
-  const salvar = async () => {
-    if (!dia) return alert('Selecione a data!');
-    setLoading(true);
-    try {
-      const igrejaId = getStoredChurchId();
-      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar a liturgia');
-
-      let cId = culto?.['Culto nr.'];
-      let imagemUrl = culto?.imagem_url || null;
-
-      if (!cId) {
-        const { data, error } = await supabase
-          .from('Louvores IPPN')
-          .insert({
-            Dia: dia,
-            igreja_id: igrejaId,
-            palavra_pastoral: palavraPastoral || null,
-            palavra_pastoral_autor: palavraPastoralAutor || null,
-          })
-          .select().single();
-        if (error) throw error;
-        cId = data['Culto nr.'];
-      } else {
-        await supabase.from('Louvores IPPN').update({
-          Dia: dia,
-          igreja_id: igrejaId,
-          palavra_pastoral: palavraPastoral || null,
-          palavra_pastoral_autor: palavraPastoralAutor || null,
-        }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
+      if (fallbackRows.length > 0) {
+        const { error: fallbackInsertError } = await supabase.from('louvor_itens').insert(fallbackRows);
+        if (fallbackInsertError) throw fallbackInsertError;
       }
 
-      if (imagemUpload) {
-        const url = await uploadImagem(imagemUpload, cId);
-        if (url) {
-          imagemUrl = url;
-          await supabase.from('Louvores IPPN').update({ imagem_url: imagemUrl }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
-        }
-      }
-
-      await supabase.from('louvor_itens').delete().eq('culto_id', cId);
-
-      const rows: any[] = [];
-      let ord = 1;
-      itens.forEach(it => {
-        if (it.canticos_lista.length > 0) {
-          it.canticos_lista.forEach(m => {
-            rows.push({
-              culto_id: cId, ordem: ord++, tipo: it.tipo,
-              conteudo_publico: it.conteudo_publico || null,
-              descricao: it.descricao || null,
-              horario: it.horario || null,
-              cantico_id: m.cantico_id || null,
-              tom: m.tom || null,
-            });
-          });
-        } else {
-          rows.push({
-            culto_id: cId, ordem: ord++, tipo: it.tipo,
-            conteudo_publico: it.conteudo_publico || null,
-            descricao: it.descricao || null,
-            horario: it.horario || null,
-            cantico_id: null, tom: null,
-          });
-        }
-      });
-
-      if (rows.length > 0) {
-        const { error } = await supabase.from('louvor_itens').insert(rows);
-        if (error) throw error;
-      }
-
-      if (HABILITAR_BOLETIM_SECOES_NEXT) {
-        await salvarBoletim(cId, igrejaId, imagemUrl);
-      }
-
-      alert('✅ Salvo com sucesso!');
+      alert('✅ Boletim do dia salvo com sucesso!');
       onSalvo();
-    } catch (e: any) {
-      alert(`Erro: ${e.message}`);
+    } catch (error: any) {
+      alert(`Erro: ${error.message}`);
     } finally {
-      setLoading(false);
+      setSalvando(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-30 flex items-center justify-between shadow-sm">
-        <button onClick={onCancelar} className="text-emerald-700 font-bold text-base px-4 py-2.5 hover:bg-emerald-50 rounded-xl transition-colors active:bg-emerald-100">
-          ← Voltar
-        </button>
-        <h2 className="font-black text-slate-800 text-base uppercase tracking-wider">
-          {culto ? 'Editar Liturgia' : 'Nova Liturgia'}
-        </h2>
-        <div className="w-24" />
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 pt-6 space-y-4">
-
-        {/* DATA */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Data do Culto</label>
-          <input
-            type="date"
-            value={dia}
-            onChange={e => {
-              setDia(e.target.value);
-              if (!culto && e.target.value) setItens(modeloPadrao(e.target.value, configuracaoIgreja));
-            }}
-            disabled={!isLideranca}
-            className="text-2xl font-black text-emerald-800 border-none focus:outline-none bg-transparent w-full py-1"
-          />
+    <div className={containerClassName}>
+      <div className={surfaceClassName}>
+        <div className={headerClassName}>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Boletim do dia</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-900">{formatCultoDateLabel(dia)}</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Este conteúdo é compartilhado entre todas as liturgias deste dia.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            {inline ? 'Fechar editor' : 'Fechar'}
+          </button>
         </div>
 
-        {/* PALAVRA PASTORAL */}
-        {HABILITAR_BOLETIM_SECOES_NEXT && isLideranca && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5">
-            <label className="text-xs font-black text-emerald-600 uppercase tracking-widest block mb-3">
-              ✝️ Palavra Pastoral
-            </label>
-            <textarea
+        <div className="space-y-6 px-6 py-6">
+          {inline ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-4 text-sm leading-6 text-emerald-950/80">
+              Aqui voce edita o boletim compartilhado deste domingo sem precisar entrar em uma liturgia especifica.
+            </div>
+          ) : null}
+
+          <div className="rounded-[28px] border border-emerald-200 bg-emerald-50/50 p-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-700">Palavra Pastoral</p>
+            <p className="mt-2 text-sm leading-7 text-emerald-950/75">
+              Mensagem pastoral, estudo, editorial ou reflexão do boletim deste dia.
+            </p>
+            <AutoResizeTextarea
               value={palavraPastoral}
               onChange={e => setPalavraPastoral(e.target.value)}
-              placeholder="Escreva a palavra pastoral da semana..."
-              rows={4}
-              className="w-full text-base text-slate-700 border border-emerald-100 rounded-xl px-4 py-3 bg-emerald-50/30 focus:outline-none focus:border-emerald-300 resize-none placeholder:text-slate-300 mb-3"
+              placeholder="Escreva aqui a palavra pastoral do boletim..."
+              className="mt-4 w-full rounded-[24px] border border-emerald-200 bg-white px-5 py-4 text-[17px] leading-8 text-slate-700 outline-none transition-colors focus:border-emerald-400 resize-none placeholder:text-slate-300"
             />
             <input
               value={palavraPastoralAutor}
               onChange={e => setPalavraPastoralAutor(e.target.value)}
-              placeholder="Autor"
-              className="w-full text-base text-slate-500 border border-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:border-slate-300 italic"
+              placeholder="Autor da palavra"
+              className="mt-4 w-full max-w-xl rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-base italic text-slate-600 outline-none transition-colors focus:border-emerald-400"
             />
           </div>
-        )}
 
-        {/* IMAGEM */}
-        {isLideranca && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5">
-            <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-4">
-              Imagem do Tema
-            </label>
-
-            {/* Instagram */}
-            <div className="flex gap-2 mb-3">
-              <input
-                type="url"
-                placeholder="URL do post do Instagram..."
-                value={instagramUrl}
-                onChange={e => setInstagramUrl(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-purple-400"
-              />
-              <button
-                onClick={importarInstagram}
-                disabled={importando}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
-              >
-                {importando ? '⏳' : '📥'}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 my-3">
-              <div className="flex-1 h-px bg-slate-100" />
-              <span className="text-xs text-slate-400">ou</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-
-            {imagemPreview && (
-              <div className="relative mb-3 group">
-                <img src={imagemPreview} alt="Preview" className="w-full h-48 object-cover rounded-xl" />
-                <button
-                  onClick={() => { setImagemPreview(null); setImagemUpload(null); }}
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >×</button>
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Imagem do tema</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Essa imagem também é compartilhada entre todas as liturgias do dia.
+                </p>
               </div>
-            )}
+            </div>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImagemChange}
-              className="w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
-            />
+            <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  Importar do Instagram
+                </label>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="url"
+                    placeholder="URL do post do Instagram..."
+                    value={instagramUrl}
+                    onChange={e => setInstagramUrl(e.target.value)}
+                    className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-purple-400"
+                  />
+                  <button
+                    onClick={importarInstagram}
+                    disabled={importando}
+                    className="rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    {importando ? 'Importando...' : 'Importar imagem'}
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImagemChange}
+                  className="mt-4 w-full cursor-pointer text-sm text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-200 file:px-4 file:py-2.5 file:text-sm file:font-bold file:text-slate-700 hover:file:bg-slate-300"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Pré-visualização</p>
+                {imagemPreview ? (
+                  <div className="relative mt-4 group">
+                    <img src={imagemPreview} alt="Preview" className="h-72 w-full rounded-2xl object-cover" />
+                    <button
+                      onClick={() => { setImagemPreview(null); setImagemUpload(null); }}
+                      className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex h-72 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-center text-sm leading-6 text-slate-400">
+                    Nenhuma imagem selecionada para este boletim.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        )}
 
-        {isLideranca && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Seções extras do boletim
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
+                  Seções do boletim
                 </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  Avisos, pedidos de oração, agenda e outros blocos livres que acompanham a liturgia.
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Avisos, pedidos de oração, agenda, informativo e outros blocos compartilhados.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowEscolherTipo(true)}
-                className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
+                className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
               >
                 + Nova seção
               </button>
@@ -1731,11 +1923,11 @@ function EditorLiturgia({
 
             {loadingBoletim ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                Carregando seções extras...
+                Carregando seções do boletim...
               </div>
             ) : boletimSecoes.length === 0 ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                Nenhuma seção extra cadastrada neste boletim.
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm leading-6 text-slate-500">
+                Nenhuma seção adicional cadastrada para este boletim.
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -1743,10 +1935,7 @@ function EditorLiturgia({
                   const config = getBoletimTipoConfig(secao.tipo);
 
                   return (
-                    <div
-                      key={secao.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-                    >
+                    <div key={secao.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                           <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
@@ -1830,187 +2019,729 @@ function EditorLiturgia({
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* ITENS DA LITURGIA */}
-        <div>
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Liturgia</h3>
-              {isLideranca && temModeloDaIgreja && (
-                <p className="mt-2 text-sm text-slate-500">
-                  Use o modelo da igreja para preencher esta liturgia com a ordem configurada no ambiente da igreja.
-                </p>
-              )}
-            </div>
-            {isLideranca && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {temModeloDaIgreja && (
-                  <button
-                    onClick={aplicarModeloDaIgreja}
-                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100 active:bg-emerald-200"
-                  >
-                    Usar modelo da igreja
-                  </button>
-                )}
-                <button
-                  onClick={() => adicionarItem(0)}
-                  className="text-sm font-bold text-emerald-600 hover:bg-emerald-50 px-4 py-2 rounded-xl transition-colors active:bg-emerald-100"
-                >
-                  + item no início
-                </button>
-              </div>
-            )}
+        <div className={footerClassName}>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvarBoletim}
+            disabled={salvando}
+            className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
+          >
+            {salvando ? 'Salvando boletim...' : 'Salvar boletim do dia'}
+          </button>
+        </div>
+      </div>
+
+      <EscolherTipoSecaoModal
+        aberto={showEscolherTipo}
+        onFechar={() => setShowEscolherTipo(false)}
+        onEscolher={(tipo) => {
+          setShowEscolherTipo(false);
+          setTipoNovaSecao(tipo);
+        }}
+      />
+
+      <EditorSecaoBoletimModal
+        aberto={Boolean(tipoNovaSecao || secaoEditando)}
+        tipo={tipoNovaSecao || secaoEditando?.tipo || null}
+        secaoExistente={tipoNovaSecao ? null : secaoEditando}
+        onFechar={() => {
+          setTipoNovaSecao(null);
+          setSecaoEditandoIndex(null);
+        }}
+        onSalvar={(secao) => {
+          if (secaoEditandoIndex !== null) {
+            setBoletimSecoes(
+              normalizarSecoesBoletim(
+                boletimSecoes.map((item, index) => (index === secaoEditandoIndex ? { ...secao, ordem: item.ordem } : item))
+              )
+            );
+          } else {
+            setBoletimSecoes(normalizarSecoesBoletim([...boletimSecoes, secao]));
+          }
+
+          setTipoNovaSecao(null);
+          setSecaoEditandoIndex(null);
+        }}
+      />
+    </div>
+  );
+}
+
+// --- EDITOR DE LITURGIA ---
+function EditorLiturgia({
+  culto,
+  diaInicial,
+  todosCultos,
+  onAbrirCulto,
+  onSalvo,
+  onCancelar,
+  canticos,
+  setCanticos,
+  podeEditarLiturgiaCompleta,
+  podeEditarLouvor,
+  configuracaoIgreja,
+}: any) {
+  const [dia, setDia] = useState<string>(culto?.Dia || diaInicial || '');
+  const [nomeLiturgia, setNomeLiturgia] = useState<string>(culto?.nome_liturgia || '');
+  const [itens, setItens] = useState<LouvorItem[]>([]);
+  const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
+  const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(
+    culto?.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
+  );
+  const [imagemUpload, setImagemUpload] = useState<File | null>(null);
+  const [imagemPreview, setImagemPreview] = useState<string | null>(culto?.imagem_url || null);
+  const [loading, setLoading] = useState(false);
+  const [boletimSecoes, setBoletimSecoes] = useState<BoletimSecaoRascunho[]>([]);
+
+  const isLideranca = podeEditarLiturgiaCompleta;
+  const podVerTom = isLideranca || podeEditarLouvor;
+  const canEditarMusica = isLideranca || podeEditarLouvor;
+  const tiposLiturgicos = normalizarTiposLiturgicosDisponiveis(
+    resolveTiposLiturgicos(configuracaoIgreja),
+    itens
+  );
+  const temModeloDaIgreja = (configuracaoIgreja?.modelosLiturgia?.length || 0) > 0;
+  const dataCultoFormatada = dia ? formatCultoDateLabel(dia) : 'Escolha a data do culto';
+  const totalItensComTextoPublico = itens.filter((item) => item.conteudo_publico?.trim()).length;
+  const tituloLiturgiaAtual = getCultoTituloExibicao(
+    culto,
+    nomeLiturgia.trim() || (culto ? 'Editar Liturgia' : 'Nova Liturgia')
+  );
+  const cultosDoMesmoDiaAtual = useMemo(
+    () =>
+      (todosCultos || []).filter(
+        (item: Culto) => dia && getCultoDateKey(item.Dia) === getCultoDateKey(dia)
+      ),
+    [todosCultos, dia]
+  );
+  const outrosCultosDoMesmoDia = cultosDoMesmoDiaAtual.filter(
+    (item: Culto) => !culto || item['Culto nr.'] !== culto['Culto nr.']
+  );
+
+  useEffect(() => {
+    setNomeLiturgia(culto?.nome_liturgia || '');
+  }, [culto?.['Culto nr.'], culto?.nome_liturgia]);
+
+  useEffect(() => {
+    if (culto) {
+      carregarItens(culto['Culto nr.']);
+    } else if (dia) {
+      setItens(modeloPadrao(dia, configuracaoIgreja));
+    }
+  }, [culto, dia, configuracaoIgreja]);
+
+  useEffect(() => {
+    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
+      setBoletimSecoes([]);
+      return;
+    }
+
+    if (cultosDoMesmoDiaAtual.length > 0) {
+      carregarSecoesBoletim(cultosDoMesmoDiaAtual.map((item: Culto) => item['Culto nr.']));
+      return;
+    }
+
+    setBoletimSecoes([]);
+  }, [culto, dia, todosCultos]);
+
+  useEffect(() => {
+    if (culto?.palavra_pastoral_autor) return;
+    if (!configuracaoIgreja?.pastorPadrao) return;
+
+    setPalavraPastoralAutor((current: string) => (
+      current.trim() ? current : configuracaoIgreja.pastorPadrao || ''
+    ));
+  }, [culto?.palavra_pastoral_autor, configuracaoIgreja]);
+
+  useEffect(() => {
+    if (!dia || cultosDoMesmoDiaAtual.length === 0) return;
+
+    const referencia = getCultoBoletimReferencia(cultosDoMesmoDiaAtual);
+    if (!referencia) return;
+
+    setPalavraPastoral(referencia.palavra_pastoral || '');
+    setPalavraPastoralAutor(
+      referencia.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
+    );
+    setImagemPreview(referencia.imagem_url || null);
+    setImagemUpload(null);
+  }, [dia, cultosDoMesmoDiaAtual, configuracaoIgreja?.pastorPadrao]);
+
+  const carregarItens = async (cultoNr: number) => {
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
+    const itensLiturgia = data.filter(
+      (linha) => !isBoletimFallbackTipo(linha.tipo) && !isLiturgiaMetaTipo(linha.tipo)
+    );
+
+    if (!itensLiturgia) return;
+
+    // Agrupar linhas do mesmo item
+    const agrupados: LouvorItem[] = [];
+    itensLiturgia.forEach((linha: any) => {
+      const ultimo = agrupados[agrupados.length - 1];
+      if (
+        ultimo &&
+        ultimo.tipo === linha.tipo &&
+        ultimo.conteudo_publico === linha.conteudo_publico &&
+        ultimo.descricao === linha.descricao &&
+        ultimo.horario === linha.horario
+      ) {
+        ultimo.canticos_lista.push({ cantico_id: linha.cantico_id, tom: linha.tom });
+      } else {
+        agrupados.push({
+          id: linha.id,
+          tipo: linha.tipo,
+          ordem: linha.ordem,
+          conteudo_publico: linha.conteudo_publico,
+          descricao: linha.descricao,
+          horario: linha.horario,
+          canticos_lista: linha.cantico_id ? [{ cantico_id: linha.cantico_id, tom: linha.tom }] : [],
+        });
+      }
+    });
+
+    setItens(agrupados);
+  };
+
+  const carregarSecoesBoletim = async (cultoIds: number[]) => {
+    if (!HABILITAR_BOLETIM_SECOES_NEXT) {
+      setBoletimSecoes([]);
+      return;
+    }
+
+    try {
+      const { data: itensRaw, error: itensError } = await supabase
+        .from('louvor_itens')
+        .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+        .in('culto_id', cultoIds)
+        .order('ordem', { ascending: true });
+
+      if (itensError) throw itensError;
+
+      const rows = (itensRaw || []) as LouvorItemRow[];
+      let secoesRascunho: BoletimSecaoRascunho[] = [];
+
+      for (const cultoId of cultoIds) {
+        const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
+        const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto);
+
+        if (secoesDoCulto.length > 0) {
+          secoesRascunho = secoesDoCulto;
+          break;
+        }
+      }
+
+      setBoletimSecoes(normalizarSecoesBoletim(secoesRascunho));
+    } catch (error) {
+      console.warn('Falha ao carregar seções extras do boletim:', error);
+      setBoletimSecoes([]);
+    }
+  };
+
+  const adicionarItem = (posicao: number) => {
+    const novo: LouvorItem = {
+      tipo: tiposLiturgicos[0] || TIPOS_LITURGICOS_PADRAO[0],
+      ordem: posicao + 1,
+      conteudo_publico: null,
+      descricao: null,
+      horario: null,
+      canticos_lista: [],
+    };
+    const novos = [...itens];
+    novos.splice(posicao, 0, novo);
+    setItens(novos.map((it, i) => ({ ...it, ordem: i + 1 })));
+  };
+
+  const aplicarModeloDaIgreja = () => {
+    const baseDia = dia || new Date().toISOString().split('T')[0];
+    setItens(modeloPadrao(baseDia, configuracaoIgreja));
+  };
+
+  const salvar = async () => {
+    if (!dia) return alert('Selecione a data!');
+    setLoading(true);
+    try {
+      const igrejaId = getStoredChurchId();
+      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar a liturgia');
+
+      let cId = culto?.['Culto nr.'];
+      let imagemUrl = culto?.imagem_url || null;
+
+      if (!cId) {
+        const { data, error } = await supabase
+          .from('Louvores IPPN')
+          .insert({
+            Dia: dia,
+            igreja_id: igrejaId,
+            palavra_pastoral: palavraPastoral || null,
+            palavra_pastoral_autor: palavraPastoralAutor || null,
+          })
+          .select().single();
+        if (error) throw error;
+        cId = data['Culto nr.'];
+      } else {
+        await supabase.from('Louvores IPPN').update({
+          Dia: dia,
+          igreja_id: igrejaId,
+          palavra_pastoral: palavraPastoral || null,
+          palavra_pastoral_autor: palavraPastoralAutor || null,
+        }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
+      }
+
+      if (imagemUpload) {
+        const url = await uploadImagemTema(imagemUpload, cId);
+        if (url) {
+          imagemUrl = url;
+        }
+      }
+
+      const cultoIdsMesmoDia = Array.from(
+        new Set([...cultosDoMesmoDiaAtual.map((item: Culto) => item['Culto nr.']), cId])
+      );
+      const imagemUrlFinal =
+        imagemPreview === null && !imagemUpload
+          ? null
+          : imagemUrl ||
+            (typeof imagemPreview === 'string' && !imagemPreview.startsWith('data:') ? imagemPreview : null);
+
+      if (cultoIdsMesmoDia.length > 0) {
+        const { error: syncBoletimError } = await supabase
+          .from('Louvores IPPN')
+          .update({
+            palavra_pastoral: palavraPastoral || null,
+            palavra_pastoral_autor: palavraPastoralAutor || null,
+            imagem_url: imagemUrlFinal,
+          })
+          .in('"Culto nr."', cultoIdsMesmoDia)
+          .eq('igreja_id', igrejaId);
+
+        if (syncBoletimError) throw syncBoletimError;
+      }
+
+      await supabase.from('louvor_itens').delete().eq('culto_id', cId);
+
+      const rows: any[] = [];
+      const metaNomeLiturgia = buildLiturgiaMetaRow(nomeLiturgia);
+
+      if (metaNomeLiturgia) {
+        rows.push({
+          culto_id: cId,
+          ...metaNomeLiturgia,
+        });
+      }
+
+      let ord = 1;
+      itens.forEach(it => {
+        if (it.canticos_lista.length > 0) {
+          it.canticos_lista.forEach(m => {
+            rows.push({
+              culto_id: cId, ordem: ord++, tipo: it.tipo,
+              conteudo_publico: it.conteudo_publico || null,
+              descricao: it.descricao || null,
+              horario: it.horario || null,
+              cantico_id: m.cantico_id || null,
+              tom: m.tom || null,
+            });
+          });
+        } else {
+          rows.push({
+            culto_id: cId, ordem: ord++, tipo: it.tipo,
+            conteudo_publico: it.conteudo_publico || null,
+            descricao: it.descricao || null,
+            horario: it.horario || null,
+            cantico_id: null, tom: null,
+          });
+        }
+      });
+
+      if (rows.length > 0) {
+        const { error } = await supabase.from('louvor_itens').insert(rows);
+        if (error) throw error;
+      }
+
+      if (HABILITAR_BOLETIM_SECOES_NEXT) {
+        const { error: deleteFallbackError } = await supabase
+          .from('louvor_itens')
+          .delete()
+          .in('culto_id', cultoIdsMesmoDia)
+          .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
+
+        if (deleteFallbackError) throw deleteFallbackError;
+
+        const fallbackRows = cultoIdsMesmoDia.flatMap((cultoIdMesmoDia) =>
+          buildBoletimFallbackRows(boletimSecoes, 1000).map((row) => ({
+            culto_id: cultoIdMesmoDia,
+            ...row,
+          }))
+        );
+
+        if (fallbackRows.length > 0) {
+          const { error: fallbackInsertError } = await supabase.from('louvor_itens').insert(fallbackRows);
+          if (fallbackInsertError) throw fallbackInsertError;
+        }
+      }
+
+      alert('✅ Salvo com sucesso!');
+      onSalvo();
+    } catch (e: any) {
+      alert(`Erro: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.10),_transparent_28%),linear-gradient(180deg,#f4f7f6_0%,#eef3f1_100%)] pb-36">
+      {/* Header */}
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-4 px-4 py-4 lg:px-8">
+          <button onClick={onCancelar} className="rounded-2xl px-4 py-2.5 text-base font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100">
+            ← Voltar
+          </button>
+          <div className="min-w-0 text-center">
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Editor de culto</p>
+            <h2 className="truncate text-base font-black uppercase tracking-wider text-slate-800">
+              {tituloLiturgiaAtual}
+            </h2>
           </div>
-
-          <div className="space-y-2">
-            {itens.map((it, idx) => (
-              <div key={idx}>
-                <ItemLiturgia
-                  item={{ ...it, tiposLiturgicosDisponiveis: tiposLiturgicos }}
-                  index={idx}
-                  canticos={canticos}
-                  onCreate={async (nome: string) => {
-                    const payload = {
-                      nome: nome.trim(),
-                      letra: '',
-                      referencia: '',
-                      tags: [],
-                      youtube_url: null,
-                      spotify_url: null,
-                    };
-
-                    const { data, error }: any = await supabase
-                      .from('canticos')
-                      .insert(payload)
-                      .select('id, nome')
-                      .single();
-
-                    if (error) {
-                      throw new Error(error.message || 'Nao foi possivel criar o cântico.');
-                    }
-
-                    const novo = { ...data, ultima_vez: null };
-                    setCanticos((prev: Cantico[]) => [...prev, novo]);
-                    return novo;
-                  }}
-                  onUpdate={(u: LouvorItem) => {
-                    const novos = [...itens];
-                    novos[idx] = u;
-                    setItens(novos);
-                  }}
-                  onRemove={() => setItens(itens.filter((_, i) => i !== idx))}
-                  onMove={(d: string) => {
-                    const novos = [...itens];
-                    const alvo = d === 'cima' ? idx - 1 : idx + 1;
-                    if (alvo >= 0 && alvo < novos.length) {
-                      [novos[idx], novos[alvo]] = [novos[alvo], novos[idx]];
-                      setItens(novos);
-                    }
-                  }}
-                  isLideranca={isLideranca}
-                  podVerTom={podVerTom}
-                  canEditarMusica={canEditarMusica}
-                />
-
-                {isLideranca && (
-                  <button
-                    onClick={() => adicionarItem(idx + 1)}
-                    className="w-full mt-1 py-2.5 text-sm text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors font-semibold active:bg-emerald-100"
-                  >
-                    + adicionar item aqui
-                  </button>
-                )}
-              </div>
-            ))}
+          <div className="hidden min-w-[220px] justify-end text-right text-xs text-slate-500 lg:flex">
+            Preencha com calma. Tudo foi pensado para parecer um editor simples e guiado.
           </div>
         </div>
+      </header>
+
+      <main className="mx-auto grid w-full max-w-[1800px] gap-6 px-4 pt-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-8">
+        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+          <div className="rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.98),rgba(255,255,255,0.98))] p-5 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Como editar</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Uma folha simples para montar o culto</h3>
+            <p className="mt-3 text-sm leading-7 text-slate-600">
+              Pense nesta tela como um editor guiado. Preencha a data, escreva a palavra pastoral se quiser, organize a imagem e depois monte a liturgia item por item.
+            </p>
+          </div>
+
+          <div className="rounded-[28px] border border-slate-200 bg-white/95 p-5 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Resumo rápido</p>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Data</p>
+                <p className="mt-2 text-sm font-semibold text-slate-800">{dataCultoFormatada}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Itens da liturgia</p>
+                <p className="mt-2 text-2xl font-black text-slate-900">{itens.length}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Texto público preenchido</p>
+                <p className="mt-2 text-2xl font-black text-slate-900">{totalItensComTextoPublico}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-slate-200 bg-white/95 p-5 shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Dicas</p>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <p>O campo <strong>Público</strong> é o que pode aparecer no boletim e nas saídas públicas.</p>
+              <p>O campo <strong>Interno</strong> é só para orientar quem vai conduzir o culto.</p>
+              <p>Nos títulos dos itens, você pode digitar livremente. Não precisa cadastrar antes.</p>
+              <p>Se a igreja já tem um modelo, você pode usá-lo como ponto de partida e depois ajustar tudo.</p>
+            </div>
+          </div>
+        </aside>
+
+        <section className="overflow-hidden rounded-[34px] border border-slate-200/90 bg-white/95 shadow-[0_40px_120px_-70px_rgba(15,23,42,0.35)]">
+          <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.96))] px-6 py-8 lg:px-10">
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">Documento do culto</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 lg:text-4xl">
+              {tituloLiturgiaAtual}
+            </h1>
+            <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600">
+              Preencha cada bloco como se estivesse escrevendo um documento: primeiro as informações gerais, depois os conteúdos do boletim e por fim os momentos da liturgia.
+            </p>
+          </div>
+
+          <div className="space-y-8 px-6 py-8 lg:px-10">
+            {cultosDoMesmoDiaAtual.length > 0 ? (
+              <div className="rounded-[28px] border border-sky-200 bg-sky-50/60 p-5">
+                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-sky-700">
+                  Domingo em conjunto
+                </p>
+                <h3 className="mt-2 text-xl font-black text-slate-900">
+                  {cultosDoMesmoDiaAtual.length === 1
+                    ? 'Este domingo tem 1 liturgia cadastrada'
+                    : `Este domingo tem ${cultosDoMesmoDiaAtual.length} liturgias cadastradas`}
+                </h3>
+                <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-600">
+                  Nesta fase, o banco continua igual, mas a interface já trata as liturgias do mesmo domingo como um conjunto. Você pode navegar entre elas sem sair da página.
+                </p>
+
+                {outrosCultosDoMesmoDia.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {outrosCultosDoMesmoDia.map((item: Culto, index: number) => (
+                      <button
+                        key={item['Culto nr.']}
+                        type="button"
+                        onClick={() => onAbrirCulto(item)}
+                        className="rounded-2xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-800 transition-colors hover:bg-sky-100"
+                      >
+                        {getCultoNomeLiturgia(item) || `Abrir liturgia ${index + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,460px)]">
+              <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+                <label className="block text-xs font-black uppercase tracking-[0.24em] text-slate-400">Data do culto</label>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Escolha a data do culto. Em uma liturgia nova, o sistema pode usar essa data para sugerir o modelo inicial.
+                </p>
+                <input
+                  type="date"
+                  value={dia}
+                  onChange={e => {
+                    setDia(e.target.value);
+                    if (!culto && e.target.value) setItens(modeloPadrao(e.target.value, configuracaoIgreja));
+                  }}
+                  disabled={!isLideranca}
+                  className="mt-4 w-full bg-transparent py-1 text-2xl font-black text-emerald-800 outline-none"
+                />
+              </div>
+
+              <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
+                <label className="block text-xs font-black uppercase tracking-[0.24em] text-slate-400">Nome da liturgia</label>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Dê um nome livre para identificar esta celebração, como Culto Manhã, Culto Noite ou Culto Vespertino.
+                </p>
+                <input
+                  type="text"
+                  value={nomeLiturgia}
+                  onChange={(e) => setNomeLiturgia(e.target.value)}
+                  disabled={!isLideranca}
+                  placeholder="Ex.: Culto Manhã"
+                  className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xl font-bold text-slate-800 outline-none transition-colors focus:border-emerald-400 disabled:bg-slate-100"
+                />
+              </div>
+            </div>
+
+            {isLideranca ? (
+              <div className="rounded-[28px] border border-sky-200 bg-sky-50/60 p-5">
+                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-sky-700">
+                  Boletim do dia
+                </p>
+                <h3 className="mt-2 text-xl font-black text-slate-900">
+                  Conteúdo compartilhado entre todas as liturgias deste dia
+                </h3>
+                <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-600">
+                  Palavra pastoral, imagem do tema e seções extras não são editadas aqui. Para manter a regra de negócio clara, esse conteúdo agora fica no botão <strong>Editar boletim do dia</strong> na listagem do domingo.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-3xl">
+                  <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Liturgia</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Monte a ordem do culto como um documento vivo. Cada cartão abaixo representa um momento da liturgia e explica exatamente o que preencher.
+                  </p>
+                  {isLideranca && temModeloDaIgreja && (
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Se quiser acelerar, use o modelo da igreja e depois personalize cada item.
+                    </p>
+                  )}
+                </div>
+                {isLideranca && (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {temModeloDaIgreja && (
+                      <button
+                        onClick={aplicarModeloDaIgreja}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100 active:bg-emerald-200"
+                      >
+                        Usar modelo da igreja
+                      </button>
+                    )}
+                    <button
+                      onClick={() => adicionarItem(0)}
+                      className="rounded-2xl px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100"
+                    >
+                      + item no início
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {itens.map((it, idx) => (
+                  <div key={idx}>
+                    <ItemLiturgia
+                      item={{ ...it, tiposLiturgicosDisponiveis: tiposLiturgicos }}
+                      index={idx}
+                      canticos={canticos}
+                      onCreate={async (nome: string) => {
+                        const payload = {
+                          nome: nome.trim(),
+                          letra: '',
+                          referencia: '',
+                          tags: [],
+                          youtube_url: null,
+                          spotify_url: null,
+                        };
+
+                        const { data, error }: any = await supabase
+                          .from('canticos')
+                          .insert(payload)
+                          .select('id, nome')
+                          .single();
+
+                        if (error) {
+                          throw new Error(error.message || 'Nao foi possivel criar o cântico.');
+                        }
+
+                        const novo = { ...data, ultima_vez: null };
+                        setCanticos((prev: Cantico[]) => [...prev, novo]);
+                        return novo;
+                      }}
+                      onUpdate={(u: LouvorItem) => {
+                        const novos = [...itens];
+                        novos[idx] = u;
+                        setItens(novos);
+                      }}
+                      onRemove={() => setItens(itens.filter((_, i) => i !== idx))}
+                      onMove={(d: string) => {
+                        const novos = [...itens];
+                        const alvo = d === 'cima' ? idx - 1 : idx + 1;
+                        if (alvo >= 0 && alvo < novos.length) {
+                          [novos[idx], novos[alvo]] = [novos[alvo], novos[idx]];
+                          setItens(novos);
+                        }
+                      }}
+                      isLideranca={isLideranca}
+                      podVerTom={podVerTom}
+                      canEditarMusica={canEditarMusica}
+                    />
+
+                    {isLideranca && (
+                      <button
+                        onClick={() => adicionarItem(idx + 1)}
+                        className="mt-2 w-full rounded-2xl border border-dashed border-slate-300 py-3 text-sm font-semibold text-slate-500 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100"
+                      >
+                        + adicionar item aqui
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Botão salvar fixo */}
       {isLideranca && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-40">
-          <button
-            onClick={salvar}
-            disabled={loading}
-            className="w-full max-w-2xl mx-auto block bg-emerald-700 hover:bg-emerald-800 text-white py-4 rounded-2xl font-bold text-base shadow-lg disabled:opacity-60 transition-colors"
-          >
-            {loading ? '⏳ Salvando...' : '✅ Salvar Liturgia'}
-          </button>
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:px-4">
+            <div className="text-sm leading-6 text-slate-500">
+              Salve quando terminar. Este botão salva a liturgia atual. O boletim compartilhado do dia é editado separadamente.
+            </div>
+            <button
+              onClick={salvar}
+              disabled={loading}
+              className="block rounded-2xl bg-emerald-700 px-8 py-4 text-base font-bold text-white shadow-lg transition-colors hover:bg-emerald-800 disabled:opacity-60"
+            >
+              {loading ? '⏳ Salvando...' : '✅ Salvar Liturgia'}
+            </button>
+          </div>
         </div>
       )}
 
-      {HABILITAR_BOLETIM_SECOES_NEXT ? (
-        <>
-          <EscolherTipoSecaoModal
-            aberto={showEscolherTipo}
-            onFechar={() => setShowEscolherTipo(false)}
-            onEscolher={(tipo) => {
-              setShowEscolherTipo(false);
-              setTipoNovaSecao(tipo);
-            }}
-          />
-
-          <EditorSecaoBoletimModal
-            aberto={Boolean(tipoNovaSecao || secaoEditando)}
-            tipo={tipoNovaSecao || secaoEditando?.tipo || null}
-            secaoExistente={tipoNovaSecao ? null : secaoEditando}
-            onFechar={() => {
-              setTipoNovaSecao(null);
-              setSecaoEditandoIndex(null);
-            }}
-            onSalvar={(secao) => {
-              if (secaoEditandoIndex !== null) {
-                setBoletimSecoes(
-                  normalizarSecoesBoletim(
-                    boletimSecoes.map((item, index) => (index === secaoEditandoIndex ? { ...secao, ordem: item.ordem } : item))
-                  )
-                );
-              } else {
-                setBoletimSecoes(normalizarSecoesBoletim([...boletimSecoes, secao]));
-              }
-
-              setTipoNovaSecao(null);
-              setSecaoEditandoIndex(null);
-            }}
-          />
-        </>
-      ) : null}
     </div>
   );
 }
 
 // --- CARD DE CULTO NA LISTAGEM ---
-function CultoCard({ culto, onEditar, onWhatsApp, onPDF, podeEditar }: any) {
+function CultoCard({
+  culto,
+  tituloExibicao,
+  descricaoExibicao,
+  onEditar,
+  onWhatsApp,
+  onPDF,
+  onExcluir,
+  podeEditar,
+  podeExcluir,
+  excluindo,
+  esconderResumoBoletim,
+}: any) {
   const dataFormatada = formatCultoDateLabel(culto.Dia);
+  const titulo = getCultoTituloExibicao(culto, tituloExibicao || dataFormatada);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-all shadow-sm">
-      <div className="flex items-center gap-4 p-4">
-        {culto.imagem_url && (
-          <img src={culto.imagem_url} alt="" className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">#{culto['Culto nr.']}</p>
-          <h3 className="font-bold text-slate-800 text-base truncate mt-0.5">{dataFormatada}</h3>
-          {culto.palavra_pastoral && (
-            <p className="text-sm text-emerald-600 truncate mt-1">✝️ Palavra pastoral disponível</p>
+    <div className="rounded-[26px] border border-slate-200 bg-white px-5 py-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
+          {culto.imagem_url ? (
+            <img src={culto.imagem_url} alt="" className="h-20 w-20 rounded-2xl object-cover shadow-sm flex-shrink-0" />
+          ) : (
+            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl text-slate-400 shadow-sm">
+              L
+            </div>
           )}
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Liturgia do dia</p>
+            <h3 className="mt-2 text-xl font-black tracking-tight text-slate-900">
+              {titulo}
+            </h3>
+            {descricaoExibicao ? (
+              <p className="mt-2 text-sm leading-6 text-slate-500">{descricaoExibicao}</p>
+            ) : null}
+            {!esconderResumoBoletim && culto.palavra_pastoral ? (
+              <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                Palavra pastoral disponível
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={() => onWhatsApp(culto)} className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 active:bg-emerald-200 transition-colors flex items-center justify-center" title="WhatsApp">
+
+        <div className="flex flex-wrap items-center gap-2 lg:max-w-[360px] lg:justify-end">
+          {podeEditar ? (
+            <button
+              onClick={() => onEditar(culto)}
+              className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
+              title="Editar liturgia"
+            >
+              Editar liturgia
+            </button>
+          ) : null}
+          <button onClick={() => onWhatsApp(culto)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 active:bg-emerald-200" title="WhatsApp">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.559 4.189 1.619 6.011L0 24l6.117-1.605a11.847 11.847 0 005.925 1.586h.005c6.635 0 12.032-5.396 12.035-12.032a11.76 11.76 0 00-3.528-8.485" />
             </svg>
           </button>
-          <button onClick={() => onPDF(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center" title="PDF">
+          <button onClick={() => onPDF(culto)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-50 text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200" title="PDF">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
           </button>
-          {podeEditar && (
-            <button onClick={() => onEditar(culto)} className="w-11 h-11 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors flex items-center justify-center text-lg" title="Editar">
-              ✏️
+          {podeExcluir && (
+            <button
+              onClick={() => onExcluir(culto)}
+              disabled={excluindo}
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-lg text-red-600 transition-colors hover:bg-red-100 active:bg-red-200 disabled:opacity-50"
+              title="Excluir"
+            >
+              {excluindo ? '⏳' : '🗑️'}
             </button>
           )}
         </div>
@@ -2027,9 +2758,13 @@ export default function CultosPage() {
   const [cultos, setCultos] = useState<Culto[]>([]);
   const [configuracaoIgreja, setConfiguracaoIgreja] = useState<LiturgiaChurchConfig | null>(null);
   const [editando, setEditando] = useState<Culto | null | 'novo'>(null);
+  const [novoDiaInicial, setNovoDiaInicial] = useState('');
+  const [boletimDiaEditando, setBoletimDiaEditando] = useState<{ dia: string; cultos: Culto[] } | null>(null);
+  const [cultoExcluindoId, setCultoExcluindoId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
   const totalLoading = loading || permLoading;
+  const gruposCultos = useMemo(() => buildCultoDayGroups(cultos), [cultos]);
 
   useEffect(() => {
     if (!permLoading && !permissoes.podeGerenciarCultos) {
@@ -2045,103 +2780,150 @@ export default function CultosPage() {
 
   const carregarTudo = async () => {
     setLoading(true);
-    const igrejaId = getStoredChurchId();
+    try {
+      const igrejaId = getStoredChurchId();
 
-    if (!igrejaId) {
+      if (!igrejaId) {
+        setCanticos([]);
+        setCultos([]);
+        setConfiguracaoIgreja(null);
+        return;
+      }
+
+      const [
+        { data: todosCanticos },
+        { data: cultosData },
+        { data: igrejaRaw },
+        { data: modelosLiturgiaRaw },
+      ] = await Promise.all([
+        supabase
+          .from('canticos_unificados')
+          .select('id, nome, tipo, numero')
+          .order('nome'),
+        supabase
+          .from('Louvores IPPN')
+          .select('*')
+          .eq('igreja_id', igrejaId)
+          .order('Dia', { ascending: false }),
+        supabase
+          .from('igrejas')
+          .select('tipos_liturgicos, modelo_liturgico_padrao')
+          .eq('id', igrejaId)
+          .maybeSingle(),
+        supabase
+          .from('modelos_liturgia')
+          .select('bloco, ordem, tipo, descricao_padrao, tem_cantico')
+          .eq('igreja_id', igrejaId)
+          .order('ordem', { ascending: true }),
+      ]);
+
+      const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
+
+      setCanticos((todosCanticos || []).map(c => ({ ...c, ultima_vez: null })));
+      const cultosBase = (cultosData || []) as Culto[];
+      let cultosComNome = cultosBase;
+
+      if (cultosBase.length > 0) {
+        const cultoIds = cultosBase.map((culto) => culto['Culto nr.']);
+
+        try {
+          const { data: nomesLiturgiaRows, error: nomesLiturgiaError } = await supabase
+            .from('louvor_itens')
+            .select('culto_id, conteudo_publico, ordem')
+            .in('culto_id', cultoIds)
+            .eq('tipo', LITURGIA_META_TIPO)
+            .order('ordem', { ascending: true });
+
+          if (nomesLiturgiaError) {
+            console.warn('Falha ao carregar nomes das liturgias:', nomesLiturgiaError);
+          } else {
+            const nomesPorCulto = new Map<number, string>();
+
+            (nomesLiturgiaRows || []).forEach((row: any) => {
+              const cultoId = typeof row.culto_id === 'number' ? row.culto_id : Number(row.culto_id);
+              const nome = typeof row.conteudo_publico === 'string' ? row.conteudo_publico.trim() : '';
+
+              if (Number.isFinite(cultoId) && nome && !nomesPorCulto.has(cultoId)) {
+                nomesPorCulto.set(cultoId, nome);
+              }
+            });
+
+            cultosComNome = cultosBase.map((culto) => ({
+              ...culto,
+              nome_liturgia: nomesPorCulto.get(culto['Culto nr.']) || null,
+            }));
+          }
+        } catch (error) {
+          console.warn('Falha inesperada ao carregar nomes das liturgias:', error);
+        }
+      }
+
+      setCultos(cultosComNome);
+      const modelosFallback = extractModeloLiturgicoPadrao(igrejaRaw?.modelo_liturgico_padrao);
+      const fallbackPorChave = new Map(
+        modelosFallback.map((item) => [`${item.ordem}-${item.tipo}-${item.bloco}`, item] as const)
+      );
+      const modelosTabela = (modelosLiturgiaRaw || []).map((item) => ({
+        bloco: typeof item.bloco === 'string' ? item.bloco : '',
+        ordem: typeof item.ordem === 'number' ? item.ordem : 0,
+        tipo: typeof item.tipo === 'string' ? item.tipo : '',
+        descricao_padrao: typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '',
+        conteudo_publico_padrao:
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.conteudo_publico_padrao || '',
+        descricao_interna_padrao:
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.descricao_interna_padrao || (typeof item.descricao_padrao === 'string' ? item.descricao_padrao : ''),
+        tem_cantico: item.tem_cantico === true,
+      }));
+      const tiposDaIgreja = extractTiposLiturgicos(igrejaRaw?.tipos_liturgicos);
+      const tiposDerivadosDoModelo = [...new Set(
+        modelosTabela
+          .map((item) => item.tipo.trim())
+          .filter(Boolean)
+      )];
+
+      const modelosMesclados = mergeModelosLiturgia(modelosTabela, modelosFallback);
+
+      setConfiguracaoIgreja({
+        tiposLiturgicos: tiposDaIgreja.length > 0 ? tiposDaIgreja : tiposDerivadosDoModelo,
+        modelosLiturgia: modelosMesclados,
+        pastorPadrao,
+      });
+
+      if (todosCanticos) {
+        try {
+          const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
+          const { data: todosCultos } = await supabase
+            .from('Louvores IPPN')
+            .select('"Culto nr.", Dia')
+            .eq('igreja_id', igrejaId);
+          if (itens && todosCultos) {
+            const mapaCultos = new Map(todosCultos.map((c: any) => [c['Culto nr.'], c.Dia]));
+            const mapaUltimas = new Map<string, string>();
+            itens.forEach((it: any) => {
+              const dia = mapaCultos.get(it.culto_id);
+              if (!dia) return;
+              if (!mapaUltimas.has(it.cantico_id) || dia > mapaUltimas.get(it.cantico_id)!) {
+                mapaUltimas.set(it.cantico_id, dia as string);
+              }
+            });
+            setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: mapaUltimas.get(c.id) || null })));
+          }
+        } catch (error) {
+          console.warn('Falha ao carregar histórico dos cânticos:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Falha ao carregar a página de cultos:', error);
       setCanticos([]);
       setCultos([]);
       setConfiguracaoIgreja(null);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const [
-      { data: todosCanticos },
-      { data: cultosData },
-      { data: igrejaRaw },
-      { data: modelosLiturgiaRaw },
-    ] = await Promise.all([
-      supabase
-        .from('canticos_unificados')
-        .select('id, nome, tipo, numero')
-        .order('nome'),
-      supabase
-        .from('Louvores IPPN')
-        .select('*')
-        .eq('igreja_id', igrejaId)
-        .order('Dia', { ascending: false }),
-      supabase
-        .from('igrejas')
-        .select('tipos_liturgicos, modelo_liturgico_padrao')
-        .eq('id', igrejaId)
-        .maybeSingle(),
-      supabase
-        .from('modelos_liturgia')
-        .select('bloco, ordem, tipo, descricao_padrao, tem_cantico')
-        .eq('igreja_id', igrejaId)
-        .order('ordem', { ascending: true }),
-    ]);
-
-    const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
-
-    setCanticos((todosCanticos || []).map(c => ({ ...c, ultima_vez: null })));
-    setCultos(cultosData || []);
-    const modelosFallback = extractModeloLiturgicoPadrao(igrejaRaw?.modelo_liturgico_padrao);
-    const fallbackPorChave = new Map(
-      modelosFallback.map((item) => [`${item.ordem}-${item.tipo}-${item.bloco}`, item] as const)
-    );
-    const modelosTabela = (modelosLiturgiaRaw || []).map((item) => ({
-      bloco: typeof item.bloco === 'string' ? item.bloco : '',
-      ordem: typeof item.ordem === 'number' ? item.ordem : 0,
-      tipo: typeof item.tipo === 'string' ? item.tipo : '',
-      descricao_padrao: typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '',
-      conteudo_publico_padrao:
-        fallbackPorChave.get(
-          `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
-        )?.conteudo_publico_padrao || '',
-      descricao_interna_padrao:
-        fallbackPorChave.get(
-          `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
-        )?.descricao_interna_padrao || (typeof item.descricao_padrao === 'string' ? item.descricao_padrao : ''),
-      tem_cantico: item.tem_cantico === true,
-    }));
-    const tiposDaIgreja = extractTiposLiturgicos(igrejaRaw?.tipos_liturgicos);
-    const tiposDerivadosDoModelo = [...new Set(
-      modelosTabela
-        .map((item) => item.tipo.trim())
-        .filter(Boolean)
-    )];
-
-    const modelosMesclados = mergeModelosLiturgia(modelosTabela, modelosFallback);
-
-    setConfiguracaoIgreja({
-      tiposLiturgicos: tiposDaIgreja.length > 0 ? tiposDaIgreja : tiposDerivadosDoModelo,
-      modelosLiturgia: modelosMesclados,
-      pastorPadrao,
-    });
-
-    // Buscar últimas datas dos cânticos
-    if (todosCanticos) {
-      const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
-      const { data: todosCultos } = await supabase
-        .from('Louvores IPPN')
-        .select('"Culto nr.", Dia')
-        .eq('igreja_id', igrejaId);
-      if (itens && todosCultos) {
-        const mapaCultos = new Map(todosCultos.map((c: any) => [c['Culto nr.'], c.Dia]));
-        const mapaUltimas = new Map<string, string>();
-        itens.forEach((it: any) => {
-          const dia = mapaCultos.get(it.culto_id);
-          if (!dia) return;
-          if (!mapaUltimas.has(it.cantico_id) || dia > mapaUltimas.get(it.cantico_id)!) {
-            mapaUltimas.set(it.cantico_id, dia as string);
-          }
-        });
-        setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: mapaUltimas.get(c.id) || null })));
-      }
-    }
-
-    setLoading(false);
   };
 
   const shareWhatsApp = async (culto: Culto) => {
@@ -2161,7 +2943,8 @@ export default function CultosPage() {
     const agrupados = agruparItensLiturgia(data);
 
     const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
-    let texto = `LITURGIA DO CULTO DE *${dataFmt}*\n\n`;
+    const nomeLiturgia = getCultoNomeLiturgia(culto);
+    let texto = `LITURGIA DO CULTO${nomeLiturgia ? ` *${nomeLiturgia.toUpperCase()}*` : ''} DE *${dataFmt}*\n\n`;
 
     if (culto.palavra_pastoral) {
       texto += `✝️ *PALAVRA PASTORAL*\n${culto.palavra_pastoral}\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
@@ -2199,6 +2982,7 @@ export default function CultosPage() {
     const dataFmt = new Date(culto.Dia + 'T00:00:00')
       .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
       .toUpperCase();
+    const nomeLiturgia = getCultoNomeLiturgia(culto);
 
     const renderPdf = (scale: number) => {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -2231,7 +3015,7 @@ export default function CultosPage() {
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(titleSize);
-        doc.text('LITURGIA DO CULTO', pw / 2, 11, { align: 'center' });
+        doc.text(nomeLiturgia ? `LITURGIA - ${nomeLiturgia.toUpperCase()}` : 'LITURGIA DO CULTO', pw / 2, 11, { align: 'center' });
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(subtitleSize);
         doc.text(dataFmt, pw / 2, 17, { align: 'center' });
@@ -2420,6 +3204,76 @@ export default function CultosPage() {
     window.open(blobUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const deletarCulto = async (culto: Culto) => {
+    const igrejaId = getStoredChurchId();
+    const cultoId = culto['Culto nr.'];
+
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de excluir a liturgia.');
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `Excluir a liturgia de ${formatCultoDateLabel(culto.Dia)}? Esta ação remove a liturgia e todas as seções do boletim.`
+    );
+
+    if (!confirmar) return;
+
+    setCultoExcluindoId(cultoId);
+
+    try {
+      const { data: secoesRaw, error: secoesError } = await supabase
+        .from('boletim_secoes')
+        .select('id')
+        .eq('culto_id', cultoId)
+        .eq('igreja_id', igrejaId);
+
+      if (secoesError) throw secoesError;
+
+      const secaoIds = (secoesRaw || [])
+        .map((item) => item.id)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+      if (secaoIds.length > 0) {
+        const { error: deleteItensError } = await supabase
+          .from('boletim_itens')
+          .delete()
+          .in('secao_id', secaoIds);
+
+        if (deleteItensError) throw deleteItensError;
+      }
+
+      const { error: deleteSecoesError } = await supabase
+        .from('boletim_secoes')
+        .delete()
+        .eq('culto_id', cultoId)
+        .eq('igreja_id', igrejaId);
+
+      if (deleteSecoesError) throw deleteSecoesError;
+
+      const { error: deleteLouvorItensError } = await supabase
+        .from('louvor_itens')
+        .delete()
+        .eq('culto_id', cultoId);
+
+      if (deleteLouvorItensError) throw deleteLouvorItensError;
+
+      const { error: deleteCultoError } = await supabase
+        .from('Louvores IPPN')
+        .delete()
+        .eq('"Culto nr."', cultoId)
+        .eq('igreja_id', igrejaId);
+
+      if (deleteCultoError) throw deleteCultoError;
+
+      setCultos((atuais) => atuais.filter((item) => item['Culto nr.'] !== cultoId));
+    } catch (error: any) {
+      alert(`Erro ao excluir liturgia: ${error?.message || 'falha inesperada.'}`);
+    } finally {
+      setCultoExcluindoId(null);
+    }
+  };
+
   if (totalLoading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
@@ -2431,25 +3285,34 @@ export default function CultosPage() {
 
   if (editando !== null) return (
     <EditorLiturgia
+      key={editando === 'novo' ? `novo-${novoDiaInicial || 'sem-data'}` : `culto-${editando['Culto nr.']}`}
       culto={editando === 'novo' ? null : editando}
+      diaInicial={editando === 'novo' ? novoDiaInicial : editando.Dia}
+      todosCultos={cultos}
+      onAbrirCulto={(culto: Culto) => setEditando(culto)}
       canticos={canticos}
       setCanticos={setCanticos}
       configuracaoIgreja={configuracaoIgreja}
       podeEditarLiturgiaCompleta={permissoes.podeEditarLiturgiaCompleta}
       podeEditarLouvor={permissoes.podeEditarLouvor}
-      onSalvo={() => { setEditando(null); carregarTudo(); }}
-      onCancelar={() => setEditando(null)}
+      onSalvo={() => { setEditando(null); setNovoDiaInicial(''); carregarTudo(); }}
+      onCancelar={() => { setEditando(null); setNovoDiaInicial(''); }}
     />
   );
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Liturgias</h1>
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Liturgias</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+              A interface já organiza os cultos por domingo/data. Assim fica mais natural trabalhar um boletim do domingo com uma ou várias liturgias dentro dele.
+            </p>
+          </div>
           {isLideranca && (
             <button
-              onClick={() => setEditando('novo')}
+              onClick={() => { setNovoDiaInicial(''); setEditando('novo'); }}
               className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
             >
               + Nova
@@ -2457,21 +3320,150 @@ export default function CultosPage() {
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-6">
           {cultos.length === 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500">
               Nenhuma liturgia encontrada para a igreja selecionada.
             </div>
           )}
-          {cultos.map(c => (
-            <CultoCard
-              key={c['Culto nr.']}
-              culto={c}
-              podeEditar={permissoes.podeEditarLouvor}
-              onEditar={(culto: Culto) => setEditando(culto)}
-              onWhatsApp={shareWhatsApp}
-              onPDF={sharePDF}
-            />
+          {gruposCultos.map((grupo) => (
+            <section
+              key={grupo.dia}
+              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
+            >
+              {(() => {
+                const boletimReferencia = getCultoBoletimReferencia(grupo.cultos);
+
+                return (
+                  <>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                    {grupo.isDomingo ? 'Boletim do domingo' : 'Grupo do dia'}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                    {formatCultoDateLabel(grupo.dia)}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    {grupo.cultos.length === 1
+                      ? '1 liturgia cadastrada neste dia.'
+                      : `${grupo.cultos.length} liturgias cadastradas neste dia.`}
+                  </p>
+                </div>
+
+                {isLideranca && (
+                  <button
+                    onClick={() => { setNovoDiaInicial(grupo.dia); setEditando('novo'); }}
+                    className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                  >
+                    + Nova liturgia neste dia
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.98),rgba(255,255,255,0.98))] shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBoletimDiaEditando((atual) =>
+                        atual?.dia === grupo.dia ? null : { dia: grupo.dia, cultos: grupo.cultos }
+                      )
+                    }
+                    className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-emerald-50/80"
+                  >
+                    <div className="max-w-3xl">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
+                        Boletim compartilhado do dia
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+                          {boletimReferencia?.palavra_pastoral?.trim() ? 'Palavra pastoral preenchida' : 'Palavra pastoral vazia'}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+                          {boletimReferencia?.imagem_url ? 'Imagem definida' : 'Sem imagem do tema'}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm">
+                          {boletimDiaEditando?.dia === grupo.dia ? 'Editor aberto abaixo' : 'Editor fechado'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-3">
+                      <span className="hidden rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white lg:inline-flex">
+                        {boletimDiaEditando?.dia === grupo.dia ? 'Fechar boletim' : 'Abrir boletim'}
+                      </span>
+                      <span
+                        className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-emerald-700 shadow-sm transition-transform ${
+                          boletimDiaEditando?.dia === grupo.dia ? 'rotate-180' : ''
+                        }`}
+                      >
+                        ⌄
+                      </span>
+                    </div>
+                  </button>
+
+                  {boletimDiaEditando?.dia === grupo.dia ? (
+                    <div className="border-t border-emerald-200 bg-white/90 p-4">
+                      <EditorBoletimDoDiaModal
+                        aberto
+                        inline
+                        dia={grupo.dia}
+                        cultos={grupo.cultos}
+                        onFechar={() => setBoletimDiaEditando(null)}
+                        onSalvo={() => {
+                          setBoletimDiaEditando(null);
+                          carregarTudo();
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-[24px] border border-slate-200 bg-slate-50/65 p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                        Liturgias do dia
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {grupo.cultos.map((culto, index) => (
+                      <CultoCard
+                        key={culto['Culto nr.']}
+                        culto={culto}
+                        tituloExibicao={
+                          grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : 'Liturgia única'
+                        }
+                        descricaoExibicao={
+                          grupo.cultos.length > 1
+                            ? 'Uma das liturgias deste mesmo domingo.'
+                            : 'Liturgia deste domingo.'
+                        }
+                        esconderResumoBoletim
+                        podeEditar={permissoes.podeEditarLouvor}
+                        podeExcluir={isLideranca}
+                        excluindo={cultoExcluindoId === culto['Culto nr.']}
+                        onEditar={(item: Culto) => setEditando(item)}
+                        onWhatsApp={shareWhatsApp}
+                        onPDF={sharePDF}
+                        onExcluir={deletarCulto}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+                  </>
+                );
+              })()}
+            </section>
           ))}
         </div>
       </div>

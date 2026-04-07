@@ -37,6 +37,7 @@ interface BoletimItemRow {
 
 interface LegacyLouvorItemRow {
   id: string;
+  culto_id?: number;
   ordem: number | null;
   tipo: string | null;
   tom: string | null;
@@ -66,9 +67,104 @@ interface LegacyBoletimSecao {
   itens: BoletimItemRow[];
 }
 
+interface BoletimFallbackMeta {
+  secaoTitulo: string;
+  secaoIcone: string | null;
+  secaoVisivel: boolean;
+  secaoOrdem: number;
+  itemDestaque: boolean;
+  itemOrdem: number;
+}
+
+const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
+
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isBoletimFallbackTipo(tipo: string | null | undefined) {
+  return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
+}
+
+function extrairTipoBoletimFallback(tipo: string | null | undefined) {
+  if (!isBoletimFallbackTipo(tipo)) return null;
+  return tipo.slice(BOLETIM_FALLBACK_TIPO_PREFIX.length) || null;
+}
+
+function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallbackMeta | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<BoletimFallbackMeta>;
+
+    if (typeof parsed.secaoTitulo !== 'string') return null;
+    if (typeof parsed.secaoOrdem !== 'number') return null;
+    if (typeof parsed.itemOrdem !== 'number') return null;
+
+    return {
+      secaoTitulo: parsed.secaoTitulo,
+      secaoIcone: typeof parsed.secaoIcone === 'string' ? parsed.secaoIcone : null,
+      secaoVisivel: parsed.secaoVisivel !== false,
+      secaoOrdem: parsed.secaoOrdem,
+      itemDestaque: parsed.itemDestaque === true,
+      itemOrdem: parsed.itemOrdem,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildExtraSectionsFromFallbackRows(
+  rows: LegacyLouvorItemRow[],
+  cultoId: number
+): LegacyBoletimSecao[] {
+  const secoes = new Map<string, LegacyBoletimSecao>();
+  const itemOrders = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const tipo = extrairTipoBoletimFallback(row.tipo);
+    const meta = parseBoletimFallbackMeta(row.descricao);
+    const conteudo = row.conteudo_publico?.trim() || '';
+
+    if (!tipo || !meta || !conteudo || meta.secaoVisivel === false) return;
+
+    const key = `${meta.secaoOrdem}:${tipo}:${meta.secaoTitulo}`;
+
+    if (!secoes.has(key)) {
+      secoes.set(key, {
+        id: `legacy-extra-${key}`,
+        igreja_id: null,
+        culto_id: cultoId,
+        tipo,
+        titulo: meta.secaoTitulo,
+        icone: meta.secaoIcone,
+        ordem: meta.secaoOrdem + 10,
+        visivel: meta.secaoVisivel,
+        criado_em: null,
+        itens: [],
+      });
+    }
+
+    secoes.get(key)?.itens.push({
+      id: row.id,
+      secao_id: `legacy-extra-${key}`,
+      conteudo,
+      destaque: meta.itemDestaque,
+      ordem: meta.itemOrdem,
+      criado_em: null,
+    });
+    itemOrders.set(row.id, meta.itemOrdem);
+  });
+
+  return [...secoes.values()]
+    .map((secao) => ({
+      ...secao,
+      itens: [...secao.itens].sort(
+        (a, b) => (itemOrders.get(a.id) || 0) - (itemOrders.get(b.id) || 0)
+      ),
+    }))
+    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 }
 
 async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
@@ -140,6 +236,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
   if (itensError) throw itensError;
 
   const itens = (itensRaw || []) as LegacyLouvorItemRow[];
+  const itensLiturgia = itens.filter((item) => !isBoletimFallbackTipo(item.tipo));
   const canticosPorId = await resolveCanticosPorId(itens.map((item) => item.cantico_id));
 
   const secoes: LegacyBoletimSecao[] = [];
@@ -196,7 +293,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
     });
   }
 
-  if (itens.length > 0) {
+  if (itensLiturgia.length > 0) {
     secoes.push({
       id: `legacy-liturgia-${culto['Culto nr.']}`,
       igreja_id: null,
@@ -207,7 +304,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
       ordem: 2,
       visivel: true,
       criado_em: null,
-      itens: itens.map((item, index) => {
+      itens: itensLiturgia.map((item, index) => {
         const nomeCantico = item.cantico_id
           ? canticosPorId.get(String(item.cantico_id))
           : null;
@@ -228,6 +325,8 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
       }),
     });
   }
+
+  secoes.push(...buildExtraSectionsFromFallbackRows(itens, culto['Culto nr.']));
 
   return {
     boletimSecoes: secoes,

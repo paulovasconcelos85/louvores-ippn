@@ -143,6 +143,31 @@ function parseAgendaBoletimItem(conteudo: string) {
   };
 }
 
+function parseAvisoBoletimItem(conteudo: string) {
+  const texto = conteudo.trim();
+  if (!texto) return null;
+
+  const separadorDuplo = texto.indexOf('\n\n');
+  if (separadorDuplo >= 0) {
+    const titulo = texto.slice(0, separadorDuplo).trim();
+    const corpo = texto.slice(separadorDuplo + 2).trim();
+
+    if (!titulo || !corpo) return null;
+
+    return { titulo, corpo };
+  }
+
+  const [titulo, ...restante] = texto.split('\n');
+  const corpo = restante.join('\n').trim();
+
+  if (!titulo.trim() || !corpo) return null;
+
+  return {
+    titulo: titulo.trim(),
+    corpo,
+  };
+}
+
 function formatarDataAgenda(valor: string) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return valor;
@@ -271,8 +296,13 @@ export default function Home() {
       texto += `*${index + 1}. ${secao.titulo}*\n`;
       for (const item of secao.itens) {
         const agenda = secao.tipo === 'agenda' ? parseAgendaBoletimItem(item.conteudo) : null;
+        const aviso = secao.tipo === 'avisos' ? parseAvisoBoletimItem(item.conteudo) : null;
         if (agenda) {
           texto += `- ${formatarDataAgenda(agenda.data)}${agenda.temHora ? ` às ${agenda.hora}` : ''} — ${agenda.descricao}\n`;
+          continue;
+        }
+        if (aviso) {
+          texto += `${item.destaque ? '• ' : '- '}${aviso.titulo}\n${aviso.corpo}\n`;
           continue;
         }
 
@@ -429,6 +459,7 @@ export default function Home() {
   const isLiturgiaSection = (secao: BoletimSecao) => secao.tipo === 'liturgia';
   const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
   const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
+  const isAvisosSection = (secao: BoletimSecao) => secao.tipo === 'avisos';
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
 
@@ -509,6 +540,21 @@ export default function Home() {
               {agenda.temHora ? ` · ${agenda.hora}` : ''}
             </p>
             <p className="mt-2 text-[15px] leading-7 text-slate-700 sm:text-base">{agenda.descricao}</p>
+          </div>
+        );
+      }
+    }
+
+    if (isAvisosSection(secao)) {
+      const aviso = parseAvisoBoletimItem(conteudo);
+
+      if (aviso) {
+        return (
+          <div className="space-y-2">
+            <p className="text-[15px] font-semibold leading-6 text-slate-900 sm:text-base">
+              {aviso.titulo}
+            </p>
+            <div>{renderBlocoTexto(aviso.corpo)}</div>
           </div>
         );
       }
@@ -674,7 +720,7 @@ export default function Home() {
               {boletimSecoes.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] py-24">
                   <Music className="w-10 h-10 text-slate-300" />
-                  <p className="text-slate-400">Nenhuma secao de boletim publicada para esta igreja.</p>
+                  <p className="text-slate-400">Nenhuma seção de boletim publicada para esta igreja.</p>
                 </div>
               ) : (
                 boletimSecoes.map((secao, index) => (
@@ -684,7 +730,7 @@ export default function Home() {
                   >
                     <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
                       <p className="text-[#365c4d] text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
-                        Secao {index + 1}
+                        Seção {index + 1}
                       </p>
                       <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold tracking-tight text-slate-900">
                         {getTituloSecao(secao)}
@@ -692,7 +738,7 @@ export default function Home() {
                     </div>
 
                     {secao.itens.length === 0 ? (
-                      <p className="text-sm text-slate-400">Sem itens publicados nesta secao.</p>
+                      <p className="text-sm text-slate-400">Sem itens publicados nesta seção.</p>
                     ) : (
                       <div
                         className={`rounded-[28px] border px-5 py-4 sm:px-6 sm:py-5 ${
