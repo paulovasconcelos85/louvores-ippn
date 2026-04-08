@@ -1,7 +1,91 @@
 import { createClient } from '@supabase/supabase-js';
+import https from 'node:https';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
+
+function shouldAllowInsecureTls() {
+  return process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0';
+}
+
+function isTlsCertificateChainError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /self-signed certificate in certificate chain/i.test(error.message)
+  );
+}
+
+async function nodeHttpsFetchOnce(input: string | URL | Request, init?: RequestInit, rejectUnauthorized = true) {
+  const requestUrl =
+    input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input);
+  const requestMethod = init?.method || (input instanceof Request ? input.method : 'GET');
+  const requestHeaders = new Headers(input instanceof Request ? input.headers : init?.headers);
+  const requestBody =
+    init?.body ||
+    (input instanceof Request && input.method !== 'GET' && input.method !== 'HEAD' ? await input.text() : undefined);
+
+  return new Promise<Response>((resolve, reject) => {
+    const request = https.request(
+      requestUrl,
+      {
+        method: requestMethod,
+        headers: Object.fromEntries(requestHeaders.entries()),
+        rejectUnauthorized,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+
+        response.on('data', (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+
+        response.on('end', () => {
+          const body = Buffer.concat(chunks);
+          const headers = new Headers();
+
+          Object.entries(response.headers).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              value.forEach((headerValue) => headers.append(key, headerValue));
+              return;
+            }
+
+            if (typeof value === 'string') {
+              headers.set(key, value);
+            }
+          });
+
+          resolve(
+            new Response(body, {
+              status: response.statusCode || 500,
+              statusText: response.statusMessage || '',
+              headers,
+            })
+          );
+        });
+      }
+    );
+
+    request.on('error', reject);
+
+    if (requestBody) {
+      request.write(requestBody);
+    }
+
+    request.end();
+  });
+}
+
+async function resilientServerFetch(input: string | URL | Request, init?: RequestInit) {
+  try {
+    return await nodeHttpsFetchOnce(input, init, !shouldAllowInsecureTls());
+  } catch (error) {
+    if (!shouldAllowInsecureTls() && isTlsCertificateChainError(error)) {
+      return nodeHttpsFetchOnce(input, init, false);
+    }
+
+    throw error;
+  }
+}
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +94,9 @@ const supabaseAdmin = createClient(
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: resilientServerFetch,
     },
   }
 );
@@ -355,7 +442,9 @@ function buildLegacyLiturgiaConteudo(
 }
 
 export async function GET(request: NextRequest) {
+  let etapa = 'iniciando';
   try {
+    etapa = 'auth';
     const user = await getAuthenticatedUserFromServerCookies(request);
     const includeInternal = Boolean(user?.id);
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
@@ -367,6 +456,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    etapa = 'buscar-igreja';
     const { data: igrejaRaw, error: igrejaError } = await supabaseAdmin
       .from('igrejas')
       .select('*')
@@ -384,6 +474,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    etapa = 'buscar-secoes';
     const { data: secoesRaw, error: secoesError } = await supabaseAdmin
       .from('boletim_secoes')
       .select('*')
@@ -397,6 +488,7 @@ export async function GET(request: NextRequest) {
     const secoes = (secoesRaw || []) as BoletimSecaoRow[];
     const secaoIds = secoes.map((secao) => secao.id);
 
+    etapa = 'buscar-detalhes-relacionados';
     const [
       { data: itensRaw, error: itensError },
       { data: cultosRaw, error: cultosError },
@@ -458,12 +550,14 @@ export async function GET(request: NextRequest) {
     const secoesComConteudo = boletimSecoes.filter((secao) => secao.itens.length > 0);
 
     if (boletimSecoes.length === 0 || secoesComConteudo.length === 0) {
+      etapa = 'fallback-legado';
       const fallback = await buildLegacyBoletimFallback(igrejaId, false);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
     }
 
     if (includeInternal && boletimSecoes.some((secao) => secao.id.startsWith('legacy-'))) {
+      etapa = 'fallback-legado-interno';
       const { data: cultoRaw } = await supabaseAdmin
         .from('Louvores IPPN')
         .select('"Culto nr."')
@@ -512,6 +606,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    etapa = 'resposta';
     return NextResponse.json({
       igreja,
       igrejaDetalhes,
@@ -522,9 +617,9 @@ export async function GET(request: NextRequest) {
       message,
     });
   } catch (error: any) {
-    console.error('Erro ao carregar boletim da home:', error);
+    console.error('Erro ao carregar boletim da home:', { etapa, error });
     return NextResponse.json(
-      { error: error.message || 'Erro ao carregar boletim.' },
+      { error: error.message || 'Erro ao carregar boletim.', etapa },
       { status: 500 }
     );
   }

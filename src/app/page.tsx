@@ -100,6 +100,20 @@ interface CanticoModalData {
   audio_url: string | null;
 }
 
+interface LiturgiaGrupo {
+  id: string;
+  titulo: string;
+  corpos: string[];
+}
+
+interface LiturgiaCard {
+  id: string;
+  nome: string | null;
+  grupos: LiturgiaGrupo[];
+}
+
+const LITURGIA_META_TIPO = '__liturgia__:nome';
+
 function formatarDataExtenso(valor: string) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -210,6 +224,64 @@ function extrairPartesLiturgicas(conteudo: string) {
   };
 }
 
+function extrairNomeCardLiturgia(conteudo: string) {
+  const { titulo, corpo } = extrairPartesLiturgicas(conteudo);
+  if (titulo !== LITURGIA_META_TIPO) return null;
+  return corpo || null;
+}
+
+function getTituloCardLiturgia(nome: string | null) {
+  return nome ? `Liturgia - ${nome}` : 'Liturgia';
+}
+
+function agruparCardsLiturgia(itens: BoletimItem[]) {
+  const cards: LiturgiaCard[] = [];
+  let cardAtual: LiturgiaCard | null = null;
+
+  for (const item of itens) {
+    const nomeLiturgia = extrairNomeCardLiturgia(item.conteudo);
+
+    if (nomeLiturgia !== null) {
+      cardAtual = {
+        id: `liturgia-${item.id}`,
+        nome: nomeLiturgia,
+        grupos: [],
+      };
+      cards.push(cardAtual);
+      continue;
+    }
+
+    const partes = extrairPartesLiturgicas(item.conteudo);
+    const titulo = partes.titulo || 'Item liturgico';
+
+    if (!cardAtual) {
+      cardAtual = {
+        id: `liturgia-default-${item.id}`,
+        nome: null,
+        grupos: [],
+      };
+      cards.push(cardAtual);
+    }
+
+    const ultimoGrupo = cardAtual.grupos[cardAtual.grupos.length - 1];
+
+    if (ultimoGrupo && ultimoGrupo.titulo === titulo) {
+      if (partes.corpo) {
+        ultimoGrupo.corpos.push(partes.corpo);
+      }
+      continue;
+    }
+
+    cardAtual.grupos.push({
+      id: item.id,
+      titulo,
+      corpos: partes.corpo ? [partes.corpo] : [],
+    });
+  }
+
+  return cards.filter((card) => card.grupos.length > 0);
+}
+
 export default function Home() {
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -294,6 +366,30 @@ export default function Home() {
 
     for (const [index, secao] of boletimSecoes.entries()) {
       texto += `*${index + 1}. ${secao.titulo}*\n`;
+
+      if (secao.tipo === 'liturgia') {
+        const cards = agruparCardsLiturgia(secao.itens);
+
+        for (const card of cards) {
+          texto += `${getTituloCardLiturgia(card.nome)}\n`;
+
+          for (const grupo of card.grupos) {
+            texto += `${grupo.titulo}\n`;
+
+            for (const corpo of grupo.corpos) {
+              if (corpo) {
+                texto += `${corpo}\n`;
+              }
+            }
+
+            texto += '\n';
+          }
+        }
+
+        texto += '\n';
+        continue;
+      }
+
       for (const item of secao.itens) {
         const agenda = secao.tipo === 'agenda' ? parseAgendaBoletimItem(item.conteudo) : null;
         const aviso = secao.tipo === 'avisos' ? parseAvisoBoletimItem(item.conteudo) : null;
@@ -581,32 +677,6 @@ export default function Home() {
     return secao.titulo.match(/(\d{4}-\d{2}-\d{2})/) ? 'Liturgia' : secao.titulo;
   };
 
-  const agruparItensLiturgicos = (itens: BoletimItem[]) => {
-    const grupos: Array<{
-      id: string;
-      titulo: string;
-      corpos: string[];
-    }> = [];
-
-    for (const item of itens) {
-      const partes = extrairPartesLiturgicas(item.conteudo);
-      const ultimoGrupo = grupos[grupos.length - 1];
-
-      if (ultimoGrupo && ultimoGrupo.titulo === partes.titulo) {
-        ultimoGrupo.corpos.push(partes.corpo);
-        continue;
-      }
-
-      grupos.push({
-        id: item.id,
-        titulo: partes.titulo,
-        corpos: [partes.corpo],
-      });
-    }
-
-    return grupos;
-  };
-
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
       <header className="bg-[#17352b] text-white">
@@ -739,17 +809,21 @@ export default function Home() {
 
                     {secao.itens.length === 0 ? (
                       <p className="text-sm text-slate-400">Sem itens publicados nesta seção.</p>
-                    ) : (
-                      <div
-                        className={`rounded-[28px] border px-5 py-4 sm:px-6 sm:py-5 ${
-                          isPastoralSection(secao)
-                            ? 'border-[#d9d2c1] bg-[linear-gradient(180deg,#fffaf0_0%,#f8f0dc_100%)] shadow-[0_10px_30px_rgba(95,74,35,0.08)]'
-                            : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
-                        }`}
-                      >
-                        <div className="space-y-0">
-                          {(isLiturgiaSection(secao)
-                            ? agruparItensLiturgicos(secao.itens).map((grupo, itemIndex) => (
+                    ) : isLiturgiaSection(secao) ? (
+                      <div className="space-y-4">
+                        {agruparCardsLiturgia(secao.itens).map((card) => (
+                          <div
+                            key={card.id}
+                            className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] px-5 py-4 shadow-[0_10px_32px_rgba(77,58,32,0.05)] sm:px-6 sm:py-5"
+                          >
+                            <div className="space-y-0">
+                              <div className="border-b border-[#ece5d9] pb-4">
+                                <p className="text-lg font-semibold text-slate-900 sm:text-xl">
+                                  {getTituloCardLiturgia(card.nome)}
+                                </p>
+                              </div>
+
+                              {card.grupos.map((grupo, itemIndex) => (
                                 <div
                                   key={grupo.id}
                                   className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
@@ -769,23 +843,36 @@ export default function Home() {
                                     </div>
                                   </div>
                                 </div>
-                              ))
-                            : secao.itens.map((item, itemIndex) => (
-                                <div
-                                  key={item.id}
-                                  className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
-                                >
-                                  {isImageSection(secao) ? (
-                                    <img
-                                      src={item.conteudo}
-                                      alt={secao.titulo}
-                                      className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
-                                    />
-                                  ) : (
-                                    renderItemConteudo(secao, item.conteudo)
-                                  )}
-                                </div>
-                              )))}
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        className={`rounded-[28px] border px-5 py-4 sm:px-6 sm:py-5 ${
+                          isPastoralSection(secao)
+                            ? 'border-[#d9d2c1] bg-[linear-gradient(180deg,#fffaf0_0%,#f8f0dc_100%)] shadow-[0_10px_30px_rgba(95,74,35,0.08)]'
+                            : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
+                        }`}
+                      >
+                        <div className="space-y-0">
+                          {secao.itens.map((item, itemIndex) => (
+                            <div
+                              key={item.id}
+                              className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                            >
+                              {isImageSection(secao) ? (
+                                <img
+                                  src={item.conteudo}
+                                  alt={secao.titulo}
+                                  className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
+                                />
+                              ) : (
+                                renderItemConteudo(secao, item.conteudo)
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
