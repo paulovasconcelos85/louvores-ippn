@@ -41,7 +41,134 @@ interface Cantico {
   nome: string;
   tipo?: string;
   numero?: string | null;
+  letra?: string | null;
+  igreja_id?: string | null;
   ultima_vez?: string | null;
+}
+
+function mapHinarioNovoCanticoToCantico(
+  item: {
+    id: string | number;
+    numero: string | null;
+    titulo: string | null;
+    letra: string | null;
+  }
+): Cantico {
+  return {
+    id: String(item.id),
+    numero: item.numero || null,
+    nome: item.titulo?.trim() || 'Hino sem título',
+    tipo: 'hinario',
+    letra: item.letra,
+  };
+}
+
+function normalizeCanticoSearchTerm(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getCanticoDisplayLabel(cantico: Cantico | null | undefined) {
+  if (!cantico) return '';
+  return cantico.tipo === 'hinario' && cantico.numero
+    ? `Hino ${cantico.numero} · ${cantico.nome}`
+    : cantico.nome;
+}
+
+function getCanticoInlineReference(cantico: Cantico) {
+  if (cantico.tipo === 'hinario' && cantico.numero) {
+    return `Hino ${cantico.nome} (${cantico.numero})`;
+  }
+
+  return `Cântico: ${cantico.nome}`;
+}
+
+function getRepertorioTextos(canticos: Cantico[]) {
+  const temHinos = canticos.some((cantico) => cantico.tipo === 'hinario');
+  const temCanticos = canticos.some((cantico) => cantico.tipo !== 'hinario');
+
+  if (temHinos && !temCanticos) {
+    return {
+      rotuloPlural: 'Hinos',
+      rotuloSingular: 'hino',
+      placeholderBusca: 'Buscar hino...',
+      tituloBuscaNome: 'Buscar hino por nome',
+      ajudaPublico:
+        'Escreva aqui somente o que pode aparecer para a igreja no boletim ou na publicação. Digite <strong>@</strong> para buscar por nome ou <strong>#</strong> para buscar por número de hino. Se não precisar mostrar nada neste item, deixe em branco.',
+      placeholderPublico:
+        'Ex.: Tema da mensagem, leitura bíblica, chamada para a igreja... Use @ ou # para inserir um hino',
+      descricaoSecaoComCadastro:
+        'Adicione aqui os hinos ligados a esta etapa. Você pode buscar um já disponível no hinário e, se precisar, informar o tom.',
+      descricaoSecaoSemCadastro:
+        'Adicione aqui os hinos ligados a esta etapa. Você pode buscar um já disponível no hinário e, se precisar, informar o tom.',
+      acaoAdicionar: 'Adicionar hino',
+      aceitaBuscaPorNumero: true,
+    };
+  }
+
+  if (!temHinos && temCanticos) {
+    return {
+      rotuloPlural: 'Cânticos',
+      rotuloSingular: 'cântico',
+      placeholderBusca: 'Buscar cântico...',
+      tituloBuscaNome: 'Buscar cântico por nome',
+      ajudaPublico:
+        'Escreva aqui somente o que pode aparecer para a igreja no boletim ou na publicação. Digite <strong>@</strong> para buscar por nome do cântico. Se não precisar mostrar nada neste item, deixe em branco.',
+      placeholderPublico:
+        'Ex.: Tema da mensagem, leitura bíblica, chamada para a igreja... Use @ para inserir um cântico',
+      descricaoSecaoComCadastro:
+        'Adicione aqui os cânticos ligados a esta etapa. Você pode buscar um já cadastrado, criar um novo e, se precisar, informar o tom.',
+      descricaoSecaoSemCadastro:
+        'Adicione aqui os cânticos ligados a esta etapa. Você pode buscar um já cadastrado e, se precisar, informar o tom.',
+      acaoAdicionar: 'Adicionar cântico',
+      aceitaBuscaPorNumero: false,
+    };
+  }
+
+  return {
+    rotuloPlural: 'Repertório',
+    rotuloSingular: 'item do repertório',
+    placeholderBusca: 'Buscar item do repertório...',
+    tituloBuscaNome: 'Buscar hino ou cântico por nome',
+    ajudaPublico:
+      'Escreva aqui somente o que pode aparecer para a igreja no boletim ou na publicação. Digite <strong>@</strong> para buscar por nome ou <strong>#</strong> para buscar por número de hino. Se não precisar mostrar nada neste item, deixe em branco.',
+    placeholderPublico:
+      'Ex.: Tema da mensagem, leitura bíblica, chamada para a igreja... Use @ ou # para inserir um hino/cântico',
+    descricaoSecaoComCadastro:
+      'Adicione aqui os itens musicais ligados a esta etapa. Você pode buscar um já cadastrado, criar um novo e, se precisar, informar o tom.',
+    descricaoSecaoSemCadastro:
+      'Adicione aqui os itens musicais ligados a esta etapa. Você pode buscar um já cadastrado e, se precisar, informar o tom.',
+    acaoAdicionar: 'Adicionar item musical',
+    aceitaBuscaPorNumero: true,
+  };
+}
+
+function matchesCanticoQuery(cantico: Cantico, query: string) {
+  const termo = normalizeCanticoSearchTerm(query);
+  if (!termo) return true;
+
+  const termoCompacto = termo.replace(/[^a-z0-9]/g, '');
+  const numero = cantico.numero?.trim() || '';
+  const numeroSemZeros = numero.replace(/^0+/, '') || numero;
+  const candidatos = [
+    cantico.nome,
+    getCanticoDisplayLabel(cantico),
+    numero,
+    numeroSemZeros,
+    numero ? `hino ${numero}` : '',
+    numeroSemZeros ? `hino ${numeroSemZeros}` : '',
+  ]
+    .filter(Boolean)
+    .map((valor) => normalizeCanticoSearchTerm(valor));
+
+  return candidatos.some((valor) => {
+    if (valor.includes(termo)) return true;
+    return valor.replace(/[^a-z0-9]/g, '').includes(termoCompacto);
+  });
 }
 
 interface CanticoNoItem {
@@ -104,6 +231,8 @@ interface LiturgiaChurchConfig {
   tiposLiturgicos: string[];
   modelosLiturgia: ModeloLiturgiaConfig[];
   pastorPadrao: string | null;
+  modoRepertorio: string | null;
+  permiteCadastroCanticos: boolean;
 }
 
 interface Culto {
@@ -188,6 +317,31 @@ function extractTiposLiturgicos(value: unknown): string[] {
       return typeof candidate === 'string' ? candidate.trim() : '';
     })
     .filter(Boolean);
+}
+
+function normalizeModoRepertorio(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function filtrarCanticosPorConfiguracao(
+  canticos: Cantico[],
+  configuracao: Pick<LiturgiaChurchConfig, 'modoRepertorio' | 'permiteCadastroCanticos'> | null
+) {
+  const modoRepertorio = normalizeModoRepertorio(configuracao?.modoRepertorio);
+  let lista = [...canticos];
+
+  if (modoRepertorio === 'hinario') {
+    lista = lista.filter(
+      (cantico) =>
+        cantico.tipo === 'hinario' &&
+        typeof cantico.letra === 'string' &&
+        cantico.letra.trim().length > 0
+    );
+  } else if (modoRepertorio === 'livre' || modoRepertorio === 'canticos') {
+    lista = lista.filter((cantico) => cantico.tipo !== 'hinario');
+  }
+
+  return lista;
 }
 
 function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgiaConfig[] {
@@ -403,7 +557,7 @@ function getCultoBoletimReferencia(cultos: Culto[]) {
 
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function createDraftId(prefix: string) {
@@ -622,7 +776,8 @@ async function buscarPastorPadrao(igrejaId: string): Promise<string | null> {
 
 async function carregarLouvorItensComCanticos(
   cultoId: number,
-  canticosFallback: Cantico[] = []
+  canticosFallback: Cantico[] = [],
+  igrejaId?: string | null
 ): Promise<LouvorItemRowComCantico[]> {
   const { data: itens, error: itensError } = await supabase
     .from('louvor_itens')
@@ -642,19 +797,37 @@ async function carregarLouvorItensComCanticos(
     )
   );
   const canticoIdsUuid = canticoIds.filter(isUuid);
+  const canticoIdsHinario = canticoIds
+    .filter((value) => !isUuid(value) && /^\d+$/.test(value))
+    .map((value) => Number(value));
 
-  const [canticosLegadosResult, canticosUnificadosResult] =
-    canticoIdsUuid.length > 0
+  const [canticosLegadosResult, hinarioNovoCanticoResult, canticosUnificadosResult] =
+    canticoIds.length > 0
       ? await Promise.all([
-          supabase.from('canticos').select('id, nome').in('id', canticoIdsUuid),
-          supabase.from('canticos_unificados').select('id, nome').in('id', canticoIdsUuid),
+          canticoIdsUuid.length > 0
+            ? (() => {
+                let query = supabase.from('canticos').select('id, nome').in('id', canticoIdsUuid);
+
+                if (igrejaId) {
+                  query = query.eq('igreja_id', igrejaId);
+                }
+
+                return query;
+              })()
+            : Promise.resolve({ data: [], error: null }),
+          canticoIdsHinario.length > 0
+            ? supabase.from('hinario_novo_cantico').select('id, titulo').in('id', canticoIdsHinario)
+            : Promise.resolve({ data: [], error: null }),
+          supabase.from('canticos_unificados').select('id, nome').in('id', canticoIds),
         ])
       : [
+          { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
         ];
 
   if (canticosLegadosResult.error) throw canticosLegadosResult.error;
+  if (hinarioNovoCanticoResult.error) throw hinarioNovoCanticoResult.error;
   if (canticosUnificadosResult.error) throw canticosUnificadosResult.error;
 
   const canticosPorId = new Map<string, string | null>();
@@ -667,6 +840,13 @@ async function carregarLouvorItensComCanticos(
     const canticoId = String(cantico.id);
     if (!canticosPorId.has(canticoId) || !canticosPorId.get(canticoId)) {
       canticosPorId.set(canticoId, cantico.nome);
+    }
+  });
+
+  ((hinarioNovoCanticoResult.data || []) as Array<{ id: string | number; titulo: string | null }>).forEach((cantico) => {
+    const canticoId = String(cantico.id);
+    if (!canticosPorId.has(canticoId) || !canticosPorId.get(canticoId)) {
+      canticosPorId.set(canticoId, cantico.titulo);
     }
   });
 
@@ -794,19 +974,18 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
   value: Cantico | null;
   onChange: (c: Cantico | null) => void;
   canticos: Cantico[];
-  onCreate: (nome: string) => Promise<Cantico>;
+  onCreate?: (nome: string) => Promise<Cantico>;
   disabled?: boolean;
 }) {
-  const [query, setQuery] = useState(value?.nome || '');
+  const textosRepertorio = getRepertorioTextos(canticos);
+  const [query, setQuery] = useState(getCanticoDisplayLabel(value));
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setQuery(value?.nome || ''); }, [value]);
+  useEffect(() => { setQuery(getCanticoDisplayLabel(value)); }, [value]);
 
-  const filtrados = canticos.filter(c =>
-    c.nome.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 8);
+  const filtrados = canticos.filter((c) => matchesCanticoQuery(c, query)).slice(0, 8);
 
   const abrirDropdown = () => {
     if (!inputRef.current) return;
@@ -827,34 +1006,37 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
     setOpen(true);
   };
 
-  const dropdown = open && query && !disabled ? (
+  const dropdown = open && !disabled ? (
     <div
       style={dropdownStyle}
       className="bg-white border border-slate-200 rounded-2xl max-h-64 overflow-auto shadow-2xl"
     >
       {filtrados.map(c => {
         const st = getStatusMusica(c.ultima_vez);
-        const titulo =
-          c.tipo === 'hinario' && c.numero
-            ? `Hino ${c.numero} · ${c.nome}`
-            : c.nome;
+        const titulo = getCanticoDisplayLabel(c);
         return (
           <div
             key={c.id}
             className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 active:bg-slate-100"
             onMouseDown={e => e.preventDefault()}
-            onClick={() => { onChange(c); setQuery(c.nome); setOpen(false); }}
+            onClick={() => { onChange(c); setQuery(getCanticoDisplayLabel(c)); setOpen(false); }}
           >
             <div className="text-base font-semibold text-slate-800">{titulo}</div>
             <div className={`text-xs font-bold mt-0.5 ${st.cor}`}>{st.label} · {st.dataFormatada}</div>
           </div>
         );
       })}
-      {!canticos.some(c => c.nome.toLowerCase() === query.toLowerCase()) && (
+      {onCreate && query.trim() && !canticos.some(c => c.nome.toLowerCase() === query.toLowerCase()) && (
         <div
           className="px-4 py-3 text-emerald-700 font-bold text-base hover:bg-emerald-50 cursor-pointer border-t border-emerald-100 active:bg-emerald-100"
           onMouseDown={e => e.preventDefault()}
-          onClick={async () => { const n = await onCreate(query); onChange(n); setQuery(n.nome); setOpen(false); }}
+          onClick={async () => {
+            if (!onCreate) return;
+            const n = await onCreate(query);
+            onChange(n);
+            setQuery(n.nome);
+            setOpen(false);
+          }}
         >
           + Cadastrar &ldquo;{query}&rdquo;
         </div>
@@ -871,7 +1053,7 @@ function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: 
         onChange={e => { setQuery(e.target.value); abrirDropdown(); if (!e.target.value) onChange(null); }}
         onFocus={abrirDropdown}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Buscar cântico..."
+        placeholder={textosRepertorio.placeholderBusca}
         className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-emerald-500 bg-emerald-50/50 disabled:bg-slate-50 disabled:cursor-default"
       />
       {typeof window !== 'undefined' && createPortal(dropdown, document.body)}
@@ -916,6 +1098,226 @@ function AutoResizeTextarea({
   );
 }
 
+function PublicCanticoTextarea({
+  value,
+  onChange,
+  canticos,
+  disabled,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  canticos: Cantico[];
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textosRepertorio = getRepertorioTextos(canticos);
+  const [triggerState, setTriggerState] = useState<{
+    trigger: '@' | '#';
+    query: string;
+    start: number;
+    end: number;
+  } | null>(null);
+  const [selecionadoIndex, setSelecionadoIndex] = useState(0);
+
+  const ajustarAltura = () => {
+    const element = textareaRef.current;
+    if (!element) return;
+
+    element.style.height = '0px';
+    element.style.height = `${element.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    ajustarAltura();
+  }, [value]);
+
+  const analisarTrigger = (texto: string, cursor: number) => {
+    const cursorSeguro = Math.max(0, Math.min(cursor, texto.length));
+    const trechoAnterior = texto.slice(0, cursorSeguro);
+    const inicioLinha = trechoAnterior.lastIndexOf('\n') + 1;
+    const linhaAtual = trechoAnterior.slice(inicioLinha);
+    const match = linhaAtual.match(/(?:^|\s)([@#])([^\s@#]*)$/);
+
+    if (!match) {
+      setTriggerState(null);
+      return;
+    }
+
+    const trigger = match[1] as '@' | '#';
+    const query = match[2] || '';
+    if (trigger === '#' && !textosRepertorio.aceitaBuscaPorNumero) {
+      setTriggerState(null);
+      return;
+    }
+    const token = `${trigger}${query}`;
+    const tokenIndex = linhaAtual.lastIndexOf(token);
+
+    if (tokenIndex < 0) {
+      setTriggerState(null);
+      return;
+    }
+
+    let end = cursorSeguro;
+
+    while (end < texto.length && !/\s/.test(texto[end])) {
+      end += 1;
+    }
+
+    setTriggerState({
+      trigger,
+      query,
+      start: inicioLinha + tokenIndex,
+      end,
+    });
+    setSelecionadoIndex(0);
+  };
+
+  const sugestoes = useMemo(() => {
+    if (!triggerState) return [];
+
+    if (triggerState.trigger === '#') {
+      const termo = triggerState.query.trim();
+      const termoCompacto = termo.replace(/\D/g, '');
+
+      return canticos
+        .filter((cantico) => cantico.tipo === 'hinario' && cantico.numero)
+        .filter((cantico) => {
+          if (!termoCompacto) return true;
+
+          const numero = cantico.numero?.trim() || '';
+          const numeroSemZeros = numero.replace(/^0+/, '') || numero;
+
+          return (
+            numero.includes(termoCompacto) ||
+            numeroSemZeros.includes(termoCompacto)
+          );
+        })
+        .slice(0, 8);
+    }
+
+    return canticos.filter((cantico) => matchesCanticoQuery(cantico, triggerState.query)).slice(0, 8);
+  }, [canticos, triggerState]);
+
+  const aplicarSugestao = (cantico: Cantico) => {
+    if (!triggerState) return;
+
+    const referencia = getCanticoInlineReference(cantico);
+    const proximoValor = `${value.slice(0, triggerState.start)}${referencia}${value.slice(triggerState.end)}`;
+    onChange(proximoValor);
+    setTriggerState(null);
+    setSelecionadoIndex(0);
+
+    requestAnimationFrame(() => {
+      const element = textareaRef.current;
+      if (!element) return;
+      const novaPosicao = triggerState.start + referencia.length;
+      element.focus();
+      element.setSelectionRange(novaPosicao, novaPosicao);
+      ajustarAltura();
+    });
+  };
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={textareaRef}
+        value={value}
+        disabled={disabled}
+        placeholder={placeholder}
+        rows={1}
+        style={{ overflow: 'hidden' }}
+        className={className}
+        onChange={(event) => {
+          const proximoValor = event.target.value;
+          onChange(proximoValor);
+          ajustarAltura();
+          analisarTrigger(proximoValor, event.target.selectionStart ?? proximoValor.length);
+        }}
+        onClick={(event) => {
+          const element = event.currentTarget;
+          analisarTrigger(element.value, element.selectionStart ?? element.value.length);
+        }}
+        onKeyUp={(event) => {
+          const element = event.currentTarget;
+          analisarTrigger(element.value, element.selectionStart ?? element.value.length);
+        }}
+        onBlur={() => {
+          setTimeout(() => setTriggerState(null), 120);
+        }}
+        onKeyDown={(event) => {
+          if (!triggerState || sugestoes.length === 0) return;
+
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSelecionadoIndex((atual) => (atual + 1) % sugestoes.length);
+            return;
+          }
+
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSelecionadoIndex((atual) => (atual - 1 + sugestoes.length) % sugestoes.length);
+            return;
+          }
+
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            aplicarSugestao(sugestoes[selecionadoIndex] || sugestoes[0]);
+            return;
+          }
+
+          if (event.key === 'Escape') {
+            setTriggerState(null);
+          }
+        }}
+      />
+
+      {triggerState && sugestoes.length > 0 && !disabled ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-xl">
+          <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">
+            {triggerState.trigger === '#'
+              ? 'Buscar hino por número'
+              : textosRepertorio.tituloBuscaNome}
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {sugestoes.map((cantico, index) => {
+              const ativo = index === selecionadoIndex;
+              return (
+                <button
+                  key={`${cantico.id}-${index}`}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => aplicarSugestao(cantico)}
+                  className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors ${
+                    ativo ? 'bg-emerald-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {cantico.nome}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {getCanticoInlineReference(cantico)}
+                    </p>
+                  </div>
+                  {cantico.numero ? (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                      {cantico.numero}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // --- LINHA DE CÂNTICO ---
 function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreate, canEditarMusica }: any) {
   const cantico =
@@ -957,6 +1359,7 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
   const tiposDisponiveis = item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO;
   const tipoInputId = `tipo-liturgico-${index}`;
   const tituloItem = item.tipo?.trim() || `Item ${index + 1}`;
+  const textosRepertorio = getRepertorioTextos(canticos);
 
   const adicionarCantico = () => {
     onUpdate({ ...item, canticos_lista: [...item.canticos_lista, { cantico_id: null, tom: null }] });
@@ -1056,17 +1459,18 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
 
           {/* Campo público */}
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
-            <label className="flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
-              <span>📢</span> Público
-            </label>
-            <p className="mb-3 text-sm leading-6 text-emerald-900/70">
-              Escreva aqui somente o que pode aparecer para a igreja no boletim ou na publicação. Se não precisar mostrar nada neste item, deixe em branco.
-            </p>
-            <AutoResizeTextarea
+              <label className="flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">
+                <span>📢</span> Público
+              </label>
+              <p className="mb-3 text-sm leading-6 text-emerald-900/70">
+                <span dangerouslySetInnerHTML={{ __html: textosRepertorio.ajudaPublico }} />
+              </p>
+            <PublicCanticoTextarea
               value={item.conteudo_publico || ''}
-              onChange={e => onUpdate({ ...item, conteudo_publico: e.target.value })}
+              onChange={(conteudo) => onUpdate({ ...item, conteudo_publico: conteudo })}
+              canticos={canticos}
               disabled={!isLideranca}
-              placeholder="Ex.: Tema da mensagem, leitura bíblica, chamada para a igreja..."
+              placeholder={textosRepertorio.placeholderPublico}
               className="w-full rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-base text-slate-700 outline-none transition-colors focus:border-emerald-400 resize-none disabled:cursor-default disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:py-0 placeholder:text-slate-300"
             />
           </div>
@@ -1093,10 +1497,12 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-3">
               <label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-slate-400">
-                <span>🎵</span> Cânticos
+                <span>🎵</span> {textosRepertorio.rotuloPlural}
               </label>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Adicione aqui os cânticos ligados a esta etapa. Você pode buscar um já cadastrado, criar um novo e, se precisar, informar o tom.
+                {onCreate
+                  ? textosRepertorio.descricaoSecaoComCadastro
+                  : textosRepertorio.descricaoSecaoSemCadastro}
               </p>
             </div>
             {item.canticos_lista.map((m: CanticoNoItem, idx: number) => (
@@ -1116,7 +1522,7 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
                 onClick={adicionarCantico}
                 className="mt-3 ml-2 text-emerald-600 hover:text-emerald-800 text-base font-bold flex items-center gap-2 hover:bg-emerald-50 px-3 py-2.5 rounded-xl transition-colors active:bg-emerald-100"
               >
-                <span>🎵</span> Adicionar cântico
+                <span>🎵</span> {textosRepertorio.acaoAdicionar}
               </button>
             )}
           </div>
@@ -2105,6 +2511,8 @@ function EditorLiturgia({
   const isLideranca = podeEditarLiturgiaCompleta;
   const podVerTom = isLideranca || podeEditarLouvor;
   const canEditarMusica = isLideranca || podeEditarLouvor;
+  const podeCadastrarCanticos =
+    canEditarMusica && configuracaoIgreja?.permiteCadastroCanticos !== false;
   const tiposLiturgicos = normalizarTiposLiturgicosDisponiveis(
     resolveTiposLiturgicos(configuracaoIgreja),
     itens
@@ -2177,7 +2585,7 @@ function EditorLiturgia({
   }, [dia, cultosDoMesmoDiaAtual, configuracaoIgreja?.pastorPadrao]);
 
   const carregarItens = async (cultoNr: number) => {
-    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos, getStoredChurchId());
     const itensLiturgia = data.filter(
       (linha) => !isBoletimFallbackTipo(linha.tipo) && !isLiturgiaMetaTipo(linha.tipo)
     );
@@ -2589,30 +2997,38 @@ function EditorLiturgia({
                       item={{ ...it, tiposLiturgicosDisponiveis: tiposLiturgicos }}
                       index={idx}
                       canticos={canticos}
-                      onCreate={async (nome: string) => {
-                        const payload = {
-                          nome: nome.trim(),
-                          letra: '',
-                          referencia: '',
-                          tags: [],
-                          youtube_url: null,
-                          spotify_url: null,
-                        };
+                      onCreate={podeCadastrarCanticos
+                        ? async (nome: string) => {
+                            const igrejaId = getStoredChurchId();
+                            if (!igrejaId) {
+                              throw new Error('Selecione uma igreja antes de cadastrar um cântico.');
+                            }
 
-                        const { data, error }: any = await supabase
-                          .from('canticos')
-                          .insert(payload)
-                          .select('id, nome')
-                          .single();
+                            const payload = {
+                              nome: nome.trim(),
+                              letra: '',
+                              referencia: '',
+                              tags: [],
+                              youtube_url: null,
+                              spotify_url: null,
+                              igreja_id: igrejaId,
+                            };
 
-                        if (error) {
-                          throw new Error(error.message || 'Nao foi possivel criar o cântico.');
-                        }
+                            const { data, error }: any = await supabase
+                              .from('canticos')
+                              .insert(payload)
+                              .select('id, nome, igreja_id')
+                              .single();
 
-                        const novo = { ...data, ultima_vez: null };
-                        setCanticos((prev: Cantico[]) => [...prev, novo]);
-                        return novo;
-                      }}
+                            if (error) {
+                              throw new Error(error.message || 'Nao foi possivel criar o cântico.');
+                            }
+
+                            const novo = { ...data, ultima_vez: null };
+                            setCanticos((prev: Cantico[]) => [...prev, novo]);
+                            return novo;
+                          }
+                        : undefined}
                       onUpdate={(u: LouvorItem) => {
                         const novos = [...itens];
                         novos[idx] = u;
@@ -2791,15 +3207,21 @@ export default function CultosPage() {
       }
 
       const [
-        { data: todosCanticos },
+        { data: canticosBaseRaw },
+        { data: hinarioNovoCanticosRaw },
         { data: cultosData },
         { data: igrejaRaw },
         { data: modelosLiturgiaRaw },
       ] = await Promise.all([
         supabase
-          .from('canticos_unificados')
-          .select('id, nome, tipo, numero')
+          .from('canticos')
+          .select('id, nome, letra, igreja_id')
+          .eq('igreja_id', igrejaId)
           .order('nome'),
+        supabase
+          .from('hinario_novo_cantico')
+          .select('id, numero, titulo, letra')
+          .order('numero'),
         supabase
           .from('Louvores IPPN')
           .select('*')
@@ -2807,7 +3229,7 @@ export default function CultosPage() {
           .order('Dia', { ascending: false }),
         supabase
           .from('igrejas')
-          .select('tipos_liturgicos, modelo_liturgico_padrao')
+          .select('tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
           .eq('id', igrejaId)
           .maybeSingle(),
         supabase
@@ -2818,8 +3240,26 @@ export default function CultosPage() {
       ]);
 
       const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
+      const canticosBaseNormalizados = (
+        (canticosBaseRaw || []) as Array<{ id: string; nome: string; letra: string | null; igreja_id: string | null }>
+      ).map((cantico) => ({
+        ...cantico,
+        tipo: 'cantico' as const,
+        numero: null,
+      }));
+      const hinarioNovoCanticos = (
+        (hinarioNovoCanticosRaw || []) as Array<{
+          id: string | number;
+          numero: string | null;
+          titulo: string | null;
+          letra: string | null;
+        }>
+      ).map(mapHinarioNovoCanticoToCantico);
+      const todosCanticos = [...canticosBaseNormalizados, ...hinarioNovoCanticos].sort((a, b) =>
+        a.nome.localeCompare(b.nome, 'pt-BR')
+      );
 
-      setCanticos((todosCanticos || []).map(c => ({ ...c, ultima_vez: null })));
+      setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
       const cultosBase = (cultosData || []) as Culto[];
       let cultosComNome = cultosBase;
 
@@ -2887,13 +3327,23 @@ export default function CultosPage() {
 
       const modelosMesclados = mergeModelosLiturgia(modelosTabela, modelosFallback);
 
-      setConfiguracaoIgreja({
+      const configuracaoCarregada = {
         tiposLiturgicos: tiposDaIgreja.length > 0 ? tiposDaIgreja : tiposDerivadosDoModelo,
         modelosLiturgia: modelosMesclados,
         pastorPadrao,
-      });
+        modoRepertorio: normalizeModoRepertorio(igrejaRaw?.modo_repertorio) || null,
+        permiteCadastroCanticos: igrejaRaw?.permite_cadastro_canticos ?? true,
+      };
 
-      if (todosCanticos) {
+      setConfiguracaoIgreja(configuracaoCarregada);
+
+      const canticosFiltrados = filtrarCanticosPorConfiguracao(
+        (todosCanticos || []) as Cantico[],
+        configuracaoCarregada
+      );
+      setCanticos(canticosFiltrados.map((cantico) => ({ ...cantico, ultima_vez: null })));
+
+      if (todosCanticos.length > 0) {
         try {
           const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
           const { data: todosCultos } = await supabase
@@ -2910,11 +3360,13 @@ export default function CultosPage() {
                 mapaUltimas.set(it.cantico_id, dia as string);
               }
             });
-            setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: mapaUltimas.get(c.id) || null })));
+            setCanticos(canticosFiltrados.map(c => ({ ...c, ultima_vez: mapaUltimas.get(String(c.id)) || null })));
           }
         } catch (error) {
           console.warn('Falha ao carregar histórico dos cânticos:', error);
         }
+      } else {
+        setCanticos([]);
       }
     } catch (error) {
       console.error('Falha ao carregar a página de cultos:', error);
@@ -2937,7 +3389,7 @@ export default function CultosPage() {
       .maybeSingle();
     if (!cultoValido) return;
 
-    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos, igrejaId);
     if (!data) return;
 
     const agrupados = agruparItensLiturgia(data);
@@ -2975,7 +3427,7 @@ export default function CultosPage() {
       .maybeSingle();
     if (!cultoValido) return;
 
-    const data = await carregarLouvorItensComCanticos(cultoNr, canticos);
+    const data = await carregarLouvorItensComCanticos(cultoNr, canticos, igrejaId);
     if (!data) return;
     const agrupados = agruparItensLiturgia(data);
 

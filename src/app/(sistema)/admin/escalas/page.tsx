@@ -1005,7 +1005,7 @@ export default function EscalasPage() {
                               Criar novo culto automaticamente
                             </p>
                             <p className="text-xs text-slate-600 mt-1">
-                              Um novo registro será criado em "Louvores IPPN" com liturgia padrão pré-preenchida
+                              Um novo culto será criado com liturgia padrão pré-preenchida
                             </p>
                           </div>
                         </label>

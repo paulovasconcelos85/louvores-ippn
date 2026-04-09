@@ -7,11 +7,19 @@ function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || null;
 }
 
-export async function resolvePessoaIdForCurrentUser(user: User | null | undefined) {
+interface ResolvePessoaIdOptions {
+  allowLegacyTemAcesso?: boolean;
+}
+
+export async function resolvePessoaIdForCurrentUser(
+  user: User | null | undefined,
+  options: ResolvePessoaIdOptions = {}
+) {
   if (!user?.id) {
     return null;
   }
 
+  const allowLegacyTemAcesso = options.allowLegacyTemAcesso ?? true;
   const normalizedEmail = normalizeEmail(user.email);
 
   const byAuth = await supabase
@@ -46,6 +54,10 @@ export async function resolvePessoaIdForCurrentUser(user: User | null | undefine
     if (byEmail.data?.pessoa_id) {
       return byEmail.data.pessoa_id as string;
     }
+  }
+
+  if (!allowLegacyTemAcesso) {
+    return null;
   }
 
   const legacyByAuth = await supabase

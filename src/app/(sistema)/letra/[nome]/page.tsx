@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { BookOpen, Music, Youtube } from 'lucide-react';
+import { getStoredChurchId } from '@/lib/church-utils';
 
 interface LetraData {
   tipo: 'hinario' | 'cantico';
@@ -35,20 +35,26 @@ export default function LetraPage() {
     async function fetchDados() {
       setLoading(true);
       const nomeDecodificado = decodeURIComponent(nome as string);
+      try {
+        const params = new URLSearchParams({ nome: nomeDecodificado });
+        const igrejaId = getStoredChurchId();
+        if (igrejaId) {
+          params.set('igreja_id', igrejaId);
+        }
+        const response = await fetch(`/api/canticos-publicos?${params.toString()}`);
+        const payload = await response.json();
 
-      // Buscar da VIEW unificada
-      const { data, error } = await supabase
-        .from('canticos_unificados')
-        .select('tipo, numero, nome, letra, referencia, tags, autor_letra, compositor, youtube_url, spotify_url, audio_url')
-        .eq('nome', nomeDecodificado)
-        .maybeSingle();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Erro ao buscar dados.');
+        }
 
-      if (error) {
+        setDados((payload.cantico || null) as LetraData | null);
+      } catch (error) {
         console.error('Erro ao buscar dados:', error);
+        setDados(null);
+      } finally {
+        setLoading(false);
       }
-
-      setDados(data || null);
-      setLoading(false);
     }
 
     fetchDados();

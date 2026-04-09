@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getStoredChurchId } from '@/lib/church-utils';
 import { 
   ArrowLeft, 
   Plus, 
@@ -31,6 +32,8 @@ interface Cantico {
   id: string;
   numero: string | null;
   nome: string;
+  tipo?: string | null;
+  igreja_id?: string | null;
   letra: string | null;
   tags: string[] | null;
   referencia: string | null;
@@ -46,10 +49,63 @@ interface Cantico {
   holyrics_bpm: number | null;
 }
 
+interface ConfiguracaoRepertorio {
+  modo_repertorio: string | null;
+  permite_cadastro_canticos: boolean;
+}
+
 interface HolyricsParagraph {
   number: number;
   description: string;
   text: string;
+}
+
+function parseHinarioAssuntoTags(assunto: string | null) {
+  if (!assunto) return null;
+
+  const tags = assunto
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return tags.length > 0 ? tags : null;
+}
+
+function mapHinarioNovoCantico(item: {
+  id: string | number;
+  numero: string | null;
+  titulo: string | null;
+  letra: string | null;
+  assunto: string | null;
+  referencia_biblica: string | null;
+  autor_letra: string | null;
+  compositor: string | null;
+  link_audio: string | null;
+  created_at: string | null;
+  holyrics_paragraphs: HolyricsParagraph[] | null;
+  holyrics_artist: string | null;
+  holyrics_key: string | null;
+  holyrics_bpm: number | null;
+}): Cantico {
+  return {
+    id: String(item.id),
+    numero: item.numero || null,
+    nome: item.titulo?.trim() || 'Hino sem título',
+    tipo: 'hinario',
+    letra: item.letra,
+    tags: parseHinarioAssuntoTags(item.assunto),
+    referencia: item.referencia_biblica,
+    autor_letra: item.autor_letra,
+    compositor: item.compositor,
+    audio_url: item.link_audio,
+    youtube_url: null,
+    spotify_url: null,
+    created_at: item.created_at || new Date(0).toISOString(),
+    holyrics_paragraphs: item.holyrics_paragraphs,
+    holyrics_artist: item.holyrics_artist,
+    holyrics_key: item.holyrics_key,
+    holyrics_bpm: item.holyrics_bpm,
+  };
 }
 
 const TAGS_LITURGICAS = [
@@ -80,6 +136,7 @@ export default function CanticosPage() {
   const { loading: permLoading, permissoes } = usePermissions();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [canticos, setCanticos] = useState<Cantico[]>([]);
+  const [configuracaoRepertorio, setConfiguracaoRepertorio] = useState<ConfiguracaoRepertorio | null>(null);
   const [historico, setHistorico] = useState<Map<string, string[]>>(new Map());
   const [busca, setBusca] = useState('');
   const [filtroTags, setFiltroTags] = useState<string[]>([]);
@@ -119,6 +176,19 @@ export default function CanticosPage() {
   const [avisoSimilaridade, setAvisoSimilaridade] = useState<string[]>([]);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const totalLoading = permLoading;
+  const modoRepertorio = configuracaoRepertorio?.modo_repertorio?.trim().toLowerCase() || '';
+  const usaSomenteHinario = modoRepertorio === 'hinario';
+  const podeGerenciarCadastroLocal =
+    permissoes.podeGerenciarCanticos &&
+    configuracaoRepertorio?.permite_cadastro_canticos !== false &&
+    !usaSomenteHinario;
+  const tituloPagina = usaSomenteHinario ? 'Hinário' : 'Cânticos';
+  const placeholderBusca = usaSomenteHinario
+    ? 'Buscar hino por número, título ou letra...'
+    : 'Buscar cântico por nome ou letra...';
+  const mensagemSemResultados = usaSomenteHinario
+    ? 'Nenhum hino encontrado'
+    : 'Nenhum cântico encontrado';
 
   const textoParaSlides = (texto: string): HolyricsParagraph[] => {
     if (!texto.trim()) return [];
@@ -134,7 +204,43 @@ export default function CanticosPage() {
     return slides.map(s => s.text).join('\n\n');
   };
 
+  const fetchConfiguracaoRepertorio = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+
+    if (!igrejaId) {
+      setConfiguracaoRepertorio(null);
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('igrejas')
+      .select('modo_repertorio, permite_cadastro_canticos')
+      .eq('id', igrejaId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao carregar configuração do repertório:', error);
+      setConfiguracaoRepertorio(null);
+      return null;
+    }
+
+    const configuracao = {
+      modo_repertorio: typeof data?.modo_repertorio === 'string' ? data.modo_repertorio : null,
+      permite_cadastro_canticos: data?.permite_cadastro_canticos ?? true,
+    };
+
+    setConfiguracaoRepertorio(configuracao);
+    return configuracao;
+  }, []);
+
   const fetchHistoricoCanticos = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+
+    if (!igrejaId) {
+      setHistorico(new Map());
+      return;
+    }
+
     const { data: louvoresItens, error: erroItens } = await supabase
       .from('louvor_itens')
       .select('cantico_id, culto_id')
@@ -149,7 +255,8 @@ export default function CanticosPage() {
 
     const { data: cultos, error: erroCultos } = await supabase
       .from('Louvores IPPN')
-      .select('*');
+      .select('*')
+      .eq('igreja_id', igrejaId);
 
     if (erroCultos) {
       console.error('Erro ao buscar cultos:', erroCultos);
@@ -193,28 +300,93 @@ export default function CanticosPage() {
     setHistorico(mapa);
   }, []);
 
-  const fetchCanticos = useCallback(async () => {
-    let query = supabase
-      .from('canticos')
-      .select('*');
+  const fetchCanticos = useCallback(async (configuracao?: ConfiguracaoRepertorio | null) => {
+    const configuracaoAtual = configuracao || configuracaoRepertorio;
+    const modoAtual = configuracaoAtual?.modo_repertorio?.trim().toLowerCase() || '';
+    const igrejaId = getStoredChurchId();
+    const usaHinario = modoAtual === 'hinario';
+    if (usaHinario) {
+      const { data, error } = await supabase
+        .from('hinario_novo_cantico')
+        .select('id, numero, titulo, letra, assunto, referencia_biblica, autor_letra, compositor, link_audio, created_at, holyrics_paragraphs, holyrics_artist, holyrics_key, holyrics_bpm')
+        .order('numero', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar hinos:', error);
+        setCanticos([]);
+        return;
+      }
+
+      let lista = ((data || []) as Array<{
+        id: string | number;
+        numero: string | null;
+        titulo: string | null;
+        letra: string | null;
+        assunto: string | null;
+        referencia_biblica: string | null;
+        autor_letra: string | null;
+        compositor: string | null;
+        link_audio: string | null;
+        created_at: string | null;
+        holyrics_paragraphs: HolyricsParagraph[] | null;
+        holyrics_artist: string | null;
+        holyrics_key: string | null;
+        holyrics_bpm: number | null;
+      }>).map(mapHinarioNovoCantico);
+
+      if (busca.trim()) {
+        const termo = busca.trim().toLowerCase();
+        const numeroBusca = /^\d+$/.test(termo) ? termo.padStart(3, '0') : null;
+        lista = lista.filter((cantico) => {
+          const nome = cantico.nome.toLowerCase();
+          const letra = cantico.letra?.toLowerCase() || '';
+          const numero = cantico.numero?.toLowerCase() || '';
+          return Boolean(
+            nome.includes(termo) ||
+              letra.includes(termo) ||
+              numero.includes(termo) ||
+              (numeroBusca && numero === numeroBusca)
+          );
+        });
+      }
+
+      if (filtroTags.length > 0) {
+        lista = lista.filter((cantico) =>
+          filtroTags.some((tag) => cantico.tags?.includes(tag))
+        );
+      }
+
+      setCanticos(lista.filter((cantico) => Boolean(cantico.letra?.trim())));
+      return;
+    }
+
+    if (!igrejaId) {
+      setCanticos([]);
+      return;
+    }
+
+    let query = supabase.from('canticos').select('*');
+    query = query.eq('igreja_id', igrejaId);
 
     if (busca.trim()) {
       const termo = busca.trim();
-      if (/^\d+$/.test(termo)) {
-        query = query.or(`numero.eq.${termo.padStart(3, '0')},nome.ilike.%${termo}%,letra.ilike.%${termo}%`);
-      } else {
-        query = query.or(`nome.ilike.%${termo}%,letra.ilike.%${termo}%`);
-      }
+      query = query.or(`nome.ilike.%${termo}%,letra.ilike.%${termo}%`);
     }
 
     if (filtroTags.length > 0) {
       query = query.contains('tags', filtroTags);
     }
 
-    const { data } = await query.order('nome', { ascending: true });
+    const { data, error } = await query.order('nome', { ascending: true });
 
-    if (data) setCanticos(data);
-  }, [busca, filtroTags]);
+    if (error) {
+      console.error('Erro ao carregar cânticos:', error);
+      setCanticos([]);
+      return;
+    }
+
+    setCanticos((data || []) as Cantico[]);
+  }, [busca, filtroTags, configuracaoRepertorio]);
 
   const calcularSimilaridade = useCallback((str1: string, str2: string): number => {
     const s1 = str1.toLowerCase().trim();
@@ -267,6 +439,16 @@ export default function CanticosPage() {
 
   const salvarConfigHolyrics = async () => {
     if (!modalHolyrics) return;
+    if (!podeGerenciarCadastroLocal) {
+      alert('A edição do repertório está desativada para a igreja ativa.');
+      return;
+    }
+
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de salvar.');
+      return;
+    }
 
     const slides = textoParaSlides(holyForm.letraParaSlides);
 
@@ -278,7 +460,8 @@ export default function CanticosPage() {
         holyrics_key: holyForm.key,
         holyrics_bpm: holyForm.bpm || null
       })
-      .eq('id', modalHolyrics.id);
+      .eq('id', modalHolyrics.id)
+      .eq('igreja_id', igrejaId);
 
     if (!error) {
       await fetchCanticos();
@@ -424,9 +607,28 @@ export default function CanticosPage() {
 
   useEffect(() => {
     if (permLoading || !permissoes.podeGerenciarCanticos) return;
-    fetchCanticos();
-    fetchHistoricoCanticos();
-  }, [permLoading, permissoes.podeGerenciarCanticos, fetchCanticos, fetchHistoricoCanticos]);
+    let active = true;
+
+    const carregar = async () => {
+      const configuracao = await fetchConfiguracaoRepertorio();
+      if (!active) return;
+      await fetchCanticos(configuracao);
+      if (!active) return;
+      await fetchHistoricoCanticos();
+    };
+
+    carregar();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    permLoading,
+    permissoes.podeGerenciarCanticos,
+    fetchCanticos,
+    fetchConfiguracaoRepertorio,
+    fetchHistoricoCanticos,
+  ]);
 
   useEffect(() => {
     if (criandoNovo && form.nome.length > 2) {
@@ -456,6 +658,7 @@ export default function CanticosPage() {
   };
 
   const iniciarEdicao = (c: Cantico) => {
+    if (!podeGerenciarCadastroLocal) return;
     setCriandoNovo(false);
     setExpandido(null);
     setEditando(c.id);
@@ -471,6 +674,7 @@ export default function CanticosPage() {
   };
 
   const iniciarNovo = () => {
+    if (!podeGerenciarCadastroLocal) return;
     setCriandoNovo(true);
     setEditando(null);
     setExpandido(null);
@@ -486,6 +690,17 @@ export default function CanticosPage() {
   };
 
   const salvar = async () => {
+    if (!podeGerenciarCadastroLocal) {
+      alert('O cadastro de cânticos está desativado para a igreja ativa.');
+      return;
+    }
+
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de salvar.');
+      return;
+    }
+
     if (!form.nome.trim()) {
       alert('O nome do cântico é obrigatório!');
       return;
@@ -498,10 +713,11 @@ export default function CanticosPage() {
       tags: form.tags,
       youtube_url: form.youtube_url.trim() || null,
       spotify_url: form.spotify_url.trim() || null,
+      igreja_id: igrejaId,
     };
 
     if (editando) {
-      const { error } = await supabase.from('canticos').update(payload).eq('id', editando);
+      const { error } = await supabase.from('canticos').update(payload).eq('id', editando).eq('igreja_id', igrejaId);
       if (!error) {
         await fetchCanticos();
         setEditando(null);
@@ -519,11 +735,22 @@ export default function CanticosPage() {
   };
 
   const deletar = async (id: string, nome: string) => {
+    if (!podeGerenciarCadastroLocal) {
+      alert('O cadastro de cânticos está desativado para a igreja ativa.');
+      return;
+    }
+
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de remover.');
+      return;
+    }
+
     if (!confirm(`Tem certeza que deseja deletar "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
       return;
     }
 
-    const { error } = await supabase.from('canticos').delete().eq('id', id);
+    const { error } = await supabase.from('canticos').delete().eq('id', id).eq('igreja_id', igrejaId);
     
     if (!error) {
       await fetchCanticos();
@@ -686,20 +913,28 @@ export default function CanticosPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             <Music className="text-emerald-700" size={32} />
-            Cânticos
+            {tituloPagina}
           </h1>
           <p className="text-slate-600 mt-2">
-            {canticos.length} {canticos.length === 1 ? 'cântico' : 'cânticos'} disponíveis
+            {canticos.length} {canticos.length === 1 ? (usaSomenteHinario ? 'hino disponível' : 'cântico disponível') : (usaSomenteHinario ? 'hinos disponíveis' : 'cânticos disponíveis')}
           </p>
         </div>
 
-        <button 
-          onClick={iniciarNovo} 
-          className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-5 rounded-2xl font-bold text-lg shadow-lg mb-6 flex items-center justify-center gap-2 transition-colors"
-        >
-          <Plus size={24} />
-          Novo Cântico
-        </button>
+        {podeGerenciarCadastroLocal ? (
+          <button 
+            onClick={iniciarNovo} 
+            className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-5 rounded-2xl font-bold text-lg shadow-lg mb-6 flex items-center justify-center gap-2 transition-colors"
+          >
+            <Plus size={24} />
+            Novo Cântico
+          </button>
+        ) : (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+            {usaSomenteHinario
+              ? 'Esta igreja usa o hinário oficial. Os hinos exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.'
+              : 'Esta igreja está usando um repertório controlado. Os itens exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.'}
+          </div>
+        )}
 
         {criandoNovo && (
           <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-2xl p-5 shadow-lg mb-6">
@@ -717,7 +952,7 @@ export default function CanticosPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
-              placeholder="Buscar por nome, letra..."
+              placeholder={placeholderBusca}
               value={busca}
               onChange={e => setBusca(e.target.value)}
               className="w-full border-2 border-slate-300 pl-12 pr-4 py-4 rounded-xl text-base focus:border-emerald-600 outline-none shadow-sm"
@@ -884,26 +1119,30 @@ export default function CanticosPage() {
                           >
                             <Download size={20} />
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              iniciarEdicao(c);
-                            }}
-                            className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <Edit2 size={20} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deletar(c.id, c.nome);
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Deletar"
-                          >
-                            <Trash2 size={20} />
-                          </button>
+                          {podeGerenciarCadastroLocal && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  iniciarEdicao(c);
+                                }}
+                                className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit2 size={20} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deletar(c.id, c.nome);
+                                }}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Deletar"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -966,7 +1205,7 @@ export default function CanticosPage() {
         {canticos.length === 0 && (
           <div className="text-center py-12 text-slate-500">
             <Music size={48} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">Nenhum cântico encontrado</p>
+            <p className="font-medium">{mensagemSemResultados}</p>
             <p className="text-sm mt-2">Tente ajustar os filtros ou a busca</p>
           </div>
         )}
@@ -1150,6 +1389,7 @@ Cada estrofe separada será um slide diferente no Holyrics."
                 <div className="flex gap-2 sm:gap-3">
                   <button
                     onClick={salvarConfigHolyrics}
+                    disabled={!podeGerenciarCadastroLocal}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-lg text-sm"
                   >
                     <Save size={18} />

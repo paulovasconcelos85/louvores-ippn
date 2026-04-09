@@ -100,6 +100,12 @@ interface CanticoModalData {
   audio_url: string | null;
 }
 
+interface CanticoAbertoRef {
+  nome: string;
+  numero: string | null;
+  rotulo: 'Hino' | 'Cântico' | 'Cantico';
+}
+
 interface LiturgiaGrupo {
   id: string;
   titulo: string;
@@ -113,6 +119,7 @@ interface LiturgiaCard {
 }
 
 const LITURGIA_META_TIPO = '__liturgia__:nome';
+const LISTA_MARCADOR_REGEX = /^(?:\uF0D8|[\u2022\u2023\u2043\u2219\u25AA\u25CF\u25E6\u25B8\u25B6])\s*/;
 
 function formatarDataExtenso(valor: string) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -215,6 +222,15 @@ function getMensagemErro(error: unknown, fallback: string) {
   return fallback;
 }
 
+function extrairTextoMarcadorLista(linha: string) {
+  const texto = linha.trim();
+  const semMarcador = texto.replace(LISTA_MARCADOR_REGEX, '').trim();
+
+  if (!semMarcador || semMarcador === texto) return null;
+
+  return semMarcador;
+}
+
 function extrairPartesLiturgicas(conteudo: string) {
   const [titulo, ...restante] = conteudo.split('\n');
 
@@ -294,7 +310,7 @@ export default function Home() {
   const [redesSociais, setRedesSociais] = useState<RedeSocial[]>([]);
   const [loadingIgrejas, setLoadingIgrejas] = useState(true);
   const [loadingBoletim, setLoadingBoletim] = useState(true);
-  const [canticoAbertoNome, setCanticoAbertoNome] = useState<string | null>(null);
+  const [canticoAbertoRef, setCanticoAbertoRef] = useState<CanticoAbertoRef | null>(null);
   const [canticoAberto, setCanticoAberto] = useState<CanticoModalData | null>(null);
   const [loadingCantico, setLoadingCantico] = useState(false);
 
@@ -342,6 +358,17 @@ export default function Home() {
     }
 
     return null;
+  }, [boletimSecoes]);
+
+  const numeracaoSecoesVisiveis = useMemo(() => {
+    let contador = 0;
+
+    return new Map(
+      boletimSecoes.map((secao) => [
+        secao.id,
+        secao.tipo === 'imagem_tema' ? null : ++contador,
+      ])
+    );
   }, [boletimSecoes]);
 
   const compartilharWhatsApp = async () => {
@@ -510,7 +537,7 @@ export default function Home() {
   }, [igrejaAtualId, authLoading]);
 
   useEffect(() => {
-    if (!canticoAbertoNome) {
+    if (!canticoAbertoRef) {
       setCanticoAberto(null);
       return;
     }
@@ -521,7 +548,13 @@ export default function Home() {
       try {
         setLoadingCantico(true);
 
-        const params = new URLSearchParams({ nome: canticoAbertoNome });
+        const params = new URLSearchParams({ nome: canticoAbertoRef.nome });
+        if (canticoAbertoRef.numero) {
+          params.set('numero', canticoAbertoRef.numero);
+        }
+        if (igrejaAtualId) {
+          params.set('igreja_id', igrejaAtualId);
+        }
         const response = await fetch(`/api/canticos-publicos?${params.toString()}`);
         const data = await lerJsonSeguro(response);
 
@@ -547,7 +580,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [canticoAbertoNome]);
+  }, [canticoAbertoRef, igrejaAtualId]);
 
   const loading = loadingIgrejas || loadingBoletim;
 
@@ -569,17 +602,22 @@ export default function Home() {
       : '/pedidos-pastorais';
 
   const extrairCanticoLinha = (linha: string) => {
-    const match = linha.match(/^(C[âa]ntico|Cantico|Hino):\s*(.+)$/i);
+    const match = linha.match(/^(C[âa]ntico|Cantico|Hino)(?:\s*[:\-]\s*|\s+)(.+)$/i);
     if (!match) return null;
 
     const nomeCompleto = match[2].trim();
+    const sufixoMatch = nomeCompleto.match(/\(([^)]+)\)\s*$/);
     const nome = nomeCompleto.replace(/\s+\(([^)]+)\)\s*$/, '').trim();
-    const tomMatch = nomeCompleto.match(/\(([^)]+)\)\s*$/);
+    const sufixo = sufixoMatch ? sufixoMatch[1].trim() : null;
+    const ehHino = /^hino$/i.test(match[1]);
+    const numero = ehHino && sufixo && /^\d{1,3}$/.test(sufixo) ? sufixo.padStart(3, '0') : null;
+    const tom = numero ? null : sufixo;
 
     return {
-      rotulo: match[1],
+      rotulo: match[1] as 'Hino' | 'Cântico' | 'Cantico',
       nome,
-      tom: tomMatch ? tomMatch[1] : null,
+      numero,
+      tom,
     };
   };
 
@@ -601,13 +639,33 @@ export default function Home() {
               <button
                 key={`${cantico.nome}-${index}`}
                 type="button"
-                onClick={() => setCanticoAbertoNome(cantico.nome)}
+                onClick={() =>
+                  setCanticoAbertoRef({
+                    nome: cantico.nome,
+                    numero: cantico.numero,
+                    rotulo: cantico.rotulo,
+                  })
+                }
                 className="inline-flex items-center gap-2 rounded-full border border-[#d8d1c4] bg-[#faf7f0] px-3 py-1.5 text-left text-sm font-medium text-[#365c4d] transition-colors hover:border-[#365c4d] hover:bg-[#f4eee1]"
               >
                 <span>{cantico.rotulo}:</span>
                 <span className="underline underline-offset-2">{cantico.nome}</span>
+                {cantico.numero ? <span className="text-slate-500">({cantico.numero})</span> : null}
                 {cantico.tom ? <span className="text-slate-500">({cantico.tom})</span> : null}
               </button>
+            );
+          }
+
+          const itemLista = extrairTextoMarcadorLista(valor);
+          if (itemLista) {
+            return (
+              <p
+                key={`${itemLista}-${index}`}
+                className={`${emphasis ? 'text-slate-800' : 'text-slate-700'} flex items-start gap-2 text-[15px] leading-7 sm:text-base`}
+              >
+                <span className="pt-[0.12rem] text-[#365c4d]">•</span>
+                <span className="flex-1">{itemLista}</span>
+              </p>
             );
           }
 
@@ -793,19 +851,21 @@ export default function Home() {
                   <p className="text-slate-400">Nenhuma seção de boletim publicada para esta igreja.</p>
                 </div>
               ) : (
-                boletimSecoes.map((secao, index) => (
+                boletimSecoes.map((secao) => (
                   <article
                     key={secao.id}
                     className="space-y-5"
                   >
-                    <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
-                      <p className="text-[#365c4d] text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
-                        Seção {index + 1}
-                      </p>
-                      <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold tracking-tight text-slate-900">
-                        {getTituloSecao(secao)}
-                      </h3>
-                    </div>
+                    {!isImageSection(secao) && (
+                      <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
+                        <p className="text-[#365c4d] text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
+                          Seção {numeracaoSecoesVisiveis.get(secao.id)}
+                        </p>
+                        <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold tracking-tight text-slate-900">
+                          {getTituloSecao(secao)}
+                        </h3>
+                      </div>
+                    )}
 
                     {secao.itens.length === 0 ? (
                       <p className="text-sm text-slate-400">Sem itens publicados nesta seção.</p>
@@ -1034,7 +1094,7 @@ export default function Home() {
         </div>
       </footer>
 
-      {canticoAbertoNome && (
+      {canticoAbertoRef && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
             <div className="flex items-start justify-between gap-4 border-b border-[#ece5d9] px-5 py-4 sm:px-6">
@@ -1043,7 +1103,7 @@ export default function Home() {
                   {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
                 </p>
                 <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold text-slate-900">
-                  {canticoAbertoNome}
+                  {canticoAberto?.nome || canticoAbertoRef.nome}
                 </h2>
                 {canticoAberto?.referencia ? (
                   <p className="text-sm text-slate-500">{canticoAberto.referencia}</p>
@@ -1051,7 +1111,7 @@ export default function Home() {
               </div>
               <button
                 type="button"
-                onClick={() => setCanticoAbertoNome(null)}
+                onClick={() => setCanticoAbertoRef(null)}
                 className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Fechar letra"
               >

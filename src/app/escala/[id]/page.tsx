@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getStoredChurchId } from '@/lib/church-utils';
+import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 
 interface Tag {
   id: string;
@@ -41,25 +43,6 @@ interface Escala {
   escalas_funcoes: EscalaFuncao[];
 }
 
-const CATEGORIAS_LABEL: Record<string, string> = {
-  lideranca_pastor: 'Liderança - Pastor',
-  lideranca_presbitero: 'Liderança - Presbíteros',
-  lideranca_diacono: 'Liderança - Diáconos',
-  louvor_lideranca: 'Louvor - Ministração',
-  louvor_vocal: 'Louvor - Vocais',
-  louvor_instrumento: 'Louvor - Instrumentos',
-  tecnico_audio: 'Técnica - Áudio',
-  tecnico_video: 'Técnica - Mídia',
-  apoio_geral: 'Apoio - Geral',
-  ministerio_infantil: 'Ministério Infantil',
-  apoio_seguranca: 'Apoio - Segurança'
-};
-
-const getCategoriaLabel = (slug: string) => {
-  return CATEGORIAS_LABEL[slug] || slug;
-};
-
-
 export default function EscalaPublicaPage() {
   const params = useParams();
   const router = useRouter();
@@ -70,29 +53,17 @@ export default function EscalaPublicaPage() {
   const [loading, setLoading] = useState(true);
   const [confirmando, setConfirmando] = useState(false);
   const [mensagem, setMensagem] = useState('');
+  const [pessoaIdAtual, setPessoaIdAtual] = useState<string | null>(null);
+  const [resolvendoPessoa, setResolvendoPessoa] = useState(false);
   
   const [minhasFuncoes, setMinhasFuncoes] = useState<EscalaFuncao[]>([]);
 
-  useEffect(() => {
-    if (escalaId) {
-      carregarEscala();
-    }
-  }, [escalaId]);
-
-  useEffect(() => {
-    if (escala && user) {
-      const funcoes = escala.escalas_funcoes.filter(
-        f => f.pessoas.id === user.id
-      );
-      setMinhasFuncoes(funcoes);
-    }
-  }, [escala, user]);
-
-  const carregarEscala = async () => {
+  const carregarEscala = useCallback(async () => {
     try {
       setLoading(true);
-      
-      const { data, error } = await supabase
+
+      const igrejaId = getStoredChurchId();
+      let query = supabase
         .from('escalas')
         .select(`
           *,
@@ -116,19 +87,81 @@ export default function EscalaPublicaPage() {
           )
         `)
         .eq('id', escalaId)
-        .single();
+        .eq('status', 'publicada');
+
+      if (igrejaId) {
+        query = query.eq('igreja_id', igrejaId);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
       setEscala(data);
     } catch (error: any) {
       console.error('Erro ao carregar escala:', error);
+      setEscala(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [escalaId]);
+
+  useEffect(() => {
+    if (escalaId) {
+      carregarEscala();
+    }
+  }, [escalaId, carregarEscala]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    const resolverPessoaAtual = async () => {
+      if (!user) {
+        setPessoaIdAtual(null);
+        setResolvendoPessoa(false);
+        return;
+      }
+
+      try {
+        setResolvendoPessoa(true);
+        const pessoaId = await resolvePessoaIdForCurrentUser(user, {
+          allowLegacyTemAcesso: false,
+        });
+
+        if (ativo) {
+          setPessoaIdAtual(pessoaId);
+        }
+      } catch (error) {
+        console.error('Erro ao identificar pessoa da escala:', error);
+        if (ativo) {
+          setPessoaIdAtual(null);
+        }
+      } finally {
+        if (ativo) {
+          setResolvendoPessoa(false);
+        }
+      }
+    };
+
+    resolverPessoaAtual();
+
+    return () => {
+      ativo = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (escala && pessoaIdAtual) {
+      const funcoes = escala.escalas_funcoes.filter(
+        f => f.pessoas.id === pessoaIdAtual
+      );
+      setMinhasFuncoes(funcoes);
+    } else {
+      setMinhasFuncoes([]);
+    }
+  }, [escala, pessoaIdAtual]);
 
   const confirmarPresenca = async () => {
-    if (!user || minhasFuncoes.length === 0) return;
+    if (!user || !pessoaIdAtual || minhasFuncoes.length === 0) return;
     
     setConfirmando(true);
     setMensagem('');
@@ -271,8 +304,24 @@ export default function EscalaPublicaPage() {
             </div>
           )}
 
+          {user && resolvendoPessoa && (
+            <div className="bg-slate-50 border-b-2 border-slate-200 px-6 py-4">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⏳</span>
+                <div>
+                  <p className="font-semibold text-slate-900 mb-1">
+                    Identificando suas funções
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    Estamos verificando seu cadastro antes de liberar a confirmação.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Se estiver logado mas não estiver na escala */}
-          {user && minhasFuncoes.length === 0 && (
+          {user && !resolvendoPessoa && minhasFuncoes.length === 0 && (
             <div className="bg-blue-50 border-b-2 border-blue-200 px-6 py-4">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">ℹ️</span>
@@ -289,7 +338,7 @@ export default function EscalaPublicaPage() {
           )}
 
           {/* Se estiver na escala */}
-          {user && minhasFuncoes.length > 0 && (
+          {user && !resolvendoPessoa && minhasFuncoes.length > 0 && (
             <div className={`border-b-2 px-6 py-4 ${
               todasConfirmadas 
                 ? 'bg-green-50 border-green-200' 

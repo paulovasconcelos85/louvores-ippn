@@ -35,7 +35,7 @@ interface LegacyCultoRow {
 
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
@@ -48,31 +48,61 @@ async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
   );
 
   if (canticoIds.length === 0) {
-    return new Map<string, string | null>();
+    return new Map<string, { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null }>();
   }
 
   const canticoIdsUuid = canticoIds.filter(isUuid);
-  if (canticoIdsUuid.length === 0) {
-    return new Map<string, string | null>();
-  }
-
-  const [canticosRawResult, canticosUnificadosResult] = await Promise.all([
-    supabaseAdmin.from('canticos').select('id, nome').in('id', canticoIdsUuid),
-    supabaseAdmin.from('canticos_unificados').select('id, nome').in('id', canticoIdsUuid),
+  const canticoIdsHinario = canticoIds
+    .filter((value) => !isUuid(value) && /^\d+$/.test(value))
+    .map((value) => Number(value));
+  const [canticosRawResult, hinarioNovoCanticoResult, canticosUnificadosResult] = await Promise.all([
+    canticoIdsUuid.length > 0
+      ? supabaseAdmin.from('canticos').select('id, nome').in('id', canticoIdsUuid)
+      : Promise.resolve({ data: [], error: null }),
+    canticoIdsHinario.length > 0
+      ? supabaseAdmin.from('hinario_novo_cantico').select('id, numero, titulo').in('id', canticoIdsHinario)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseAdmin.from('canticos_unificados').select('id, nome, tipo, numero').in('id', canticoIds),
   ]);
 
   if (canticosRawResult.error) throw canticosRawResult.error;
+  if (hinarioNovoCanticoResult.error) throw hinarioNovoCanticoResult.error;
   if (canticosUnificadosResult.error) throw canticosUnificadosResult.error;
 
-  const canticosPorId = new Map<string, string | null>();
+  const canticosPorId = new Map<string, { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null }>();
 
   ((canticosRawResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
-    canticosPorId.set(String(cantico.id), cantico.nome);
+    canticosPorId.set(String(cantico.id), {
+      nome: cantico.nome,
+      tipo: 'cantico',
+      numero: null,
+    });
   });
 
-  ((canticosUnificadosResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
+  (
+    (hinarioNovoCanticoResult.data || []) as Array<{
+      id: string | number;
+      numero: string | null;
+      titulo: string | null;
+    }>
+  ).forEach((cantico) => {
+    const canticoId = String(cantico.id);
+    if (!canticosPorId.has(canticoId)) {
+      canticosPorId.set(canticoId, {
+        nome: cantico.titulo,
+        tipo: 'hinario',
+        numero: cantico.numero || null,
+      });
+    }
+  });
+
+  ((canticosUnificadosResult.data || []) as Array<{ id: string; nome: string | null; tipo: 'hinario' | 'cantico' | null; numero: string | null }>).forEach((cantico) => {
     if (!canticosPorId.has(String(cantico.id))) {
-      canticosPorId.set(String(cantico.id), cantico.nome);
+      canticosPorId.set(String(cantico.id), {
+        nome: cantico.nome,
+        tipo: cantico.tipo === 'hinario' ? 'hinario' : 'cantico',
+        numero: cantico.numero || null,
+      });
     }
   });
 
@@ -82,12 +112,12 @@ async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
 function buildLegacyLiturgiaConteudo(
   item: LegacyLouvorItemRow,
   index: number,
-  nomeCantico: string | null | undefined,
+  cantico: { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null } | null | undefined,
   includeInternal: boolean
 ) {
   const tituloItem = item.tipo || `Item ${index + 1}`;
-  const cantico = nomeCantico
-    ? `\nCantico: ${nomeCantico}${item.tom ? ` (${item.tom})` : ''}`
+  const linhaCantico = cantico?.nome
+    ? `\n${cantico.tipo === 'hinario' ? 'Hino' : 'Cantico'}: ${cantico.nome}${item.tom ? ` (${item.tom})` : ''}`
     : '';
   const conteudoBase = item.conteudo_publico?.trim() || '';
   const descricao = includeInternal ? item.descricao?.trim() || '' : '';
@@ -96,7 +126,7 @@ function buildLegacyLiturgiaConteudo(
     conteudoBase ? `\n${conteudoBase}` : ''
   }${
     descricao ? `\n${descricao}` : ''
-  }${cantico}`;
+  }${linhaCantico}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -147,14 +177,14 @@ export async function GET(request: NextRequest) {
 
     const boletins = cultos.map((culto) => {
       const itensCulto = (itensPorCulto.get(culto['Culto nr.']) || []).map((item, index) => {
-        const nomeCantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
+        const cantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
 
         return {
           id: item.id,
           conteudo: buildLegacyLiturgiaConteudo(
             item,
             index,
-            nomeCantico,
+            cantico,
             includeInternal
           ),
           ordem: item.ordem ?? index,

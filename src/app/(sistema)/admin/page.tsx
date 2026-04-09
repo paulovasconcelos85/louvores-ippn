@@ -22,7 +22,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCargoLabel, getCargoCor } from '@/lib/permissions';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
-import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
+import { CHURCH_STORAGE_KEY, getStoredChurchId } from '@/lib/church-utils';
+import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -49,11 +50,21 @@ export default function AdminPage() {
     if (!user) return;
     
     try {
+      const pessoaId = await resolvePessoaIdForCurrentUser(user, {
+        allowLegacyTemAcesso: false,
+      });
+
+      if (!pessoaId) {
+        setProximaEscala(null);
+        return;
+      }
+
+      const igrejaId = igrejaAtual?.id || getStoredChurchId();
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
       const dataHoje = hoje.toISOString().split('T')[0];
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('escalas')
         .select(`
           id,
@@ -66,11 +77,17 @@ export default function AdminPage() {
             pessoas!inner (id)
           )
         `)
-        .eq('escalas_funcoes.pessoas.id', user.id)
+        .eq('escalas_funcoes.pessoas.id', pessoaId)
         .gte('data', dataHoje)
-        .in('status', ['publicada', 'rascunho'])
+        .eq('status', 'publicada')
         .order('data', { ascending: true })
         .limit(1);
+
+      if (igrejaId) {
+        query = query.eq('igreja_id', igrejaId);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data && data.length > 0) {
         const escala = data[0];
@@ -83,11 +100,14 @@ export default function AdminPage() {
           funcao: funcoes[0]?.tags_funcoes?.nome || 'Função',
           confirmado: funcoes[0]?.confirmado || false
         });
+      } else {
+        setProximaEscala(null);
       }
     } catch (error) {
       console.error('Erro ao buscar próxima escala:', error);
+      setProximaEscala(null);
     }
-  }, [user]);
+  }, [user, igrejaAtual?.id]);
 
   const getTipoCultoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
