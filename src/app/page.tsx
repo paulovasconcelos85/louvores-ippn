@@ -120,6 +120,15 @@ interface LiturgiaCard {
 
 const LITURGIA_META_TIPO = '__liturgia__:nome';
 const LISTA_MARCADOR_REGEX = /^(?:\uF0D8|[\u2022\u2023\u2043\u2219\u25AA\u25CF\u25E6\u25B8\u25B6])\s*/;
+const MAX_IGREJAS_EXIBIDAS = 24;
+
+function normalizarTextoBusca(valor: string | null | undefined) {
+  return (valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 function formatarDataExtenso(valor: string) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -313,6 +322,9 @@ export default function Home() {
   const [canticoAbertoRef, setCanticoAbertoRef] = useState<CanticoAbertoRef | null>(null);
   const [canticoAberto, setCanticoAberto] = useState<CanticoModalData | null>(null);
   const [loadingCantico, setLoadingCantico] = useState(false);
+  const [buscaIgreja, setBuscaIgreja] = useState('');
+  const [filtroPais, setFiltroPais] = useState('');
+  const [filtroCidade, setFiltroCidade] = useState('');
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
@@ -370,6 +382,64 @@ export default function Home() {
       ])
     );
   }, [boletimSecoes]);
+
+  const paisesDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(
+        igrejas
+          .map((igreja) => formatarPais(igreja.pais))
+          .filter(Boolean)
+      )
+    )
+      .sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
+  }, [igrejas]);
+
+  const cidadesDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(
+        igrejas
+          .filter((igreja) => !filtroPais || formatarPais(igreja.pais) === filtroPais)
+          .map((igreja) => igreja.cidade?.trim())
+          .filter(Boolean)
+      )
+    )
+      .sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
+  }, [igrejas, filtroPais]);
+
+  const igrejasFiltradas = useMemo(() => {
+    const buscaNormalizada = normalizarTextoBusca(buscaIgreja);
+
+    return igrejas
+      .filter((igreja) => !filtroPais || formatarPais(igreja.pais) === filtroPais)
+      .filter((igreja) => !filtroCidade || igreja.cidade?.trim() === filtroCidade)
+      .filter((igreja) => {
+        if (!buscaNormalizada) return true;
+
+        const textoIndexado = normalizarTextoBusca(
+          [igreja.nome, igreja.sigla, igreja.cidade, igreja.regiao, formatarPais(igreja.pais)]
+            .filter(Boolean)
+            .join(' ')
+        );
+
+        return textoIndexado.includes(buscaNormalizada);
+      })
+      .sort((a, b) => {
+        if (a.id === igrejaAtualId) return -1;
+        if (b.id === igrejaAtualId) return 1;
+        return a.nome.localeCompare(b.nome, 'pt-BR');
+      });
+  }, [igrejas, filtroPais, filtroCidade, buscaIgreja, igrejaAtualId]);
+
+  const igrejasExibidas = useMemo(
+    () => igrejasFiltradas.slice(0, MAX_IGREJAS_EXIBIDAS),
+    [igrejasFiltradas]
+  );
+
+  useEffect(() => {
+    if (filtroCidade && !cidadesDisponiveis.includes(filtroCidade)) {
+      setFiltroCidade('');
+    }
+  }, [filtroCidade, cidadesDisponiveis]);
 
   const compartilharWhatsApp = async () => {
     if (!igrejaSelecionada) return;
@@ -1067,20 +1137,100 @@ export default function Home() {
               </div>
 
               <div className="w-full md:max-w-sm">
-                <label className="block text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 mb-2">
-                  Comunidade
-                </label>
-                <select
-                  value={igrejaAtualId || ''}
-                  onChange={(e) => setIgrejaAtualId(e.target.value || null)}
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-400 outline-none text-slate-900"
-                >
-                  {igrejas.map((igreja) => (
-                    <option key={igreja.id} value={igreja.id}>
-                      {igreja.sigla ? `${igreja.sigla} · ${igreja.nome}` : igreja.nome}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-3">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                    Comunidade
+                  </label>
+
+                  <input
+                    type="search"
+                    value={buscaIgreja}
+                    onChange={(e) => setBuscaIgreja(e.target.value)}
+                    placeholder="Buscar por nome, sigla ou local"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-700/20"
+                  />
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <select
+                      value={filtroPais}
+                      onChange={(e) => setFiltroPais(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-700/20"
+                    >
+                      <option value="">Todos os países</option>
+                      {paisesDisponiveis.map((pais) => (
+                        <option key={pais} value={pais}>
+                          {pais}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={filtroCidade}
+                      onChange={(e) => setFiltroCidade(e.target.value)}
+                      disabled={cidadesDisponiveis.length === 0}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-700/20"
+                    >
+                      <option value="">Todas as cidades</option>
+                      {cidadesDisponiveis.map((cidade) => (
+                        <option key={cidade} value={cidade}>
+                          {cidade}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {igrejasFiltradas.length} comunidade{igrejasFiltradas.length === 1 ? '' : 's'} encontrada
+                      {igrejasFiltradas.length === 1 ? '' : 's'}
+                    </span>
+                    {igrejasFiltradas.length > MAX_IGREJAS_EXIBIDAS ? (
+                      <span>Mostrando {MAX_IGREJAS_EXIBIDAS} de {igrejasFiltradas.length}</span>
+                    ) : null}
+                  </div>
+
+                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {igrejasExibidas.map((igreja) => {
+                      const selecionada = igreja.id === igrejaAtualId;
+                      const local = formatIgrejaLocalizacao(igreja);
+
+                      return (
+                        <button
+                          key={igreja.id}
+                          type="button"
+                          onClick={() => setIgrejaAtualId(igreja.id)}
+                          className={`w-full rounded-[22px] border px-4 py-3 text-left transition-colors ${
+                            selecionada
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-slate-200 bg-white hover:border-[#365c4d] hover:bg-[#faf7f0]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {igreja.sigla ? `${igreja.sigla} · ${igreja.nome}` : igreja.nome}
+                              </p>
+                              <p className="mt-1 truncate text-xs text-slate-500">
+                                {local || 'Localização não informada'}
+                              </p>
+                            </div>
+                            {selecionada ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">
+                                Atual
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {igrejasFiltradas.length === 0 ? (
+                      <div className="rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                        Nenhuma comunidade encontrada com esses filtros.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
