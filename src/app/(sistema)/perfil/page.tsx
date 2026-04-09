@@ -41,7 +41,6 @@ export default function PerfilPage() {
       .from('pessoas')
       .select('id, nome, telefone')
       .eq('id', pessoaIdAtual)
-      .eq('tem_acesso', true)
       .eq('ativo', true)
       .maybeSingle();
 

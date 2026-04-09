@@ -170,7 +170,7 @@ function isUuid(value: string | null | undefined) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function isBoletimFallbackTipo(tipo: string | null | undefined) {
+function isBoletimFallbackTipo(tipo: string | null | undefined): tipo is string {
   return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
 }
 

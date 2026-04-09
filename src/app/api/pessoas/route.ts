@@ -14,6 +14,55 @@ const supabaseAdmin = createClient(
   }
 );
 
+type AcessoPessoa = {
+  id: string;
+  pessoa_id: string | null;
+  cargo?: string | null;
+  ativo?: boolean | null;
+};
+
+const PESSOA_SELECT = `
+  id, nome, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
+  criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
+  endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
+  nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
+  profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
+  batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+  usuarios_tags(
+    tag_id,
+    nivel_habilidade,
+    tags_funcoes(id, nome, categoria, cor, icone)
+  )
+`;
+
+const PESSOA_COM_VINCULO_SELECT = `
+  id, nome, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
+  criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
+  endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
+  nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
+  profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
+  batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+  pessoas_igrejas!inner(
+    igreja_id,
+    cargo,
+    status_membro,
+    ativo
+  ),
+  usuarios_tags(
+    tag_id,
+    nivel_habilidade,
+    tags_funcoes(id, nome, categoria, cor, icone)
+  )
+`;
+
+function mapTags(pessoa: any) {
+  return pessoa.usuarios_tags
+    ?.map((ut: any) => ut.tags_funcoes)
+    .filter(Boolean) || [];
+}
+
 // ============================================
 // GET - Listar pessoas
 // ============================================
@@ -48,36 +97,13 @@ export async function GET(request: NextRequest) {
 
     let query = supabaseAdmin
       .from('pessoas')
-      .select(`
-        id, nome, cargo, email, telefone, ativo, tem_acesso, usuario_id, foto_url, observacoes,
-        criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
-        endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
-        nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
-        profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
-        batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-        cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
-        pessoas_igrejas!inner(
-          igreja_id,
-          cargo,
-          status_membro,
-          ativo
-        ),
-        usuarios_tags(
-          tag_id,
-          nivel_habilidade,
-          tags_funcoes(id, nome, categoria, cor, icone)
-        )
-      `)
+      .select(PESSOA_COM_VINCULO_SELECT)
       .eq('pessoas_igrejas.igreja_id', igrejaId)
       .order('nome');
 
     // Aplicar filtros
     if (ativo !== null) {
       query = query.eq('pessoas_igrejas.ativo', ativo === 'true');
-    }
-    
-    if (tem_acesso !== null) {
-      query = query.eq('tem_acesso', tem_acesso === 'true');
     }
     
     if (cargo) {
@@ -94,29 +120,12 @@ export async function GET(request: NextRequest) {
 
     let legacyQuery = supabaseAdmin
       .from('pessoas')
-      .select(`
-        id, nome, cargo, email, telefone, ativo, tem_acesso, usuario_id, foto_url, observacoes,
-        criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
-        endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
-        nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
-        profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
-        batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-        cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
-        usuarios_tags(
-          tag_id,
-          nivel_habilidade,
-          tags_funcoes(id, nome, categoria, cor, icone)
-        )
-      `)
+      .select(PESSOA_SELECT)
       .eq('igreja_id', igrejaId)
       .order('nome');
 
     if (ativo !== null) {
       legacyQuery = legacyQuery.eq('ativo', ativo === 'true');
-    }
-
-    if (tem_acesso !== null) {
-      legacyQuery = legacyQuery.eq('tem_acesso', tem_acesso === 'true');
     }
 
     if (cargo) {
@@ -130,33 +139,6 @@ export async function GET(request: NextRequest) {
     const { data: legacyData, error: legacyError } = await legacyQuery;
 
     if (legacyError) throw legacyError;
-
-    // Formatar resposta com tags
-    const pessoasComVinculo = data?.map(pessoa => ({
-      ...pessoa,
-      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
-      cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
-      status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
-      ativo: pessoa.pessoas_igrejas?.[0]?.ativo ?? pessoa.ativo,
-      tags: pessoa.usuarios_tags
-        ?.map((ut: any) => ut.tags_funcoes)
-        .filter(Boolean) || []
-    })) || [];
-
-    const idsComVinculo = new Set(pessoasComVinculo.map((pessoa) => pessoa.id));
-    const pessoasLegacy = (legacyData || [])
-      .filter((pessoa) => !idsComVinculo.has(pessoa.id))
-      .map((pessoa: any) => ({
-        ...pessoa,
-        tags: pessoa.usuarios_tags
-          ?.map((ut: any) => ut.tags_funcoes)
-          .filter(Boolean) || []
-      }));
-
-    const idsConhecidos = new Set([
-      ...idsComVinculo,
-      ...pessoasLegacy.map((pessoa) => pessoa.id),
-    ]);
 
     const { data: acessosDiretos, error: acessosDiretosError } = await supabaseAdmin
       .from('usuarios_acesso')
@@ -175,7 +157,7 @@ export async function GET(request: NextRequest) {
 
     const usuarioIdsPorVinculo = (vinculosUsuarios || []).map((vinculo) => vinculo.usuario_id).filter(Boolean);
 
-    let acessosPorVinculo: Array<{ id: string; pessoa_id: string | null; cargo?: string | null; ativo?: boolean | null }> = [];
+    let acessosPorVinculo: AcessoPessoa[] = [];
 
     if (usuarioIdsPorVinculo.length > 0) {
       const { data: acessosData, error: acessosDataError } = await supabaseAdmin
@@ -188,9 +170,41 @@ export async function GET(request: NextRequest) {
       acessosPorVinculo = acessosData || [];
     }
 
+    const acessosPessoa = [...((acessosDiretos || []) as AcessoPessoa[]), ...acessosPorVinculo];
+    const pessoaIdsComAcesso = new Set(
+      acessosPessoa
+        .map((acesso) => acesso.pessoa_id)
+        .filter(Boolean) as string[]
+    );
+
+    // Formatar resposta com tags
+    const pessoasComVinculo = data?.map(pessoa => ({
+      ...pessoa,
+      tem_acesso: pessoa.usuario_id ? true : pessoaIdsComAcesso.has(pessoa.id),
+      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
+      cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
+      status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
+      ativo: pessoa.pessoas_igrejas?.[0]?.ativo ?? pessoa.ativo,
+      tags: mapTags(pessoa)
+    })) || [];
+
+    const idsComVinculo = new Set(pessoasComVinculo.map((pessoa) => pessoa.id));
+    const pessoasLegacy = (legacyData || [])
+      .filter((pessoa) => !idsComVinculo.has(pessoa.id))
+      .map((pessoa: any) => ({
+        ...pessoa,
+        tem_acesso: pessoa.usuario_id ? true : pessoaIdsComAcesso.has(pessoa.id),
+        tags: mapTags(pessoa)
+      }));
+
+    const idsConhecidos = new Set([
+      ...idsComVinculo,
+      ...pessoasLegacy.map((pessoa) => pessoa.id),
+    ]);
+
     const pessoaIdsVindosDeAcesso = Array.from(
       new Set(
-        [...(acessosDiretos || []), ...acessosPorVinculo]
+        acessosPessoa
           .map((acesso) => acesso.pessoa_id)
           .filter(Boolean)
       )
@@ -204,34 +218,24 @@ export async function GET(request: NextRequest) {
       if (idsFaltantes.length > 0) {
         const { data: pessoasAcessoData, error: pessoasAcessoError } = await supabaseAdmin
           .from('pessoas')
-          .select(`
-            id, nome, cargo, email, telefone, ativo, tem_acesso, usuario_id, foto_url, observacoes,
-            criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
-            endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
-            nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
-            profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
-            batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-            cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
-            usuarios_tags(
-              tag_id,
-              nivel_habilidade,
-              tags_funcoes(id, nome, categoria, cor, icone)
-            )
-          `)
+          .select(PESSOA_SELECT)
           .in('id', idsFaltantes);
 
         if (pessoasAcessoError) throw pessoasAcessoError;
 
         pessoasPorAcesso = (pessoasAcessoData || []).map((pessoa: any) => ({
           ...pessoa,
-          tags: pessoa.usuarios_tags
-            ?.map((ut: any) => ut.tags_funcoes)
-            .filter(Boolean) || []
+          tem_acesso: true,
+          tags: mapTags(pessoa)
         }));
       }
     }
 
-    const pessoasFormatadas = [...pessoasComVinculo, ...pessoasLegacy, ...pessoasPorAcesso].sort((a, b) =>
+    const todasPessoasFormatadas = [...pessoasComVinculo, ...pessoasLegacy, ...pessoasPorAcesso];
+    const pessoasFiltradasPorAcesso = tem_acesso === null
+      ? todasPessoasFormatadas
+      : todasPessoasFormatadas.filter((pessoa) => pessoa.tem_acesso === (tem_acesso === 'true'));
+    const pessoasFormatadas = pessoasFiltradasPorAcesso.sort((a, b) =>
       a.nome.localeCompare(b.nome, 'pt-BR')
     );
 
@@ -277,6 +281,7 @@ export async function POST(request: NextRequest) {
       igreja_id: igrejaBodyId,
       ...restoDados
     } = body;
+    delete restoDados.tem_acesso;
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaBodyId, request);
 
     // Validações
@@ -392,7 +397,6 @@ export async function POST(request: NextRequest) {
         observacoes: observacoes || null,
         status_membro,
         igreja_id: igrejaId,
-        tem_acesso: false, // Fantasma por padrão
         usuario_id: null,
         ...restoDados,
       })
@@ -422,6 +426,7 @@ export async function POST(request: NextRequest) {
       message: `${nome} cadastrado${email ? '' : ' (sem acesso - fantasma)'}`,
       data: {
         ...pessoa,
+        tem_acesso: false,
         igreja_id: igrejaId,
         cargo,
         status_membro,

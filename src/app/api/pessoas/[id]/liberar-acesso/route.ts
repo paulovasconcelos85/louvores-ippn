@@ -13,6 +13,12 @@ const supabaseAdmin = createClient(
   }
 );
 
+type UsuarioAcesso = {
+  id: string;
+  pessoa_id: string | null;
+  auth_user_id: string | null;
+};
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -39,7 +45,7 @@ export async function POST(
 
     const { data: pessoa, error: pessoaError } = await supabaseAdmin
       .from('pessoas')
-      .select('id, nome, cargo, email, telefone, ativo, usuario_id, igreja_id, tem_acesso')
+      .select('id, nome, cargo, email, telefone, ativo, usuario_id, igreja_id')
       .eq('id', id)
       .single();
 
@@ -85,99 +91,129 @@ export async function POST(
       vinculosPessoa?.find((item) => item.ativo !== false)?.igreja_id ??
       vinculosPessoa?.[0]?.igreja_id;
 
+    let acessoExistente: UsuarioAcesso | null = null;
+
+    if (pessoa.usuario_id) {
+      const { data, error } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id, pessoa_id, auth_user_id')
+        .eq('auth_user_id', pessoa.usuario_id)
+        .maybeSingle<UsuarioAcesso>();
+
+      if (error) throw error;
+      acessoExistente = data || null;
+    }
+
+    if (!acessoExistente) {
+      const { data, error } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id, pessoa_id, auth_user_id')
+        .eq('pessoa_id', pessoa.id)
+        .maybeSingle<UsuarioAcesso>();
+
+      if (error) throw error;
+      acessoExistente = data || null;
+    }
+
+    if (!acessoExistente) {
+      const { data, error } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .select('id, pessoa_id, auth_user_id')
+        .eq('email', pessoa.email.toLowerCase().trim())
+        .limit(1)
+        .maybeSingle<UsuarioAcesso>();
+
+      if (error) throw error;
+      acessoExistente = data || null;
+    }
+
+    if (acessoExistente?.pessoa_id && acessoExistente.pessoa_id !== pessoa.id) {
+      return NextResponse.json(
+        { error: 'Este e-mail já está vinculado a outra pessoa com acesso.' },
+        { status: 409 }
+      );
+    }
+
+    const authUserId = pessoa.usuario_id || acessoExistente?.auth_user_id || null;
+
     const { error: updatePessoaError } = await supabaseAdmin
       .from('pessoas')
       .update({
-        tem_acesso: true,
         ativo,
         cargo,
         igreja_id: igrejaVinculoId,
+        usuario_id: authUserId,
         atualizado_em,
       })
       .eq('id', id);
 
     if (updatePessoaError) throw updatePessoaError;
 
-    if (pessoa.usuario_id) {
-      let usuarioAcessoId: string | null = null;
+    let usuarioAcessoId: string | null = null;
 
-      const { data: acessoExistente, error: acessoExistenteError } = await supabaseAdmin
+    const dadosAcesso = {
+      pessoa_id: pessoa.id,
+      igreja_id: igrejaVinculoId,
+      auth_user_id: authUserId,
+      email: pessoa.email.toLowerCase().trim(),
+      nome: pessoa.nome,
+      cargo,
+      telefone: pessoa.telefone,
+      ativo,
+      atualizado_em,
+    };
+
+    if (acessoExistente) {
+      const { data: acessoAtualizado, error: acessoUpdateError } = await supabaseAdmin
         .from('usuarios_acesso')
+        .update(dadosAcesso)
+        .eq('id', acessoExistente.id)
         .select('id')
-        .eq('auth_user_id', pessoa.usuario_id)
-        .maybeSingle();
+        .single();
 
-      if (acessoExistenteError) throw acessoExistenteError;
+      if (acessoUpdateError) throw acessoUpdateError;
+      usuarioAcessoId = acessoAtualizado.id;
+    } else {
+      const { data: acessoCriado, error: acessoInsertError } = await supabaseAdmin
+        .from('usuarios_acesso')
+        .insert({
+          ...dadosAcesso,
+          criado_em: atualizado_em,
+        })
+        .select('id')
+        .single();
 
-      if (acessoExistente) {
-        const { data: acessoAtualizado, error: acessoUpdateError } = await supabaseAdmin
-          .from('usuarios_acesso')
-          .update({
-            pessoa_id: pessoa.id,
-            igreja_id: igrejaVinculoId,
-            auth_user_id: pessoa.usuario_id,
-            email: pessoa.email,
-            nome: pessoa.nome,
-            cargo,
-            telefone: pessoa.telefone,
-            ativo,
-            atualizado_em,
-          })
-          .eq('id', acessoExistente.id)
-          .select('id')
-          .single();
+      if (acessoInsertError) throw acessoInsertError;
+      usuarioAcessoId = acessoCriado.id;
+    }
 
-        if (acessoUpdateError) throw acessoUpdateError;
-        usuarioAcessoId = acessoAtualizado.id;
-      } else {
-        const { data: acessoCriado, error: acessoInsertError } = await supabaseAdmin
-          .from('usuarios_acesso')
-          .insert({
-            pessoa_id: pessoa.id,
-            igreja_id: igrejaVinculoId,
-            auth_user_id: pessoa.usuario_id,
-            email: pessoa.email,
-            nome: pessoa.nome,
-            cargo,
-            telefone: pessoa.telefone,
-            ativo,
-            atualizado_em,
-          })
-          .select('id')
-          .single();
+    if (usuarioAcessoId && igrejaVinculoId) {
+      const vinculosParaSincronizar =
+        (vinculosPessoa && vinculosPessoa.length > 0
+          ? vinculosPessoa
+          : [{ igreja_id: igrejaVinculoId, cargo, ativo }])
+          .filter((item) => item.igreja_id);
 
-        if (acessoInsertError) throw acessoInsertError;
-        usuarioAcessoId = acessoCriado.id;
-      }
+      for (const vinculoPessoa of vinculosParaSincronizar) {
+        const { error: igrejaError } = await supabaseAdmin
+          .from('usuarios_igrejas')
+          .upsert(
+            {
+              usuario_id: usuarioAcessoId,
+              igreja_id: vinculoPessoa.igreja_id,
+              cargo: vinculoPessoa.cargo ?? cargo,
+              ativo: vinculoPessoa.ativo ?? ativo,
+            },
+            { onConflict: 'usuario_id,igreja_id' }
+          );
 
-      if (usuarioAcessoId && igrejaVinculoId) {
-        const vinculosParaSincronizar =
-          (vinculosPessoa && vinculosPessoa.length > 0
-            ? vinculosPessoa
-            : [{ igreja_id: igrejaVinculoId, cargo, ativo }])
-            .filter((item) => item.igreja_id);
-
-        for (const vinculoPessoa of vinculosParaSincronizar) {
-          const { error: igrejaError } = await supabaseAdmin
-            .from('usuarios_igrejas')
-            .upsert(
-              {
-                usuario_id: usuarioAcessoId,
-                igreja_id: vinculoPessoa.igreja_id,
-                cargo: vinculoPessoa.cargo ?? cargo,
-                ativo: vinculoPessoa.ativo ?? ativo,
-              },
-              { onConflict: 'usuario_id,igreja_id' }
-            );
-
-          if (igrejaError) throw igrejaError;
-        }
+        if (igrejaError) throw igrejaError;
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: pessoa.usuario_id
+      message: authUserId
         ? `${pessoa.nome} agora tem acesso liberado e sincronizado.`
         : `${pessoa.nome} agora tem acesso liberado. A pessoa já pode criar ou usar a conta com este e-mail.`,
     });

@@ -283,7 +283,7 @@ function isPrimeirosDomingo(data: Date): boolean {
   return d.getDay() === 0 && d.getDate() <= 7;
 }
 
-function isBoletimFallbackTipo(tipo: string | null | undefined) {
+function isBoletimFallbackTipo(tipo: string | null | undefined): tipo is string {
   return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
 }
 

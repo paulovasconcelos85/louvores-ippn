@@ -25,6 +25,30 @@ function escolherVinculoPrincipal<T extends { igreja_id: string; ativo?: boolean
   );
 }
 
+async function pessoaTemAcesso(pessoaId: string, usuarioId?: string | null) {
+  const porPessoa = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id')
+    .eq('pessoa_id', pessoaId)
+    .limit(1)
+    .maybeSingle();
+
+  if (porPessoa.error) throw porPessoa.error;
+  if (porPessoa.data?.id) return true;
+
+  if (!usuarioId) return false;
+
+  const porAuth = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id')
+    .eq('auth_user_id', usuarioId)
+    .limit(1)
+    .maybeSingle();
+
+  if (porAuth.error) throw porAuth.error;
+  return Boolean(porAuth.data?.id);
+}
+
 // ============================================
 // GET - Buscar pessoa por ID
 // ============================================
@@ -109,9 +133,12 @@ export async function GET(
       );
     }
 
+    const temAcesso = await pessoaTemAcesso(pessoa.id, pessoa.usuario_id);
+
     // Formatar tags
     const pessoaFormatada = {
       ...pessoa,
+      tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
       igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
       cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
       status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
@@ -173,6 +200,7 @@ export async function PATCH(
       status_membro,
       ...restoDados
     } = body;
+    delete restoDados.tem_acesso;
 
     const alterandoCamposSensíveis =
       cargo !== undefined || email !== undefined || body.tem_acesso !== undefined;
@@ -194,7 +222,7 @@ export async function PATCH(
     // Verificar se pessoa existe
     const { data: pessoaExistente } = await supabaseAdmin
     .from('pessoas')
-    .select('id, nome, tem_acesso, email, usuario_id, igreja_id, cargo, status_membro, ativo')
+    .select('id, nome, email, usuario_id, igreja_id, cargo, status_membro, ativo')
     .eq('id', id)
     .single();
 
@@ -221,8 +249,10 @@ export async function PATCH(
 
     if (todosVinculosPessoaError) throw todosVinculosPessoaError;
 
+    const temAcesso = await pessoaTemAcesso(id, pessoaExistente.usuario_id);
+
     // Não permitir editar email se já tem acesso
-    if (pessoaExistente.tem_acesso && email && email !== pessoaExistente.email) {
+    if (temAcesso && email && email !== pessoaExistente.email) {
       return NextResponse.json(
         { error: 'Não é possível alterar email de pessoa com acesso ao sistema' },
         { status: 400 }
@@ -375,7 +405,10 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       message: 'Pessoa atualizada com sucesso',
-      data: pessoa
+      data: {
+        ...pessoa,
+        tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
+      }
     });
 
   } catch (error: any) {
@@ -425,7 +458,7 @@ export async function DELETE(
     // Verificar se pessoa existe
     const { data: pessoa } = await supabaseAdmin
       .from('pessoas')
-      .select('id, nome, tem_acesso, igreja_id, usuario_id')
+      .select('id, nome, igreja_id, usuario_id')
       .eq('id', id)
       .single();
 
@@ -442,6 +475,8 @@ export async function DELETE(
       .eq('pessoa_id', id);
 
     if (vinculosError) throw vinculosError;
+
+    const temAcesso = await pessoaTemAcesso(id, pessoa.usuario_id);
 
     if (igrejaId && (vinculos?.length || 0) > 1) {
       const { error: deleteVinculoError } = await supabaseAdmin
@@ -493,7 +528,7 @@ export async function DELETE(
     }
 
     // Não permitir deletar se tem acesso (precisa desativar primeiro)
-    if (pessoa.tem_acesso) {
+    if (temAcesso) {
       return NextResponse.json(
         { error: 'Não é possível deletar pessoa com acesso ao sistema. Desative-a primeiro.' },
         { status: 400 }

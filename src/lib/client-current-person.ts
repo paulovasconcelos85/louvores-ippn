@@ -64,7 +64,7 @@ export async function resolvePessoaIdForCurrentUser(
     .from('pessoas')
     .select('id')
     .eq('usuario_id', user.id)
-    .eq('tem_acesso', true)
+    .eq('ativo', true)
     .limit(1)
     .maybeSingle();
 
@@ -81,7 +81,7 @@ export async function resolvePessoaIdForCurrentUser(
       .from('pessoas')
       .select('id')
       .eq('email', normalizedEmail)
-      .eq('tem_acesso', true)
+      .eq('ativo', true)
       .limit(1)
       .maybeSingle();
 
