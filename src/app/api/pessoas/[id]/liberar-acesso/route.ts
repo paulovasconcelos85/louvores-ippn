@@ -45,7 +45,7 @@ export async function POST(
 
     const { data: pessoa, error: pessoaError } = await supabaseAdmin
       .from('pessoas')
-      .select('id, nome, cargo, email, telefone, ativo, usuario_id, igreja_id')
+      .select('id, nome, cargo, email, telefone, ativo, usuario_id')
       .eq('id', id)
       .single();
 
@@ -87,7 +87,6 @@ export async function POST(
     const igrejaVinculoId =
       vinculo?.igreja_id ??
       igrejaId ??
-      pessoa.igreja_id ??
       vinculosPessoa?.find((item) => item.ativo !== false)?.igreja_id ??
       vinculosPessoa?.[0]?.igreja_id;
 
@@ -141,7 +140,6 @@ export async function POST(
       .update({
         ativo,
         cargo,
-        igreja_id: igrejaVinculoId,
         usuario_id: authUserId,
         atualizado_em,
       })

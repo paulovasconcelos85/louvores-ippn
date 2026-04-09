@@ -28,7 +28,7 @@ const PESSOA_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider,
   usuarios_tags(
     tag_id,
     nivel_habilidade,
@@ -43,7 +43,7 @@ const PESSOA_COM_VINCULO_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, igreja_id,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider,
   pessoas_igrejas!inner(
     igreja_id,
     cargo,
@@ -61,6 +61,26 @@ function mapTags(pessoa: any) {
   return pessoa.usuarios_tags
     ?.map((ut: any) => ut.tags_funcoes)
     .filter(Boolean) || [];
+}
+
+function matchesPessoaFilters(
+  pessoa: { ativo?: boolean | null; cargo?: string | null; nome?: string | null; email?: string | null },
+  filters: { ativo: string | null; cargo: string | null; busca: string | null }
+) {
+  const matchesAtivo =
+    filters.ativo === null ? true : Boolean(pessoa.ativo) === (filters.ativo === 'true');
+  const matchesCargo = !filters.cargo || pessoa.cargo === filters.cargo;
+
+  if (!filters.busca) {
+    return matchesAtivo && matchesCargo;
+  }
+
+  const buscaNormalizada = filters.busca.trim().toLowerCase();
+  const matchesBusca = [pessoa.nome, pessoa.email]
+    .filter(Boolean)
+    .some((value) => value!.toLowerCase().includes(buscaNormalizada));
+
+  return matchesAtivo && matchesCargo && matchesBusca;
 }
 
 // ============================================
@@ -118,28 +138,6 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    let legacyQuery = supabaseAdmin
-      .from('pessoas')
-      .select(PESSOA_SELECT)
-      .eq('igreja_id', igrejaId)
-      .order('nome');
-
-    if (ativo !== null) {
-      legacyQuery = legacyQuery.eq('ativo', ativo === 'true');
-    }
-
-    if (cargo) {
-      legacyQuery = legacyQuery.eq('cargo', cargo);
-    }
-
-    if (busca) {
-      legacyQuery = legacyQuery.or(`nome.ilike.%${busca}%,email.ilike.%${busca}%`);
-    }
-
-    const { data: legacyData, error: legacyError } = await legacyQuery;
-
-    if (legacyError) throw legacyError;
-
     const { data: acessosDiretos, error: acessosDiretosError } = await supabaseAdmin
       .from('usuarios_acesso')
       .select('id, pessoa_id, igreja_id, cargo, ativo')
@@ -181,7 +179,7 @@ export async function GET(request: NextRequest) {
     const pessoasComVinculo = data?.map(pessoa => ({
       ...pessoa,
       tem_acesso: pessoa.usuario_id ? true : pessoaIdsComAcesso.has(pessoa.id),
-      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
+      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || igrejaId,
       cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
       status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
       ativo: pessoa.pessoas_igrejas?.[0]?.ativo ?? pessoa.ativo,
@@ -189,17 +187,9 @@ export async function GET(request: NextRequest) {
     })) || [];
 
     const idsComVinculo = new Set(pessoasComVinculo.map((pessoa) => pessoa.id));
-    const pessoasLegacy = (legacyData || [])
-      .filter((pessoa) => !idsComVinculo.has(pessoa.id))
-      .map((pessoa: any) => ({
-        ...pessoa,
-        tem_acesso: pessoa.usuario_id ? true : pessoaIdsComAcesso.has(pessoa.id),
-        tags: mapTags(pessoa)
-      }));
 
     const idsConhecidos = new Set([
       ...idsComVinculo,
-      ...pessoasLegacy.map((pessoa) => pessoa.id),
     ]);
 
     const pessoaIdsVindosDeAcesso = Array.from(
@@ -226,18 +216,19 @@ export async function GET(request: NextRequest) {
         pessoasPorAcesso = (pessoasAcessoData || []).map((pessoa: any) => ({
           ...pessoa,
           tem_acesso: true,
+          igreja_id: igrejaId,
           tags: mapTags(pessoa)
         }));
       }
     }
 
-    const todasPessoasFormatadas = [...pessoasComVinculo, ...pessoasLegacy, ...pessoasPorAcesso];
-    const pessoasFiltradasPorAcesso = tem_acesso === null
-      ? todasPessoasFormatadas
-      : todasPessoasFormatadas.filter((pessoa) => pessoa.tem_acesso === (tem_acesso === 'true'));
-    const pessoasFormatadas = pessoasFiltradasPorAcesso.sort((a, b) =>
+    const todasPessoasFormatadas = [...pessoasComVinculo, ...pessoasPorAcesso];
+    const pessoasFormatadas = todasPessoasFormatadas
+      .filter((pessoa) => matchesPessoaFilters(pessoa, { ativo, cargo, busca }))
+      .filter((pessoa) => tem_acesso === null || pessoa.tem_acesso === (tem_acesso === 'true'))
+      .sort((a, b) =>
       a.nome.localeCompare(b.nome, 'pt-BR')
-    );
+      );
 
     return NextResponse.json({
       success: true,
@@ -305,7 +296,7 @@ export async function POST(request: NextRequest) {
 
       const { data: pessoaExistente, error: pessoaExistenteError } = await supabaseAdmin
         .from('pessoas')
-        .select('id, nome, cargo, ativo, status_membro, igreja_id, usuario_id')
+        .select('id, nome, cargo, ativo, status_membro, usuario_id')
         .eq('email', emailNormalizado)
         .maybeSingle();
 
@@ -396,7 +387,6 @@ export async function POST(request: NextRequest) {
         ativo,
         observacoes: observacoes || null,
         status_membro,
-        igreja_id: igrejaId,
         usuario_id: null,
         ...restoDados,
       })

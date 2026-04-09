@@ -103,28 +103,9 @@ export async function GET(
       .eq('pessoas_igrejas.igreja_id', igrejaId)
       .single();
 
-    let pessoa = pessoaComVinculo;
+    const pessoa = pessoaComVinculo;
 
     if (error && error.code !== 'PGRST116') throw error;
-
-    if (!pessoa) {
-      const { data: pessoaLegacy, error: legacyError } = await supabaseAdmin
-        .from('pessoas')
-        .select(`
-          *,
-          usuarios_tags(
-            tag_id,
-            nivel_habilidade,
-            tags_funcoes(id, nome, categoria, cor, icone)
-          )
-        `)
-        .eq('id', id)
-        .eq('igreja_id', igrejaId)
-        .single();
-
-      if (legacyError && legacyError.code !== 'PGRST116') throw legacyError;
-      pessoa = pessoaLegacy;
-    }
 
     if (!pessoa) {
       return NextResponse.json(
@@ -139,7 +120,7 @@ export async function GET(
     const pessoaFormatada = {
       ...pessoa,
       tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
-      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || pessoa.igreja_id,
+      igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || igrejaId,
       cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
       status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,
       ativo: pessoa.pessoas_igrejas?.[0]?.ativo ?? pessoa.ativo,
@@ -222,7 +203,7 @@ export async function PATCH(
     // Verificar se pessoa existe
     const { data: pessoaExistente } = await supabaseAdmin
     .from('pessoas')
-    .select('id, nome, email, usuario_id, igreja_id, cargo, status_membro, ativo')
+    .select('id, nome, email, usuario_id, cargo, status_membro, ativo')
     .eq('id', id)
     .single();
 
@@ -242,7 +223,7 @@ export async function PATCH(
 
     if (vinculoLookupError) throw vinculoLookupError;
 
-    const { data: todosVinculosPessoa, error: todosVinculosPessoaError } = await supabaseAdmin
+    const { error: todosVinculosPessoaError } = await supabaseAdmin
       .from('pessoas_igrejas')
       .select('id, igreja_id, cargo, status_membro, ativo')
       .eq('pessoa_id', id);
@@ -317,40 +298,6 @@ export async function PATCH(
       if (vinculoInsertError) throw vinculoInsertError;
     }
 
-    const vinculosAtualizados = [
-      ...(todosVinculosPessoa || []).filter((item) => item.igreja_id !== igrejaId),
-      {
-        igreja_id: igrejaId,
-        cargo: cargo ?? vinculoExistente?.cargo ?? pessoaExistente.cargo ?? pessoa.cargo,
-        status_membro: status_membro ?? vinculoExistente?.status_membro ?? pessoa.status_membro ?? 'ativo',
-        ativo: ativo ?? vinculoExistente?.ativo ?? pessoa.ativo ?? true,
-      },
-    ];
-
-    const vinculoPrincipal = escolherVinculoPrincipal(vinculosAtualizados, pessoaExistente.igreja_id);
-
-    const dadosEspelhoPessoa: any = {};
-    if (vinculoPrincipal?.igreja_id && pessoaExistente.igreja_id !== vinculoPrincipal.igreja_id) {
-      dadosEspelhoPessoa.igreja_id = vinculoPrincipal.igreja_id;
-    }
-    if (vinculoPrincipal && pessoa.cargo !== vinculoPrincipal.cargo) {
-      dadosEspelhoPessoa.cargo = vinculoPrincipal.cargo;
-    }
-    if (vinculoPrincipal && pessoa.status_membro !== vinculoPrincipal.status_membro) {
-      dadosEspelhoPessoa.status_membro = vinculoPrincipal.status_membro;
-    }
-    if (vinculoPrincipal && pessoa.ativo !== vinculoPrincipal.ativo) {
-      dadosEspelhoPessoa.ativo = vinculoPrincipal.ativo;
-    }
-
-    if (Object.keys(dadosEspelhoPessoa).length > 0) {
-      dadosEspelhoPessoa.atualizado_em = new Date().toISOString();
-      await supabaseAdmin
-        .from('pessoas')
-        .update(dadosEspelhoPessoa)
-        .eq('id', id);
-    }
-
     // Sincronizar cargo/ativo em usuarios_igrejas e usuarios_acesso (se o usuário tem acesso)
     if (pessoaExistente.usuario_id && (cargo !== undefined || ativo !== undefined || nome !== undefined || telefone !== undefined)) {
       const { data: acessoExistente, error: acessoLookupError } = await supabaseAdmin
@@ -408,6 +355,10 @@ export async function PATCH(
       data: {
         ...pessoa,
         tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
+        igreja_id: vinculoExistente?.igreja_id || igrejaId,
+        cargo: cargo ?? vinculoExistente?.cargo ?? pessoa.cargo,
+        status_membro: status_membro ?? vinculoExistente?.status_membro ?? pessoa.status_membro,
+        ativo: ativo ?? vinculoExistente?.ativo ?? pessoa.ativo,
       }
     });
 
@@ -458,7 +409,7 @@ export async function DELETE(
     // Verificar se pessoa existe
     const { data: pessoa } = await supabaseAdmin
       .from('pessoas')
-      .select('id, nome, igreja_id, usuario_id')
+      .select('id, nome, usuario_id')
       .eq('id', id)
       .single();
 
@@ -490,7 +441,7 @@ export async function DELETE(
       if (pessoa.usuario_id) {
         const { data: acessoExistente } = await supabaseAdmin
           .from('usuarios_acesso')
-          .select('id')
+          .select('id, igreja_id')
           .eq('auth_user_id', pessoa.usuario_id)
           .maybeSingle();
 
@@ -500,25 +451,22 @@ export async function DELETE(
             .delete()
             .eq('usuario_id', acessoExistente.id)
             .eq('igreja_id', igrejaId);
+
+          const proximoVinculo = escolherVinculoPrincipal(
+            (vinculos || []).filter((vinculo) => vinculo.igreja_id !== igrejaId),
+            igrejaId
+          );
+
+          if (acessoExistente.igreja_id === igrejaId && proximoVinculo?.igreja_id) {
+            await supabaseAdmin
+              .from('usuarios_acesso')
+              .update({
+                igreja_id: proximoVinculo.igreja_id,
+                atualizado_em: new Date().toISOString(),
+              })
+              .eq('id', acessoExistente.id);
+          }
         }
-      }
-
-      const proximoVinculo = escolherVinculoPrincipal(
-        (vinculos || []).filter((vinculo) => vinculo.igreja_id !== igrejaId),
-        pessoa.igreja_id
-      );
-
-      if (proximoVinculo) {
-        await supabaseAdmin
-          .from('pessoas')
-          .update({
-            igreja_id: proximoVinculo.igreja_id,
-            cargo: proximoVinculo.cargo,
-            status_membro: proximoVinculo.status_membro,
-            ativo: proximoVinculo.ativo,
-            atualizado_em: new Date().toISOString(),
-          })
-          .eq('id', id);
       }
 
       return NextResponse.json({
