@@ -82,6 +82,11 @@ type IgrejaForm = {
   site: string;
   instagram: string;
   youtube: string;
+  apresentacao_titulo: string;
+  apresentacao_texto: string;
+  apresentacao_imagem_url: string;
+  apresentacao_youtube_url: string;
+  apresentacao_galeria: string;
   permite_cadastro_canticos: boolean;
   modo_repertorio: string;
   horario_publicacao_boletim: string;
@@ -177,6 +182,11 @@ function criarFormularioVazio(): IgrejaForm {
     site: '',
     instagram: '',
     youtube: '',
+    apresentacao_titulo: '',
+    apresentacao_texto: '',
+    apresentacao_imagem_url: '',
+    apresentacao_youtube_url: '',
+    apresentacao_galeria: '',
     permite_cadastro_canticos: true,
     modo_repertorio: '',
     horario_publicacao_boletim: '',
@@ -362,6 +372,13 @@ function mapDetailToForm(payload: any): IgrejaForm {
     site: igreja.site || '',
     instagram: igreja.instagram || '',
     youtube: igreja.youtube || '',
+    apresentacao_titulo: igreja.apresentacao_titulo || '',
+    apresentacao_texto: igreja.apresentacao_texto || '',
+    apresentacao_imagem_url: igreja.apresentacao_imagem_url || '',
+    apresentacao_youtube_url: igreja.apresentacao_youtube_url || '',
+    apresentacao_galeria: Array.isArray(igreja.apresentacao_galeria)
+      ? igreja.apresentacao_galeria.filter((item: unknown) => typeof item === 'string').join('\n')
+      : '',
     permite_cadastro_canticos: igreja.permite_cadastro_canticos ?? true,
     modo_repertorio: igreja.modo_repertorio || '',
     horario_publicacao_boletim: normalizeHorarioToHHMM(igreja.horario_publicacao_boletim || ''),
@@ -438,6 +455,13 @@ function Textarea({
       />
     </label>
   );
+}
+
+function parseListaUrls(value: string) {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function getSubdivisionLabel(pais: string) {
@@ -742,6 +766,11 @@ export default function AdminIgrejasPage() {
       site: form.site,
       instagram: form.instagram,
       youtube: form.youtube,
+      apresentacao_titulo: form.apresentacao_titulo,
+      apresentacao_texto: form.apresentacao_texto,
+      apresentacao_imagem_url: form.apresentacao_imagem_url,
+      apresentacao_youtube_url: form.apresentacao_youtube_url,
+      apresentacao_galeria: parseListaUrls(form.apresentacao_galeria),
       permite_cadastro_canticos: form.permite_cadastro_canticos,
       modo_repertorio: form.modo_repertorio,
       horario_publicacao_boletim: form.horario_publicacao_boletim,
@@ -1042,6 +1071,57 @@ export default function AdminIgrejasPage() {
                     <Input label="E-mail" value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
                   </div>
+                </section>
+
+                <section className="space-y-5">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-rose-700" />
+                    <h3 className="text-lg font-semibold text-slate-900">Apresentação pública</h3>
+                  </div>
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
+                    <p className="font-semibold">Esse bloco aparece na homepage como “Sobre a Igreja”.</p>
+                    <p className="mt-1">
+                      O link só aparece no público quando houver <strong>título</strong> ou <strong>texto</strong>. As mídias
+                      são opcionais e entram como apoio visual da apresentação.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <Input
+                      label="Título da apresentação"
+                      value={form.apresentacao_titulo}
+                      onChange={(value) => updateForm('apresentacao_titulo', value)}
+                      placeholder="Ex.: Uma comunidade para adorar, servir e acolher"
+                    />
+                    <Input
+                      label="Imagem principal"
+                      value={form.apresentacao_imagem_url}
+                      onChange={(value) => updateForm('apresentacao_imagem_url', value)}
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <Textarea
+                    label="Texto institucional"
+                    value={form.apresentacao_texto}
+                    onChange={(value) => updateForm('apresentacao_texto', value)}
+                    rows={6}
+                  />
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <Input
+                      label="Vídeo do YouTube"
+                      value={form.apresentacao_youtube_url}
+                      onChange={(value) => updateForm('apresentacao_youtube_url', value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                    />
+                    <Textarea
+                      label="Galeria de fotos"
+                      value={form.apresentacao_galeria}
+                      onChange={(value) => updateForm('apresentacao_galeria', value)}
+                      rows={4}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Na galeria, use uma URL por linha. Se o texto institucional estiver vazio, o link “Sobre a igreja” não será exibido.
+                  </p>
                 </section>
 
                 <section className="space-y-5">

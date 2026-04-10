@@ -40,6 +40,16 @@ function sanitizeNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function sanitizeStringArray(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const items = value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+
+  return items.length > 0 ? items : null;
+}
+
 function normalizePais(value: unknown) {
   const sanitized = sanitizeString(value)?.toUpperCase();
   if (!sanitized) return 'BR';
@@ -80,6 +90,11 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     horario_publicacao_boletim: sanitizeString(body.horario_publicacao_boletim),
     dia_publicacao_boletim: sanitizeNumber(body.dia_publicacao_boletim),
     timezone_boletim: sanitizeString(body.timezone_boletim),
+    apresentacao_titulo: sanitizeString(body.apresentacao_titulo),
+    apresentacao_texto: sanitizeString(body.apresentacao_texto),
+    apresentacao_imagem_url: sanitizeString(body.apresentacao_imagem_url),
+    apresentacao_youtube_url: sanitizeString(body.apresentacao_youtube_url),
+    apresentacao_galeria: sanitizeStringArray(body.apresentacao_galeria),
   };
 }
 

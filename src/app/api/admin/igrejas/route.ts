@@ -57,6 +57,11 @@ type IgrejaPayload = {
   horario_publicacao_boletim?: string | null;
   dia_publicacao_boletim?: number | null;
   timezone_boletim?: string | null;
+  apresentacao_titulo?: string | null;
+  apresentacao_texto?: string | null;
+  apresentacao_imagem_url?: string | null;
+  apresentacao_youtube_url?: string | null;
+  apresentacao_galeria?: string[] | null;
 };
 
 function normalizePais(value?: string | null) {
@@ -70,6 +75,12 @@ function normalizePais(value?: string | null) {
 }
 
 function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
+  const apresentacao_galeria = Array.isArray(body.apresentacao_galeria)
+    ? body.apresentacao_galeria
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+    : [];
+
   return {
     nome: body.nome?.trim(),
     slug: body.slug?.trim(),
@@ -99,6 +110,11 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
     horario_publicacao_boletim: body.horario_publicacao_boletim?.trim() || null,
     dia_publicacao_boletim: body.dia_publicacao_boletim ?? null,
     timezone_boletim: body.timezone_boletim?.trim() || null,
+    apresentacao_titulo: body.apresentacao_titulo?.trim() || null,
+    apresentacao_texto: body.apresentacao_texto?.trim() || null,
+    apresentacao_imagem_url: body.apresentacao_imagem_url?.trim() || null,
+    apresentacao_youtube_url: body.apresentacao_youtube_url?.trim() || null,
+    apresentacao_galeria: apresentacao_galeria.length > 0 ? apresentacao_galeria : null,
   };
 }
 

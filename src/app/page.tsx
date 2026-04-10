@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
@@ -84,6 +85,11 @@ interface IgrejaDetalhes {
   horario_publicacao_boletim: string | null;
   dia_publicacao_boletim: number | null;
   timezone_boletim: string | null;
+  apresentacao_titulo: string | null;
+  apresentacao_texto: string | null;
+  apresentacao_imagem_url: string | null;
+  apresentacao_youtube_url: string | null;
+  apresentacao_galeria: string[] | null;
 }
 
 interface CanticoModalData {
@@ -155,6 +161,13 @@ function formatarPais(valor: string | null) {
   if (pais === 'CA') return 'Canadá';
 
   return valor;
+}
+
+function extrairYoutubeId(url: string | null) {
+  if (!url) return null;
+
+  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  return url.match(regex)?.[1] || null;
 }
 
 function parseAgendaBoletimItem(conteudo: string) {
@@ -325,6 +338,8 @@ export default function Home() {
   const [buscaIgreja, setBuscaIgreja] = useState('');
   const [filtroPais, setFiltroPais] = useState('');
   const [filtroCidade, setFiltroCidade] = useState('');
+  const [sobreIgrejaAberto, setSobreIgrejaAberto] = useState(false);
+  const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
@@ -382,6 +397,47 @@ export default function Home() {
       ])
     );
   }, [boletimSecoes]);
+
+  const apresentacaoTitulo = igrejaDetalhes?.apresentacao_titulo?.trim() || '';
+  const apresentacaoTexto = igrejaDetalhes?.apresentacao_texto?.trim() || '';
+  const temApresentacaoIgreja = Boolean(apresentacaoTitulo || apresentacaoTexto);
+
+  const galeriaApresentacao = useMemo(() => {
+    const itens = [
+      igrejaDetalhes?.apresentacao_imagem_url?.trim() || null,
+      ...((igrejaDetalhes?.apresentacao_galeria || []).map((item) => item?.trim() || null)),
+    ].filter(Boolean) as string[];
+
+    return Array.from(new Set(itens));
+  }, [igrejaDetalhes]);
+
+  const youtubeApresentacaoId = useMemo(
+    () => extrairYoutubeId(igrejaDetalhes?.apresentacao_youtube_url || null),
+    [igrejaDetalhes]
+  );
+
+  const paragrafosApresentacao = useMemo(
+    () => apresentacaoTexto.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean),
+    [apresentacaoTexto]
+  );
+
+  useEffect(() => {
+    if (!temApresentacaoIgreja) {
+      setSobreIgrejaAberto(false);
+    }
+  }, [temApresentacaoIgreja]);
+
+  useEffect(() => {
+    setSobreIgrejaAberto(false);
+  }, [igrejaAtualId]);
+
+  useEffect(() => {
+    if (!sobreIgrejaAberto) return;
+
+    requestAnimationFrame(() => {
+      sobreIgrejaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [sobreIgrejaAberto]);
 
   const paisesDisponiveis = useMemo(() => {
     return Array.from(
@@ -891,6 +947,16 @@ export default function Home() {
                   Pedidos
                   <ArrowRight className="w-4 h-4" />
                 </Link>
+                {temApresentacaoIgreja ? (
+                  <button
+                    type="button"
+                    onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
+                    className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-4 py-3 text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29]"
+                  >
+                    {sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}
+                    <ArrowRight className={`w-4 h-4 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -903,6 +969,78 @@ export default function Home() {
               Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
             </p>
           </div>
+        )}
+
+        {!loading && temApresentacaoIgreja && sobreIgrejaAberto && (
+          <section
+            ref={sobreIgrejaRef}
+            id="sobre-igreja"
+            className="mt-8 overflow-hidden rounded-[32px] border border-[#dfd1bf] bg-[linear-gradient(135deg,#fffaf2_0%,#f7efe1_55%,#f2e6d2_100%)] shadow-[0_18px_48px_rgba(101,72,31,0.08)]"
+          >
+            <div className="grid gap-8 px-5 py-6 sm:px-7 sm:py-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:items-start">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9a6a34]">
+                    Sobre a igreja
+                  </p>
+                  <h3 className="font-['Georgia','Times_New_Roman',serif] text-3xl font-semibold leading-tight text-slate-900">
+                    {apresentacaoTitulo || nomeExibicaoIgreja}
+                  </h3>
+                </div>
+
+                <div className="space-y-4 text-[15px] leading-8 text-slate-700 sm:text-base">
+                  {paragrafosApresentacao.map((paragrafo, index) => (
+                    <p key={`apresentacao-${index}`}>{paragrafo}</p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {galeriaApresentacao[0] ? (
+                  <Image
+                    src={galeriaApresentacao[0]}
+                    alt={apresentacaoTitulo || nomeExibicaoIgreja}
+                    width={1600}
+                    height={1100}
+                    unoptimized
+                    className="h-[18rem] w-full rounded-[28px] border border-[#eadfce] object-cover shadow-[0_12px_30px_rgba(74,53,28,0.12)] sm:h-[22rem]"
+                  />
+                ) : null}
+
+                {youtubeApresentacaoId ? (
+                  <div className="overflow-hidden rounded-[28px] border border-[#eadfce] bg-black shadow-[0_12px_30px_rgba(74,53,28,0.12)]">
+                    <div className="aspect-video">
+                      <iframe
+                        title={`Apresentação de ${nomeExibicaoIgreja}`}
+                        src={`https://www.youtube.com/embed/${youtubeApresentacaoId}`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="h-full w-full border-0"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {galeriaApresentacao.length > 1 ? (
+              <div className="border-t border-[#e8dccb] px-5 py-5 sm:px-7 sm:py-6">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {galeriaApresentacao.slice(1).map((foto, index) => (
+                    <Image
+                      key={`${foto}-${index}`}
+                      src={foto}
+                      alt={`${nomeExibicaoIgreja} ${index + 2}`}
+                      width={1200}
+                      height={800}
+                      unoptimized
+                      className="h-40 w-full rounded-[22px] border border-[#eadfce] object-cover shadow-[0_10px_24px_rgba(74,53,28,0.08)]"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
         )}
 
         {loading && (
@@ -993,9 +1131,12 @@ export default function Home() {
                               className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
                             >
                               {isImageSection(secao) ? (
-                                <img
+                                <Image
                                   src={item.conteudo}
                                   alt={secao.titulo}
+                                  width={1600}
+                                  height={1200}
+                                  unoptimized
                                   className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
                                 />
                               ) : (

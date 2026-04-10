@@ -627,7 +627,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from('igrejas')
         .select(
-          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim'
+          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim, apresentacao_titulo, apresentacao_texto, apresentacao_imagem_url, apresentacao_youtube_url, apresentacao_galeria'
         )
         .eq('id', igrejaId)
         .maybeSingle(),
