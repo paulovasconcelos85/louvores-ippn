@@ -1,4 +1,5 @@
 import { createPrivateKey, sign } from 'node:crypto';
+import { connect, constants } from 'node:http2';
 
 const APNS_ALLOWED_DEVICE_STATUSES = new Set(['authorized', 'provisional', 'ephemeral']);
 
@@ -119,50 +120,109 @@ export async function sendApnsNotification({
   const apnsToken = createApnsJwt(config);
   const host =
     environment === 'production' ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com';
+  const payload = JSON.stringify({
+    aps: {
+      alert: {
+        title: notification.title,
+        body: notification.body,
+      },
+      sound: 'default',
+    },
+    notification_id: notification.notificationId,
+    tipo: notification.tipo,
+    deep_link: notification.deepLink || null,
+    payload: notification.payload || {},
+  });
 
-  try {
-    const response = await fetch(`${host}/3/device/${token}`, {
-      method: 'POST',
-      headers: {
+  return new Promise<ApnsSendResult>((resolve) => {
+    const session = connect(host);
+    let settled = false;
+
+    const finish = (result: ApnsSendResult) => {
+      if (settled) return;
+      settled = true;
+
+      try {
+        session.close();
+      } catch {
+        // noop
+      }
+
+      resolve(result);
+    };
+
+    session.on('error', (error) => {
+      finish({
+        ok: false,
+        error: `APNs http2 session error: ${formatUnknownError(error)}`,
+      });
+    });
+
+    try {
+      const request = session.request({
+        [constants.HTTP2_HEADER_SCHEME]: 'https',
+        [constants.HTTP2_HEADER_METHOD]: 'POST',
+        [constants.HTTP2_HEADER_PATH]: `/3/device/${token}`,
         authorization: `bearer ${apnsToken}`,
         'apns-push-type': 'alert',
         'apns-priority': '10',
         'apns-topic': config.topic,
         'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        aps: {
-          alert: {
-            title: notification.title,
-            body: notification.body,
-          },
-          sound: 'default',
-        },
-        notification_id: notification.notificationId,
-        tipo: notification.tipo,
-        deep_link: notification.deepLink || null,
-        payload: notification.payload || {},
-      }),
-    });
+        'content-length': Buffer.byteLength(payload),
+      });
 
-    if (response.ok) {
-      return {
-        ok: true,
-        apnsId: response.headers.get('apns-id'),
-      };
+      let responseHeaders: Record<string, string | string[] | number> | null = null;
+      let responseBody = '';
+
+      request.setEncoding('utf8');
+
+      request.on('response', (headers) => {
+        responseHeaders = headers as Record<string, string | string[] | number>;
+      });
+
+      request.on('data', (chunk: string) => {
+        responseBody += chunk;
+      });
+
+      request.on('end', () => {
+        const statusHeader = responseHeaders?.[constants.HTTP2_HEADER_STATUS];
+        const status =
+          typeof statusHeader === 'number'
+            ? statusHeader
+            : typeof statusHeader === 'string'
+              ? Number(statusHeader)
+              : 0;
+        const apnsIdHeader = responseHeaders?.['apns-id'];
+        const apnsId = Array.isArray(apnsIdHeader) ? apnsIdHeader[0] : apnsIdHeader || null;
+        const trimmedBody = responseBody.trim();
+
+        if (status >= 200 && status < 300) {
+          finish({
+            ok: true,
+            apnsId: typeof apnsId === 'string' ? apnsId : null,
+          });
+          return;
+        }
+
+        finish({
+          ok: false,
+          error: `APNs status=${status}${trimmedBody ? ` body=${trimmedBody}` : ''}`,
+        });
+      });
+
+      request.on('error', (error) => {
+        finish({
+          ok: false,
+          error: `APNs http2 request error: ${formatUnknownError(error)}`,
+        });
+      });
+
+      request.end(payload);
+    } catch (error) {
+      finish({
+        ok: false,
+        error: `APNs http2 setup error: ${formatUnknownError(error)}`,
+      });
     }
-
-    const rawError = await response.text();
-    const trimmedError = rawError.trim();
-
-    return {
-      ok: false,
-      error: `APNs status=${response.status}${trimmedError ? ` body=${trimmedError}` : ''}`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: `APNs fetch error: ${formatUnknownError(error)}`,
-    };
-  }
+  });
 }
