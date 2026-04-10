@@ -24,6 +24,7 @@ import { getCargoLabel, getCargoCor } from '@/lib/permissions';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, getStoredChurchId } from '@/lib/church-utils';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -43,6 +44,11 @@ export default function AdminPage() {
   
   const [proximaEscala, setProximaEscala] = useState<MinhaProximaEscala | null>(null);
   const [igrejaAtual, setIgrejaAtual] = useState<IgrejaSelecionavel | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState({
+    total: 0,
+    pastoral: 0,
+    escalas: 0,
+  });
 
   const loading = authLoading || permLoading;
 
@@ -109,6 +115,33 @@ export default function AdminPage() {
     }
   }, [user, igrejaAtual?.id]);
 
+  const carregarResumoNotificacoes = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const params = new URLSearchParams();
+      const igrejaId = igrejaAtual?.id || getStoredChurchId();
+
+      if (igrejaId) {
+        params.set('igreja_id', igrejaId);
+      }
+
+      const response = await fetch(`/api/admin/notifications?${params.toString()}`, {
+        headers: await buildAuthenticatedHeaders(),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao carregar notificações.');
+      }
+
+      setUnreadNotifications(data.unread || { total: 0, pastoral: 0, escalas: 0 });
+    } catch (error) {
+      console.error('Erro ao carregar resumo de notificações:', error);
+      setUnreadNotifications({ total: 0, pastoral: 0, escalas: 0 });
+    }
+  }, [user, igrejaAtual?.id]);
+
   const getTipoCultoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
       dominical_manha: 'Dominical - Manhã',
@@ -133,6 +166,12 @@ export default function AdminPage() {
       buscarProximaEscala();
     }
   }, [user, buscarProximaEscala]);
+
+  useEffect(() => {
+    if (user) {
+      carregarResumoNotificacoes();
+    }
+  }, [user, carregarResumoNotificacoes]);
 
   useEffect(() => {
     let ativo = true;
@@ -379,8 +418,15 @@ export default function AdminPage() {
               onClick={() => router.push('/admin/pedidos-pastorais')}
               className="bg-white rounded-xl p-6 shadow-sm border-2 border-cyan-600 hover:shadow-lg transition-all text-left group"
             >
-              <div className="w-12 h-12 bg-cyan-600 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <MessageSquareHeart className="w-6 h-6 text-white" />
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="w-12 h-12 bg-cyan-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <MessageSquareHeart className="w-6 h-6 text-white" />
+                </div>
+                {unreadNotifications.pastoral > 0 ? (
+                  <span className="inline-flex min-w-9 items-center justify-center rounded-full bg-rose-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                    {unreadNotifications.pastoral}
+                  </span>
+                ) : null}
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
                 Pedidos
@@ -388,10 +434,18 @@ export default function AdminPage() {
               <p className="text-slate-600 text-sm mb-4">
                 Caixa de entrada para oração, aconselhamento e visitas
               </p>
-              <span className="text-xs text-cyan-700 font-semibold bg-cyan-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                Disponível
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-cyan-700 font-semibold bg-cyan-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Disponível
+                </span>
+                {unreadNotifications.pastoral > 0 ? (
+                  <span className="text-xs text-rose-700 font-semibold bg-rose-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {unreadNotifications.pastoral} novo{unreadNotifications.pastoral === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </div>
             </button>
           )}
 

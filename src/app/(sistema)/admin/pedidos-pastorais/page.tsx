@@ -97,6 +97,7 @@ export default function AdminPedidosPastoraisPage() {
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('novo');
   const [pedidoAtualizandoId, setPedidoAtualizandoId] = useState<string | null>(null);
+  const [marcandoNotificacoes, setMarcandoNotificacoes] = useState(false);
   const [contadores, setContadores] = useState({
     total: 0,
     novo: 0,
@@ -166,6 +167,33 @@ export default function AdminPedidosPastoraisPage() {
       carregarPedidos();
     }
   }, [loading, user, podeAcessarPedidos, carregarPedidos]);
+
+  const marcarResumoPastoralComoLido = useCallback(async () => {
+    if (!user || !podeAcessarPedidos || !igrejaId || marcandoNotificacoes) return;
+
+    try {
+      setMarcandoNotificacoes(true);
+
+      await fetch('/api/admin/notifications', {
+        method: 'PATCH',
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          igreja_id: igrejaId,
+          tipos: ['pastoral.resumo_10min'],
+        }),
+      });
+    } catch (error) {
+      console.error('Erro ao marcar notificações pastorais como lidas:', error);
+    } finally {
+      setMarcandoNotificacoes(false);
+    }
+  }, [user, podeAcessarPedidos, igrejaId, marcandoNotificacoes]);
+
+  useEffect(() => {
+    if (!loading && user && podeAcessarPedidos && igrejaId) {
+      marcarResumoPastoralComoLido();
+    }
+  }, [loading, user, podeAcessarPedidos, igrejaId, marcarResumoPastoralComoLido]);
 
   async function atualizarStatus(pedidoId: string, novoStatus: PedidoPastoral['status']) {
     try {
