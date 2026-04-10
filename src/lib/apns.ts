@@ -14,6 +14,10 @@ function normalizePrivateKey(value: string) {
   return value.includes('\\n') ? value.replace(/\\n/g, '\n') : value;
 }
 
+function decodeBase64PrivateKey(value: string) {
+  return Buffer.from(value, 'base64').toString('utf-8');
+}
+
 export function isValidApnsAuthorizationStatus(status: string | null | undefined) {
   return !!status && APNS_ALLOWED_DEVICE_STATUSES.has(status);
 }
@@ -49,18 +53,23 @@ export function readApnsConfigFromEnv(): ApnsConfig {
   const teamId = process.env.APNS_TEAM_ID?.trim();
   const keyId = process.env.APNS_KEY_ID?.trim();
   const privateKey = process.env.APNS_PRIVATE_KEY?.trim();
+  const privateKeyBase64 = process.env.APNS_PRIVATE_KEY_BASE64?.trim();
   const topic = process.env.APNS_BUNDLE_ID?.trim();
 
-  if (!teamId || !keyId || !privateKey || !topic) {
+  if (!teamId || !keyId || (!privateKey && !privateKeyBase64) || !topic) {
     throw new Error(
-      'APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY e APNS_BUNDLE_ID precisam estar configuradas.'
+      'APNS_TEAM_ID, APNS_KEY_ID, APNS_BUNDLE_ID e APNS_PRIVATE_KEY ou APNS_PRIVATE_KEY_BASE64 precisam estar configuradas.'
     );
   }
+
+  const resolvedPrivateKey = privateKey
+    ? normalizePrivateKey(privateKey)
+    : normalizePrivateKey(decodeBase64PrivateKey(privateKeyBase64!));
 
   return {
     teamId,
     keyId,
-    privateKey: normalizePrivateKey(privateKey),
+    privateKey: resolvedPrivateKey,
     topic,
   };
 }
