@@ -80,7 +80,7 @@ function summarizeErrors(errors: string[]) {
   return errors.join(' || ').slice(0, 4000);
 }
 
-export async function POST(request: NextRequest) {
+async function handleDispatch(request: NextRequest) {
   try {
     if (!isAuthorized(request)) {
       return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 });
@@ -325,4 +325,12 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest) {
+  return handleDispatch(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleDispatch(request);
 }
