@@ -49,6 +49,28 @@ export type ApnsSendResult =
   | { ok: true; apnsId: string | null }
   | { ok: false; error: string };
 
+function summarizeStack(stack: string | undefined) {
+  if (!stack) return null;
+  return stack
+    .split('\n')
+    .slice(0, 4)
+    .join(' | ');
+}
+
+function formatUnknownError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const details = [
+    error.message,
+    'cause' in error && error.cause ? `cause=${String(error.cause)}` : null,
+    error.stack ? `stack=${summarizeStack(error.stack)}` : null,
+  ].filter(Boolean);
+
+  return details.join(' | ');
+}
+
 export function readApnsConfigFromEnv(): ApnsConfig {
   const teamId = process.env.APNS_TEAM_ID?.trim();
   const keyId = process.env.APNS_KEY_ID?.trim();
@@ -98,42 +120,49 @@ export async function sendApnsNotification({
   const host =
     environment === 'production' ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com';
 
-  const response = await fetch(`${host}/3/device/${token}`, {
-    method: 'POST',
-    headers: {
-      authorization: `bearer ${apnsToken}`,
-      'apns-push-type': 'alert',
-      'apns-priority': '10',
-      'apns-topic': config.topic,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      aps: {
-        alert: {
-          title: notification.title,
-          body: notification.body,
-        },
-        sound: 'default',
+  try {
+    const response = await fetch(`${host}/3/device/${token}`, {
+      method: 'POST',
+      headers: {
+        authorization: `bearer ${apnsToken}`,
+        'apns-push-type': 'alert',
+        'apns-priority': '10',
+        'apns-topic': config.topic,
+        'content-type': 'application/json',
       },
-      notification_id: notification.notificationId,
-      tipo: notification.tipo,
-      deep_link: notification.deepLink || null,
-      payload: notification.payload || {},
-    }),
-  });
+      body: JSON.stringify({
+        aps: {
+          alert: {
+            title: notification.title,
+            body: notification.body,
+          },
+          sound: 'default',
+        },
+        notification_id: notification.notificationId,
+        tipo: notification.tipo,
+        deep_link: notification.deepLink || null,
+        payload: notification.payload || {},
+      }),
+    });
 
-  if (response.ok) {
+    if (response.ok) {
+      return {
+        ok: true,
+        apnsId: response.headers.get('apns-id'),
+      };
+    }
+
+    const rawError = await response.text();
+    const trimmedError = rawError.trim();
+
     return {
-      ok: true,
-      apnsId: response.headers.get('apns-id'),
+      ok: false,
+      error: `APNs status=${response.status}${trimmedError ? ` body=${trimmedError}` : ''}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: `APNs fetch error: ${formatUnknownError(error)}`,
     };
   }
-
-  const rawError = await response.text();
-  const trimmedError = rawError.trim();
-
-  return {
-    ok: false,
-    error: `APNs ${response.status}${trimmedError ? `: ${trimmedError}` : ''}`,
-  };
 }

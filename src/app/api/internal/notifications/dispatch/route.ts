@@ -77,7 +77,7 @@ function isAuthorized(request: NextRequest) {
 }
 
 function summarizeErrors(errors: string[]) {
-  return errors.slice(0, 3).join(' | ');
+  return errors.join(' || ').slice(0, 4000);
 }
 
 export async function POST(request: NextRequest) {
