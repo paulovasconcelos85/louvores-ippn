@@ -28,6 +28,11 @@ interface BoletimItem {
   destaque: boolean | null;
   ordem: number | null;
   criado_em: string | null;
+  liturgia_nome?: string | null;
+  liturgia_titulo?: string | null;
+  liturgia_publico?: string | null;
+  liturgia_interno?: string | null;
+  liturgia_horario?: string | null;
 }
 
 interface BoletimSecao {
@@ -115,7 +120,9 @@ interface CanticoAbertoRef {
 interface LiturgiaGrupo {
   id: string;
   titulo: string;
-  corpos: string[];
+  horario: string | null;
+  publicos: string[];
+  internos: string[];
 }
 
 interface LiturgiaCard {
@@ -277,7 +284,7 @@ function agruparCardsLiturgia(itens: BoletimItem[]) {
   let cardAtual: LiturgiaCard | null = null;
 
   for (const item of itens) {
-    const nomeLiturgia = extrairNomeCardLiturgia(item.conteudo);
+    const nomeLiturgia = item.liturgia_nome ?? extrairNomeCardLiturgia(item.conteudo);
 
     if (nomeLiturgia !== null) {
       cardAtual = {
@@ -289,8 +296,18 @@ function agruparCardsLiturgia(itens: BoletimItem[]) {
       continue;
     }
 
+    const possuiCamposLiturgicos =
+      typeof item.liturgia_titulo === 'string' ||
+      typeof item.liturgia_publico === 'string' ||
+      typeof item.liturgia_interno === 'string' ||
+      typeof item.liturgia_horario === 'string';
     const partes = extrairPartesLiturgicas(item.conteudo);
-    const titulo = partes.titulo || 'Item liturgico';
+    const titulo = (item.liturgia_titulo || partes.titulo || 'Item liturgico').trim();
+    const horario = item.liturgia_horario?.trim() || null;
+    const publico = possuiCamposLiturgicos
+      ? item.liturgia_publico?.trim() || ''
+      : partes.corpo;
+    const interno = possuiCamposLiturgicos ? item.liturgia_interno?.trim() || '' : '';
 
     if (!cardAtual) {
       cardAtual = {
@@ -303,9 +320,12 @@ function agruparCardsLiturgia(itens: BoletimItem[]) {
 
     const ultimoGrupo = cardAtual.grupos[cardAtual.grupos.length - 1];
 
-    if (ultimoGrupo && ultimoGrupo.titulo === titulo) {
-      if (partes.corpo) {
-        ultimoGrupo.corpos.push(partes.corpo);
+    if (ultimoGrupo && ultimoGrupo.titulo === titulo && ultimoGrupo.horario === horario) {
+      if (publico && !ultimoGrupo.publicos.includes(publico)) {
+        ultimoGrupo.publicos.push(publico);
+      }
+      if (interno && !ultimoGrupo.internos.includes(interno)) {
+        ultimoGrupo.internos.push(interno);
       }
       continue;
     }
@@ -313,7 +333,9 @@ function agruparCardsLiturgia(itens: BoletimItem[]) {
     cardAtual.grupos.push({
       id: item.id,
       titulo,
-      corpos: partes.corpo ? [partes.corpo] : [],
+      horario,
+      publicos: publico ? [publico] : [],
+      internos: interno ? [interno] : [],
     });
   }
 
@@ -529,7 +551,7 @@ export default function Home() {
           for (const grupo of card.grupos) {
             texto += `${grupo.titulo}\n`;
 
-            for (const corpo of grupo.corpos) {
+            for (const corpo of grupo.publicos) {
               if (corpo) {
                 texto += `${corpo}\n`;
               }
@@ -747,8 +769,17 @@ export default function Home() {
     };
   };
 
-  const renderBlocoTexto = (texto: string, emphasis = false) => {
+  const renderBlocoTexto = (
+    texto: string,
+    tone: 'default' | 'emphasis' | 'muted' = 'default'
+  ) => {
     const linhas = texto.split('\n');
+    const textoClassName =
+      tone === 'emphasis'
+        ? 'text-slate-800'
+        : tone === 'muted'
+          ? 'text-slate-500'
+          : 'text-slate-700';
 
     return (
       <div className="space-y-2">
@@ -787,7 +818,7 @@ export default function Home() {
             return (
               <p
                 key={`${itemLista}-${index}`}
-                className={`${emphasis ? 'text-slate-800' : 'text-slate-700'} flex items-start gap-2 text-[15px] leading-7 sm:text-base`}
+                className={`${textoClassName} flex items-start gap-2 text-[15px] leading-7 sm:text-base`}
               >
                 <span className="pt-[0.12rem] text-[#365c4d]">•</span>
                 <span className="flex-1">{itemLista}</span>
@@ -798,7 +829,7 @@ export default function Home() {
           return (
             <p
               key={`${valor}-${index}`}
-              className={`${emphasis ? 'text-slate-800' : 'text-slate-700'} text-[15px] whitespace-pre-line leading-7 sm:text-base`}
+              className={`${textoClassName} text-[15px] whitespace-pre-line leading-7 sm:text-base`}
             >
               {valor}
             </p>
@@ -841,7 +872,10 @@ export default function Home() {
     }
 
     if (!isLiturgiaSection(secao)) {
-      return renderBlocoTexto(conteudo, isPastoralSection(secao));
+      return renderBlocoTexto(
+        conteudo,
+        isPastoralSection(secao) ? 'emphasis' : 'default'
+      );
     }
 
     const [titulo, ...restante] = conteudo.split('\n');
@@ -1096,19 +1130,55 @@ export default function Home() {
                                   key={grupo.id}
                                   className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
                                 >
-                                  <div className="space-y-1.5">
-                                    <p className="text-[15px] font-semibold text-slate-900 leading-6 sm:text-base">
-                                      {grupo.titulo}
-                                    </p>
-                                    <div className="space-y-2">
-                                      {grupo.corpos.map((corpo, corpoIndex) =>
-                                        corpo ? (
-                                          <div key={`${grupo.id}-${corpoIndex}`}>
-                                            {renderBlocoTexto(corpo)}
-                                          </div>
-                                        ) : null
-                                      )}
+                                  <div className="space-y-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-[15px] font-semibold text-slate-900 leading-6 sm:text-base">
+                                        {grupo.titulo}
+                                      </p>
                                     </div>
+
+                                    {grupo.publicos.length > 0 ? (
+                                      <div className="space-y-2">
+                                        {grupo.publicos.map((corpo, corpoIndex) =>
+                                          corpo ? (
+                                            <div key={`${grupo.id}-publico-${corpoIndex}`}>
+                                              {renderBlocoTexto(corpo)}
+                                            </div>
+                                          ) : null
+                                        )}
+                                      </div>
+                                    ) : null}
+
+                                    {user && (grupo.internos.length > 0 || grupo.horario) ? (
+                                      <div className="rounded-[22px] border border-slate-200 bg-slate-50/90 px-4 py-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                                            Interno
+                                          </p>
+                                          <p className="text-xs text-slate-400">
+                                            Visível só para quem está logado
+                                          </p>
+                                        </div>
+
+                                        {grupo.horario ? (
+                                          <p className="mt-2 text-sm font-medium text-slate-500">
+                                            Horário: {grupo.horario}
+                                          </p>
+                                        ) : null}
+
+                                        {grupo.internos.length > 0 ? (
+                                          <div className="mt-3 space-y-2">
+                                            {grupo.internos.map((corpo, corpoIndex) =>
+                                              corpo ? (
+                                                <div key={`${grupo.id}-interno-${corpoIndex}`}>
+                                                  {renderBlocoTexto(corpo, 'muted')}
+                                                </div>
+                                              ) : null
+                                            )}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}

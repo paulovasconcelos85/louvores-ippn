@@ -120,6 +120,11 @@ interface BoletimItemRow {
   destaque: boolean | null;
   ordem: number | null;
   criado_em: string | null;
+  liturgia_nome?: string | null;
+  liturgia_titulo?: string | null;
+  liturgia_publico?: string | null;
+  liturgia_interno?: string | null;
+  liturgia_horario?: string | null;
 }
 
 interface LegacyLouvorItemRow {
@@ -131,6 +136,7 @@ interface LegacyLouvorItemRow {
   cantico_id: string | null;
   conteudo_publico: string | null;
   descricao: string | null;
+  horario?: string | null;
 }
 
 interface LegacyCultoRow {
@@ -164,6 +170,7 @@ interface BoletimFallbackMeta {
 }
 
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
+const LITURGIA_META_TIPO = '__liturgia__:nome';
 
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
@@ -325,6 +332,124 @@ async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
   return canticosPorId;
 }
 
+function buildLegacyLiturgiaConteudo({
+  titulo,
+  conteudoPublico,
+  conteudoInterno,
+}: {
+  titulo: string;
+  conteudoPublico: string;
+  conteudoInterno: string;
+}) {
+  return `${titulo}${conteudoPublico ? `\n${conteudoPublico}` : ''}${
+    conteudoInterno ? `\n${conteudoInterno}` : ''
+  }`;
+}
+
+function buildLiturgiaBoletimItems(
+  itensLiturgia: LegacyLouvorItemRow[],
+  canticosPorId: Map<string, { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null }>,
+  includeInternal: boolean,
+  secaoId: string
+) {
+  const itensBoletim: BoletimItemRow[] = [];
+  let grupoAtual: {
+    ordem: number | null;
+    itemId: string;
+    tipo: string;
+    conteudoPublico: string;
+    conteudoInterno: string;
+    horario: string | null;
+    canticos: string[];
+  } | null = null;
+
+  const finalizarGrupoAtual = () => {
+    if (!grupoAtual) return;
+
+    const conteudoPublico = [grupoAtual.conteudoPublico, ...grupoAtual.canticos]
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    const conteudoInterno = includeInternal ? grupoAtual.conteudoInterno : '';
+
+    itensBoletim.push({
+      id: grupoAtual.itemId,
+      secao_id: secaoId,
+      conteudo: buildLegacyLiturgiaConteudo({
+        titulo: grupoAtual.tipo,
+        conteudoPublico,
+        conteudoInterno,
+      }),
+      destaque: false,
+      ordem: grupoAtual.ordem,
+      criado_em: null,
+      liturgia_titulo: grupoAtual.tipo,
+      liturgia_publico: conteudoPublico || null,
+      liturgia_interno: conteudoInterno || null,
+      liturgia_horario: includeInternal ? grupoAtual.horario : null,
+    });
+
+    grupoAtual = null;
+  };
+
+  for (const item of itensLiturgia) {
+    if (item.tipo === LITURGIA_META_TIPO) {
+      finalizarGrupoAtual();
+
+      const nomeLiturgia = item.conteudo_publico?.trim() || '';
+      itensBoletim.push({
+        id: item.id,
+        secao_id: secaoId,
+        conteudo: `${LITURGIA_META_TIPO}\n${nomeLiturgia}`,
+        destaque: false,
+        ordem: item.ordem,
+        criado_em: null,
+        liturgia_nome: nomeLiturgia || null,
+      });
+      continue;
+    }
+
+    const tipo = item.tipo?.trim() || `Item ${(item.ordem || itensBoletim.length) + 1}`;
+    const conteudoPublico = item.conteudo_publico?.trim() || '';
+    const conteudoInterno = item.descricao?.trim() || '';
+    const horario = item.horario?.trim() || null;
+    const cantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
+    const linhaCantico = cantico?.nome
+      ? `${cantico.tipo === 'hinario' ? 'Hino' : 'Cantico'}: ${cantico.nome}${
+          item.tom ? ` (${item.tom})` : ''
+        }`
+      : '';
+    const deveAgrupar =
+      grupoAtual &&
+      grupoAtual.tipo === tipo &&
+      grupoAtual.conteudoPublico === conteudoPublico &&
+      grupoAtual.conteudoInterno === conteudoInterno &&
+      grupoAtual.horario === horario;
+
+    if (!deveAgrupar) {
+      finalizarGrupoAtual();
+      grupoAtual = {
+        ordem: item.ordem,
+        itemId: item.id,
+        tipo,
+        conteudoPublico,
+        conteudoInterno,
+        horario,
+        canticos: linhaCantico ? [linhaCantico] : [],
+      };
+      continue;
+    }
+
+    if (linhaCantico && !grupoAtual.canticos.includes(linhaCantico)) {
+      grupoAtual.canticos.push(linhaCantico);
+    }
+  }
+
+  finalizarGrupoAtual();
+
+  return itensBoletim;
+}
+
 function mergeLiturgiaSecao(
   secoes: LegacyBoletimSecao[],
   liturgiaSecao: LegacyBoletimSecao | null
@@ -364,7 +489,7 @@ async function buildLatestLiturgiaSection(
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
@@ -387,19 +512,12 @@ async function buildLatestLiturgiaSection(
     ordem: 2,
     visivel: true,
     criado_em: null,
-    itens: itensLiturgia.map((item, index) => ({
-      id: item.id,
-      secao_id: `legacy-liturgia-${culto['Culto nr.']}`,
-      conteudo: buildLegacyLiturgiaConteudo(
-        item,
-        index,
-        item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null,
-        includeInternal
-      ),
-      destaque: false,
-      ordem: item.ordem ?? index,
-      criado_em: null,
-    })),
+    itens: buildLiturgiaBoletimItems(
+      itensLiturgia,
+      canticosPorId,
+      includeInternal,
+      `legacy-liturgia-${culto['Culto nr.']}`
+    ),
   };
 }
 
@@ -424,7 +542,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
@@ -499,25 +617,12 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
       ordem: 2,
       visivel: true,
       criado_em: null,
-      itens: itensLiturgia.map((item, index) => {
-        const cantico = item.cantico_id
-          ? canticosPorId.get(String(item.cantico_id))
-          : null;
-
-        return {
-          id: item.id,
-          secao_id: `legacy-liturgia-${culto['Culto nr.']}`,
-          conteudo: buildLegacyLiturgiaConteudo(
-            item,
-            index,
-            cantico,
-            includeInternal
-          ),
-          destaque: false,
-          ordem: item.ordem ?? index,
-          criado_em: null,
-        };
-      }),
+      itens: buildLiturgiaBoletimItems(
+        itensLiturgia,
+        canticosPorId,
+        includeInternal,
+        `legacy-liturgia-${culto['Culto nr.']}`
+      ),
     });
   }
 
@@ -527,26 +632,6 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
     boletimSecoes: secoes,
     legacyMessage: secoes.length > 0 ? null : 'Esta igreja ainda nao publicou secoes do boletim.',
   };
-}
-
-function buildLegacyLiturgiaConteudo(
-  item: LegacyLouvorItemRow,
-  index: number,
-  cantico: { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null } | null | undefined,
-  includeInternal: boolean
-) {
-  const tituloItem = item.tipo || `Item ${index + 1}`;
-  const linhaCantico = cantico?.nome
-    ? `\n${cantico.tipo === 'hinario' ? 'Hino' : 'Cantico'}: ${cantico.nome}${item.tom ? ` (${item.tom})` : ''}`
-    : '';
-  const conteudoBase = item.conteudo_publico?.trim() || '';
-  const descricao = includeInternal ? item.descricao?.trim() || '' : '';
-
-  return `${tituloItem}${
-    conteudoBase ? `\n${conteudoBase}` : ''
-  }${
-    descricao ? `\n${descricao}` : ''
-  }${linhaCantico}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -683,7 +768,7 @@ export async function GET(request: NextRequest) {
       if (cultoId) {
         const { data: itensRaw, error: itensError } = await supabaseAdmin
           .from('louvor_itens')
-          .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
+          .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
           .eq('culto_id', cultoId)
           .order('ordem', { ascending: true });
 
@@ -695,24 +780,14 @@ export async function GET(request: NextRequest) {
         boletimSecoes = boletimSecoes.map((secao) => {
           if (secao.tipo !== 'liturgia') return secao;
 
-          const itensAtualizados = secao.itens.map((item, index) => {
-            const original = itensLegacy.find((legacyItem) => legacyItem.id === item.id);
-            if (!original) return item;
-
-            return {
-              ...item,
-              conteudo: buildLegacyLiturgiaConteudo(
-                original,
-                index,
-                original.cantico_id ? canticosPorId.get(String(original.cantico_id)) : null,
-                true
-              ),
-            };
-          });
-
           return {
             ...secao,
-            itens: itensAtualizados,
+            itens: buildLiturgiaBoletimItems(
+              itensLegacy.filter((item) => !isBoletimFallbackTipo(item.tipo)),
+              canticosPorId,
+              true,
+              secao.id
+            ),
           };
         });
       }
