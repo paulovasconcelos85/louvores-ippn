@@ -3456,12 +3456,9 @@ export default function CultosPage() {
       const blockGap = 4.2 * scale;
       const innerIndent = 3;
       const contentWidth = pw - marginX * 2;
+      const availableHeight = bottomY - topY;
 
-      const drawHeader = (page: number) => {
-        if (page > 1) {
-          doc.addPage();
-        }
-
+      const drawHeader = () => {
         doc.setFillColor(16, 60, 48);
         doc.rect(0, 0, pw, headerBottom - 4, 'F');
         doc.setTextColor(255, 255, 255);
@@ -3472,7 +3469,7 @@ export default function CultosPage() {
         doc.setFontSize(subtitleSize);
         doc.text(dataFmt, pw / 2, 17, { align: 'center' });
         doc.setFontSize(metaSize);
-        doc.text(`Pagina ${page} de 2`, pw / 2, 23, { align: 'center' });
+        doc.text('Pagina 1 de 1', pw / 2, 23, { align: 'center' });
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(16, 60, 48);
         doc.line(marginX, headerBottom, pw - marginX, headerBottom);
@@ -3480,6 +3477,7 @@ export default function CultosPage() {
 
       const calcPastoralHeight = () => {
         let h = titleH + blockGap;
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(publicSize);
         h += doc.splitTextToSize(culto.palavra_pastoral || '', contentWidth - 4).length * lineH;
         if (culto.palavra_pastoral_autor) {
@@ -3489,21 +3487,25 @@ export default function CultosPage() {
       };
 
       const calcItemHeight = (it: ItemAgrupado, num: number) => {
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(itemTitleSize);
         const titulo = `${num}. ${it.tipo.toUpperCase()}${it.horario ? ' / ' + it.horario : ''}`;
         let h = doc.splitTextToSize(titulo, contentWidth).length * titleH + 1.5;
 
         if (it.conteudo_publico) {
+          doc.setFont('helvetica', 'normal');
           doc.setFontSize(publicSize);
           h += doc.splitTextToSize(it.conteudo_publico, contentWidth - 4).length * lineH;
         }
 
         if (it.descricao) {
+          doc.setFont('helvetica', 'normal');
           doc.setFontSize(internalSize);
           h += doc.splitTextToSize(it.descricao, contentWidth - 4).length * lineH;
         }
 
         for (const cantico of it.canticos) {
+          doc.setFont('helvetica', 'bold');
           doc.setFontSize(songSize);
           h += doc.splitTextToSize(`${cantico.nome}${cantico.tom ? ` (${cantico.tom})` : ''}`, contentWidth - 4).length * lineH;
         }
@@ -3589,66 +3591,57 @@ export default function CultosPage() {
         });
       });
 
-      const placements: Array<{ page: number; y: number; blockIndex: number }> = [];
-      let page = 1;
+      const totalHeight = blocos.reduce((acc, bloco) => acc + bloco.altura, 0);
+
+      if (totalHeight > availableHeight) {
+        return null;
+      }
+
+      drawHeader();
       let y = topY;
+      const x = marginX;
 
-      for (let i = 0; i < blocos.length; i += 1) {
-        const bloco = blocos[i];
-        if (y + bloco.altura > bottomY) {
-          page += 1;
-          y = topY;
-        }
-
-        if (page > 2) {
-          return null;
-        }
-
-        placements.push({
-          page,
-          y,
-          blockIndex: i,
-        });
-
-        y += bloco.altura;
-      }
-
-      const totalPages = Math.max(...placements.map((item) => item.page), 1);
-
-      for (let page = 1; page <= totalPages; page += 1) {
-        drawHeader(page);
-      }
-
-      placements.forEach((placement) => {
-        const bloco = blocos[placement.blockIndex];
-        doc.setPage(placement.page);
-        const x = marginX;
-
+      blocos.forEach((bloco) => {
         if (bloco.kind === 'pastoral') {
-          renderPastoral(x, placement.y);
+          renderPastoral(x, y);
+          y += bloco.altura;
           return;
         }
 
-        renderItem(bloco.item, bloco.numero, x, placement.y);
+        renderItem(bloco.item, bloco.numero, x, y);
+        y += bloco.altura;
       });
 
       return doc;
     };
 
-    const doc =
-      renderPdf(1.18) ||
-      renderPdf(1.12) ||
-      renderPdf(1.06) ||
-      renderPdf(1) ||
-      renderPdf(0.95) ||
-      renderPdf(0.9) ||
-      renderPdf(0.85) ||
-      renderPdf(0.8) ||
-      renderPdf(0.75) ||
-      renderPdf(0.7);
+    const minScale = 0.52;
+    const maxScale = 1.18;
+    let bestScale = minScale;
+    let bestDoc = renderPdf(minScale);
+
+    if (bestDoc) {
+      let low = minScale;
+      let high = maxScale;
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const mid = (low + high) / 2;
+        const candidate = renderPdf(mid);
+
+        if (candidate) {
+          bestScale = mid;
+          bestDoc = candidate;
+          low = mid;
+        } else {
+          high = mid;
+        }
+      }
+    }
+
+    const doc = bestDoc || renderPdf(bestScale);
 
     if (!doc) {
-      alert('Nao foi possivel montar o PDF em ate duas paginas.');
+      alert('Nao foi possivel montar o PDF em uma unica pagina. Revise a quantidade de texto desta liturgia.');
       return;
     }
 
