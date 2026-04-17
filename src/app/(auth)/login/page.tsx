@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocale, useTranslations } from '@/i18n/provider';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations();
   const { user, signIn, signUp, signOut, signInWithGoogle, signInWithAzure } = useAuth();
   
   const [email, setEmail] = useState('');
@@ -21,13 +24,13 @@ export default function LoginPage() {
   const [mensagemSucesso, setMensagemSucesso] = useState('');
   const [igrejaAtual, setIgrejaAtual] = useState<IgrejaSelecionavel | null>(null);
 
-  const finalizarAcesso = async () => {
+  const finalizarAcesso = useCallback(async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      throw new Error('Sua sessão expirou. Entre novamente para continuar.');
+      throw new Error(t('login.expiredSession'));
     }
 
     const response = await fetch('/api/finalizar-acesso', {
@@ -40,11 +43,11 @@ export default function LoginPage() {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || 'Seu acesso ainda não foi liberado.');
+      throw new Error(data.message || data.error || t('login.pendingAccess'));
     }
 
     return data;
-  };
+  }, [t]);
 
   /**
    * 🔄 Monitor de Sessão
@@ -56,7 +59,7 @@ export default function LoginPage() {
     if (erroUrl) {
       setError(erroUrl);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let ativo = true;
@@ -67,7 +70,7 @@ export default function LoginPage() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || 'Erro ao carregar igrejas.');
+          throw new Error(data.error || t('login.loadChurchError'));
         }
 
         if (!ativo) return;
@@ -105,7 +108,7 @@ export default function LoginPage() {
     return () => {
       ativo = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!user) return;
@@ -123,7 +126,7 @@ export default function LoginPage() {
       } catch (err: any) {
         await signOut();
         if (ativo) {
-          setError(err.message || 'Seu acesso ainda não foi liberado.');
+          setError(err.message || t('login.pendingAccess'));
           setLoading(false);
           setSincronizandoAcesso(false);
         }
@@ -135,7 +138,7 @@ export default function LoginPage() {
     return () => {
       ativo = false;
     };
-  }, [user, router, signOut]);
+  }, [user, router, signOut, t, finalizarAcesso]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,12 +153,12 @@ export default function LoginPage() {
       // Se não houver erro, o useEffect acima fará o redirecionamento
     } catch (err: any) {
       // Tradução amigável de erros comuns
-      let mensagemErro = 'Erro ao fazer login';
+      let mensagemErro = t('login.loginError');
       
       if (err.message === 'Invalid login credentials') {
-        mensagemErro = 'E-mail ou senha incorretos.';
+        mensagemErro = t('login.invalidCredentials');
       } else if (err.message?.includes('Email not confirmed')) {
-        mensagemErro = 'Por favor, confirme seu e-mail antes de acessar.';
+        mensagemErro = t('login.emailNotConfirmed');
       } else {
         mensagemErro = err.message;
       }
@@ -170,11 +173,11 @@ export default function LoginPage() {
     setError('');
     setMensagemSucesso('');
     try {
-      const { error: googleError } = await signInWithGoogle();
+      const { error: googleError } = await signInWithGoogle(locale);
       if (googleError) throw googleError;
       // No OAuth, a página será redirecionada pelo provedor
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login com Google');
+      setError(err.message || t('login.googleError'));
       setLoading(false);
     }
   };
@@ -184,10 +187,10 @@ export default function LoginPage() {
     setError('');
     setMensagemSucesso('');
     try {
-      const { error: azureError } = await signInWithAzure();
+      const { error: azureError } = await signInWithAzure(locale);
       if (azureError) throw azureError;
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login com Microsoft');
+      setError(err.message || t('login.microsoftError'));
       setLoading(false);
     }
   };
@@ -200,11 +203,11 @@ export default function LoginPage() {
 
     try {
       if (password.length < 6) {
-        throw new Error('A senha deve ter no mínimo 6 caracteres.');
+        throw new Error(t('login.passwordMinLength'));
       }
 
       if (password !== confirmPassword) {
-        throw new Error('As senhas não conferem.');
+        throw new Error(t('login.passwordMismatch'));
       }
 
       const { data, error: signUpError } = await signUp(email, password);
@@ -216,10 +219,10 @@ export default function LoginPage() {
         return;
       }
 
-      setMensagemSucesso('Conta criada. Se houver confirmação por e-mail ativa, conclua a confirmação e depois entre normalmente.');
+      setMensagemSucesso(t('login.signUpSuccess'));
       setModo('entrar');
     } catch (err: any) {
-      setError(err.message || 'Erro ao criar sua conta.');
+      setError(err.message || t('login.signUpError'));
       setLoading(false);
       return;
     }
@@ -232,8 +235,8 @@ export default function LoginPage() {
       <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-700 mx-auto"></div>
-          <p className="mt-4 text-slate-700 font-semibold">Preparando seu acesso...</p>
-          <p className="text-sm text-slate-500 mt-2">Estamos validando seu cadastro e vinculando sua conta.</p>
+          <p className="mt-4 text-slate-700 font-semibold">{t('login.syncTitle')}</p>
+          <p className="text-sm text-slate-500 mt-2">{t('login.syncDescription')}</p>
         </div>
       </div>
     );
@@ -265,12 +268,12 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">
-              {modo === 'entrar' ? 'Bem-vindo de volta!' : 'Primeiro acesso'}
+              {modo === 'entrar' ? t('login.welcomeBack') : t('login.firstAccess')}
             </h2>
             <p className="text-slate-600 text-sm">
               {modo === 'entrar'
-                ? 'Entre com suas credenciais'
-                : 'Crie sua conta com o mesmo e-mail liberado pela administração'}
+                ? t('login.signInDescription')
+                : t('login.signUpDescription')}
             </p>
           </div>
 
@@ -298,7 +301,7 @@ export default function LoginPage() {
                 modo === 'entrar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
             >
-              Entrar
+              {t('login.tabSignIn')}
             </button>
             <button
               type="button"
@@ -311,14 +314,14 @@ export default function LoginPage() {
                 modo === 'primeiro_acesso' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
             >
-              Primeiro acesso
+              {t('login.tabFirstAccess')}
             </button>
           </div>
 
           <form onSubmit={modo === 'entrar' ? handleSubmit : handlePrimeiroAcesso} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                E-mail
+                {t('login.email')}
               </label>
               <input
                 type="email"
@@ -326,13 +329,13 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
-                placeholder="seu@email.com"
+                placeholder={t('login.placeholderEmail')}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Senha
+                {t('login.password')}
               </label>
               <input
                 type="password"
@@ -348,7 +351,7 @@ export default function LoginPage() {
             {modo === 'primeiro_acesso' && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Confirmar senha
+                  {t('login.confirmPassword')}
                 </label>
                 <input
                   type="password"
@@ -373,10 +376,10 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Processando...
+                  {t('login.submitLoading')}
                 </span>
               ) : (
-                modo === 'entrar' ? 'Entrar' : 'Criar conta'
+                modo === 'entrar' ? t('login.submitSignIn') : t('login.submitSignUp')
               )}
             </button>
           </form>
@@ -386,7 +389,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-slate-500">ou continue com</span>
+              <span className="px-4 bg-white text-slate-500">{t('login.continueWith')}</span>
             </div>
           </div>
 
@@ -427,7 +430,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-slate-500">ou</span>
+              <span className="px-4 bg-white text-slate-500">{t('login.or')}</span>
             </div>
           </div>
 
@@ -435,12 +438,13 @@ export default function LoginPage() {
             onClick={() => router.push('/')}
             className="w-full py-3 border-2 border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all"
           >
-            Voltar para a página inicial
+            {t('login.backToHome')}
           </button>
 
           <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs text-blue-900">
-              <span className="font-semibold">ℹ️ Primeiro acesso?</span> O administrador precisa liberar seu e-mail primeiro. Depois disso, você pode criar sua conta aqui ou entrar com Google/Microsoft usando o mesmo e-mail.
+              <span className="font-semibold">{t('login.firstAccessHintTitle')}</span>{' '}
+              {t('login.firstAccessHintBody')}
             </p>
           </div>
         </div>

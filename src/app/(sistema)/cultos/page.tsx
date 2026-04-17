@@ -260,6 +260,11 @@ interface LouvorItemRowComCantico extends LouvorItemRow {
   canticos: { nome: string | null } | null;
 }
 
+interface CultoLookupRow {
+  'Culto nr.': number;
+  Dia: string;
+}
+
 interface BoletimFallbackMeta {
   secaoTitulo: string;
   secaoIcone: string | null;
@@ -607,6 +612,19 @@ function normalizarSecoesBoletim(secoes: BoletimSecaoRascunho[]) {
   }));
 }
 
+function clonarSecoesBoletimRascunho(secoes: BoletimSecaoRascunho[]) {
+  return normalizarSecoesBoletim(
+    secoes.map((secao) => ({
+      ...secao,
+      id: createDraftId('secao-boletim'),
+      itens: secao.itens.map((item) => ({
+        ...item,
+        id: createDraftId('boletim-item'),
+      })),
+    }))
+  );
+}
+
 function parseAgendaConteudo(conteudo: string): AgendaItemRascunho {
   const partes = conteudo.split('|');
   const [dataRaw, horaRaw, ...descricaoPartes] = partes;
@@ -727,6 +745,80 @@ function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[]) {
       ),
     }))
     .sort((a, b) => a.ordem - b.ordem);
+}
+
+async function carregarUltimasSecoesBoletimPorTipo(
+  igrejaId: string,
+  diaAtual: string,
+  tipoDesejado: string
+): Promise<{ secoes: BoletimSecaoRascunho[]; origemDia: string | null }> {
+  const { data: cultosAnterioresRaw, error: cultosError } = await supabase
+    .from('Louvores IPPN')
+    .select('"Culto nr.", Dia')
+    .eq('igreja_id', igrejaId)
+    .lt('Dia', getCultoDateKey(diaAtual))
+    .order('Dia', { ascending: false })
+    .limit(40);
+
+  if (cultosError) throw cultosError;
+
+  const cultosAnteriores = (cultosAnterioresRaw || []) as CultoLookupRow[];
+  if (cultosAnteriores.length === 0) {
+    return { secoes: [], origemDia: null };
+  }
+
+  const cultoIds = cultosAnteriores
+    .map((culto) => culto['Culto nr.'])
+    .filter((cultoId): cultoId is number => typeof cultoId === 'number');
+
+  if (cultoIds.length === 0) {
+    return { secoes: [], origemDia: null };
+  }
+
+  const { data: fallbackRowsRaw, error: fallbackError } = await supabase
+    .from('louvor_itens')
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .in('culto_id', cultoIds)
+    .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`)
+    .order('ordem', { ascending: true });
+
+  if (fallbackError) throw fallbackError;
+
+  const fallbackRows = (fallbackRowsRaw || []) as LouvorItemRow[];
+  if (fallbackRows.length === 0) {
+    return { secoes: [], origemDia: null };
+  }
+
+  const rowsPorCulto = new Map<number, LouvorItemRow[]>();
+  fallbackRows.forEach((row) => {
+    const atuais = rowsPorCulto.get(row.culto_id) || [];
+    atuais.push(row);
+    rowsPorCulto.set(row.culto_id, atuais);
+  });
+
+  const cultosAgrupadosPorDia = new Map<string, number[]>();
+  cultosAnteriores.forEach((culto) => {
+    const dia = getCultoDateKey(culto.Dia);
+    const atuais = cultosAgrupadosPorDia.get(dia) || [];
+    atuais.push(culto['Culto nr.']);
+    cultosAgrupadosPorDia.set(dia, atuais);
+  });
+
+  for (const [dia, idsDoDia] of cultosAgrupadosPorDia.entries()) {
+    const rowsDoDia = idsDoDia.flatMap((cultoId) => rowsPorCulto.get(cultoId) || []);
+    const secoesDoDia = buildBoletimSecoesFromFallbackRows(rowsDoDia).filter(
+      (secao) => secao.tipo === tipoDesejado && secao.itens.some((item) => item.conteudo.trim().length > 0)
+    );
+
+    if (secoesDoDia.length > 0) {
+      return {
+        secoes: clonarSecoesBoletimRascunho(secoesDoDia),
+        origemDia: dia,
+      };
+    }
+  }
+
+  return { secoes: [], origemDia: null };
 }
 
 async function buscarPastorPadrao(igrejaId: string): Promise<string | null> {
@@ -2026,10 +2118,10 @@ function EditorBoletimDoDiaModal({
   const [showEscolherTipo, setShowEscolherTipo] = useState(false);
   const [tipoNovaSecao, setTipoNovaSecao] = useState<string | null>(null);
   const [secaoEditandoIndex, setSecaoEditandoIndex] = useState<number | null>(null);
+  const [pedidosOracaoReaproveitadosDe, setPedidosOracaoReaproveitadosDe] = useState<string | null>(null);
 
   const referencia = useMemo(() => getCultoBoletimReferencia(cultos), [cultos]);
-  const cultoIds = cultos.map((culto) => culto['Culto nr.']);
-  const cultoIdsKey = useMemo(() => cultoIds.join(','), [cultoIds]);
+  const cultoIds = useMemo(() => cultos.map((culto) => culto['Culto nr.']), [cultos]);
   const secaoEditando =
     secaoEditandoIndex !== null ? boletimSecoes[secaoEditandoIndex] || null : null;
 
@@ -2041,6 +2133,7 @@ function EditorBoletimDoDiaModal({
     setImagemPreview(referencia?.imagem_url || null);
     setImagemUpload(null);
     setInstagramUrl('');
+    setPedidosOracaoReaproveitadosDe(null);
 
     const carregar = async () => {
       if (cultoIds.length === 0) {
@@ -2070,17 +2163,46 @@ function EditorBoletimDoDiaModal({
           }
         }
 
-        setBoletimSecoes(normalizarSecoesBoletim(secoes));
+        const secoesAtuais = normalizarSecoesBoletim(secoes);
+        const jaTemSecaoOracao = secoesAtuais.some(
+          (secao) => secao.tipo === 'oracao' && secao.itens.some((item) => item.conteudo.trim().length > 0)
+        );
+
+        if (jaTemSecaoOracao) {
+          setBoletimSecoes(secoesAtuais);
+          return;
+        }
+
+        const igrejaId = getStoredChurchId();
+        if (!igrejaId) {
+          setBoletimSecoes(secoesAtuais);
+          return;
+        }
+
+        const { secoes: secoesReaproveitadas, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
+          igrejaId,
+          dia,
+          'oracao'
+        );
+
+        if (secoesReaproveitadas.length === 0 || !origemDia) {
+          setBoletimSecoes(secoesAtuais);
+          return;
+        }
+
+        setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesReaproveitadas]));
+        setPedidosOracaoReaproveitadosDe(origemDia);
       } catch (error) {
         console.warn('Falha ao carregar boletim do dia:', error);
         setBoletimSecoes([]);
+        setPedidosOracaoReaproveitadosDe(null);
       } finally {
         setLoadingBoletim(false);
       }
     };
 
     carregar();
-  }, [aberto, referencia, cultoIdsKey]);
+  }, [aberto, referencia, cultoIds, dia]);
 
   if (!aberto) return null;
 
@@ -2326,6 +2448,13 @@ function EditorBoletimDoDiaModal({
                 + Nova seção
               </button>
             </div>
+
+            {pedidosOracaoReaproveitadosDe ? (
+              <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-6 text-sky-950/80">
+                Os pedidos de oração do boletim de {formatCultoDateLabel(pedidosOracaoReaproveitadosDe)} foram
+                carregados automaticamente. Revise, retire o que saiu e acrescente o que entrou antes de salvar.
+              </div>
+            ) : null}
 
             {loadingBoletim ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">

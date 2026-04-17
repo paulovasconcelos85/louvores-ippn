@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { Search, X, Check } from 'lucide-react';
+import { useTranslations } from '@/i18n/provider';
 
 export interface EnderecoGoogle {
   logradouro: string;
@@ -23,6 +24,7 @@ export default function EnderecoAutocomplete({
 }: {
   onSelect: (e: EnderecoGoogle) => void;
 }) {
+  const t = useTranslations();
   const [query, setQuery] = useState('');
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -102,7 +104,7 @@ export default function EnderecoAutocomplete({
           type="text"
           value={query}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="Digite o endereço ou bairro..."
+          placeholder={t('addressAutocomplete.placeholder')}
           className={`${inputCls} pl-10 pr-10`}
           autoComplete="off"
         />
@@ -144,13 +146,13 @@ export default function EnderecoAutocomplete({
       {carregando && (
         <p className="mt-1.5 text-xs text-slate-400 flex items-center gap-1.5">
           <span className="animate-spin inline-block w-3 h-3 border-b border-blue-600 rounded-full" />
-          Buscando endereços...
+          {t('addressAutocomplete.searching')}
         </p>
       )}
 
       {selecionado && !sugestoes.length && (
         <p className="mt-1.5 text-xs text-blue-600 font-medium flex items-center gap-1">
-          <Check className="w-3.5 h-3.5" /> Endereço selecionado
+          <Check className="w-3.5 h-3.5" /> {t('addressAutocomplete.selected')}
         </p>
       )}
     </div>

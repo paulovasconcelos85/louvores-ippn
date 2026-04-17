@@ -17,6 +17,9 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import type { Locale } from '@/i18n/config';
+import { formatCountryByLocale, formatDateByLocale } from '@/i18n/format';
+import { useLocale, useTranslations } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
@@ -143,31 +146,23 @@ function normalizarTextoBusca(valor: string | null | undefined) {
     .trim();
 }
 
-function formatarDataExtenso(valor: string) {
+function formatarDataExtenso(valor: string, locale: Locale) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
 
   const [, ano, mes, dia] = match;
   const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
 
-  return new Intl.DateTimeFormat('pt-BR', {
+  return formatDateByLocale(data, locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(data);
+  });
 }
 
-function formatarPais(valor: string | null) {
+function formatarPais(valor: string | null, locale: Locale) {
   if (!valor) return null;
-
-  const pais = valor.trim().toUpperCase();
-
-  if (pais === 'PT') return 'Portugal';
-  if (pais === 'BR') return 'Brasil';
-  if (pais === 'US' || pais === 'USA') return 'Estados Unidos';
-  if (pais === 'CA') return 'Canadá';
-
-  return valor;
+  return formatCountryByLocale(valor, locale);
 }
 
 function extrairYoutubeId(url: string | null) {
@@ -218,17 +213,17 @@ function parseAvisoBoletimItem(conteudo: string) {
   };
 }
 
-function formatarDataAgenda(valor: string) {
+function formatarDataAgenda(valor: string, locale: Locale) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return valor;
 
   const [, ano, mes, dia] = match;
   const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
 
-  return new Intl.DateTimeFormat('pt-BR', {
+  return formatDateByLocale(data, locale, {
     day: '2-digit',
     month: 'short',
-  }).format(data);
+  });
 }
 
 async function lerJsonSeguro(response: Response) {
@@ -344,6 +339,8 @@ function agruparCardsLiturgia(itens: BoletimItem[]) {
 
 export default function Home() {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations();
   const { user, loading: authLoading, signOut } = useAuth();
 
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
@@ -384,7 +381,7 @@ export default function Home() {
     const localizacaoDetalhada = [
       igrejaDetalhes.cidade,
       igrejaDetalhes.uf,
-      formatarPais(igrejaDetalhes.pais),
+      formatarPais(igrejaDetalhes.pais, locale),
     ]
       .filter(Boolean)
       .join(', ');
@@ -394,7 +391,7 @@ export default function Home() {
     }
 
     return enderecoBase || localizacaoDetalhada || null;
-  }, [igrejaDetalhes]);
+  }, [igrejaDetalhes, locale]);
 
   const dataEdicao = useMemo(() => {
     for (const secao of boletimSecoes) {
@@ -403,11 +400,11 @@ export default function Home() {
       const match = secao.titulo.match(/(\d{4}-\d{2}-\d{2})/);
       if (!match) continue;
 
-      return formatarDataExtenso(match[1]);
+      return formatarDataExtenso(match[1], locale);
     }
 
     return null;
-  }, [boletimSecoes]);
+  }, [boletimSecoes, locale]);
 
   const numeracaoSecoesVisiveis = useMemo(() => {
     let contador = 0;
@@ -465,36 +462,36 @@ export default function Home() {
     return Array.from(
       new Set(
         igrejas
-          .map((igreja) => formatarPais(igreja.pais))
+          .map((igreja) => formatarPais(igreja.pais, locale))
           .filter(Boolean)
       )
     )
-      .sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
-  }, [igrejas]);
+      .sort((a, b) => a!.localeCompare(b!, locale)) as string[];
+  }, [igrejas, locale]);
 
   const cidadesDisponiveis = useMemo(() => {
     return Array.from(
       new Set(
         igrejas
-          .filter((igreja) => !filtroPais || formatarPais(igreja.pais) === filtroPais)
+          .filter((igreja) => !filtroPais || formatarPais(igreja.pais, locale) === filtroPais)
           .map((igreja) => igreja.cidade?.trim())
           .filter(Boolean)
       )
     )
-      .sort((a, b) => a!.localeCompare(b!, 'pt-BR')) as string[];
-  }, [igrejas, filtroPais]);
+      .sort((a, b) => a!.localeCompare(b!, locale)) as string[];
+  }, [igrejas, filtroPais, locale]);
 
   const igrejasFiltradas = useMemo(() => {
     const buscaNormalizada = normalizarTextoBusca(buscaIgreja);
 
     return igrejas
-      .filter((igreja) => !filtroPais || formatarPais(igreja.pais) === filtroPais)
+      .filter((igreja) => !filtroPais || formatarPais(igreja.pais, locale) === filtroPais)
       .filter((igreja) => !filtroCidade || igreja.cidade?.trim() === filtroCidade)
       .filter((igreja) => {
         if (!buscaNormalizada) return true;
 
         const textoIndexado = normalizarTextoBusca(
-          [igreja.nome, igreja.sigla, igreja.cidade, igreja.regiao, formatarPais(igreja.pais)]
+          [igreja.nome, igreja.sigla, igreja.cidade, igreja.regiao, formatarPais(igreja.pais, locale)]
             .filter(Boolean)
             .join(' ')
         );
@@ -504,9 +501,9 @@ export default function Home() {
       .sort((a, b) => {
         if (a.id === igrejaAtualId) return -1;
         if (b.id === igrejaAtualId) return 1;
-        return a.nome.localeCompare(b.nome, 'pt-BR');
+        return a.nome.localeCompare(b.nome, locale);
       });
-  }, [igrejas, filtroPais, filtroCidade, buscaIgreja, igrejaAtualId]);
+  }, [igrejas, filtroPais, filtroCidade, buscaIgreja, igrejaAtualId, locale]);
 
   const igrejasExibidas = useMemo(
     () => igrejasFiltradas.slice(0, MAX_IGREJAS_EXIBIDAS),
@@ -569,7 +566,7 @@ export default function Home() {
         const agenda = secao.tipo === 'agenda' ? parseAgendaBoletimItem(item.conteudo) : null;
         const aviso = secao.tipo === 'avisos' ? parseAvisoBoletimItem(item.conteudo) : null;
         if (agenda) {
-          texto += `- ${formatarDataAgenda(agenda.data)}${agenda.temHora ? ` às ${agenda.hora}` : ''} — ${agenda.descricao}\n`;
+          texto += `- ${formatarDataAgenda(agenda.data, locale)}${agenda.temHora ? ` às ${agenda.hora}` : ''} — ${agenda.descricao}\n`;
           continue;
         }
         if (aviso) {
@@ -847,7 +844,7 @@ export default function Home() {
         return (
           <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#365c4d]">
-              {formatarDataAgenda(agenda.data)}
+              {formatarDataAgenda(agenda.data, locale)}
               {agenda.temHora ? ` · ${agenda.hora}` : ''}
             </p>
             <p className="mt-2 text-[15px] leading-7 text-slate-700 sm:text-base">{agenda.descricao}</p>
@@ -903,7 +900,7 @@ export default function Home() {
             <p className="text-emerald-200/80 text-[11px] font-semibold uppercase tracking-[0.28em] mb-1">
               OIKOS Hub
             </p>
-            <h1 className="text-xl font-bold text-white">Boletim Eletronico</h1>
+            <h1 className="text-xl font-bold text-white">{t('home.bulletinTitle')}</h1>
             {igrejaSelecionada && (
               <p className="text-sm text-emerald-50/90 mt-1">{nomeExibicaoIgreja}</p>
             )}
@@ -915,7 +912,7 @@ export default function Home() {
                   onClick={() => router.push('/admin')}
                   className="text-sm font-medium text-emerald-200 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
-                  Painel
+                  {t('home.panel')}
                 </button>
                 <button
                   onClick={async () => {
@@ -924,7 +921,7 @@ export default function Home() {
                   }}
                   className="text-sm font-medium text-emerald-300/70 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
-                  Sair
+                  {t('home.signOut')}
                 </button>
               </>
             ) : (
@@ -932,7 +929,7 @@ export default function Home() {
                 onClick={() => router.push('/login')}
                 className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-md transition-colors"
               >
-                Entrar
+                {t('home.signIn')}
               </button>
             )}
           </div>
@@ -943,19 +940,19 @@ export default function Home() {
         <section className="rounded-[30px] border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-5 py-6 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:px-7 sm:py-8">
           <div className="space-y-5">
             <div className="space-y-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">Edição Pública</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">{t('home.publicEdition')}</p>
               <div className="space-y-2">
                 <h2 className="font-['Georgia','Times_New_Roman',serif] text-3xl sm:text-4xl leading-tight font-semibold text-slate-900">
                   {nomeExibicaoIgreja}
                 </h2>
                 <p className="text-sm uppercase tracking-[0.22em] text-slate-500">
-                  {dataEdicao ? `Edição de ${dataEdicao}` : 'Boletim público'}
+                  {dataEdicao ? t('home.editionOf', { date: dataEdicao }) : t('home.publicBulletin')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-slate-600">
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#ded7cb] bg-[#faf7f0] px-3 py-1.5 text-[#365c4d]">
                   <MapPin className="w-3.5 h-3.5" />
-                  {enderecoFormatado || localizacao || 'Localizacao nao informada'}
+                  {enderecoFormatado || localizacao || t('home.locationUnknown')}
                 </span>
               </div>
               <div className="flex flex-wrap gap-3 pt-1">
@@ -965,13 +962,13 @@ export default function Home() {
                   className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-sm font-semibold px-4 py-3 transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
-                  Compartilhar boletim
+                  {t('home.shareBulletin')}
                 </button>
                 <Link
                   href={boletinsAnterioresHref}
                   className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                 >
-                  Boletins anteriores
+                  {t('home.pastBulletins')}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link

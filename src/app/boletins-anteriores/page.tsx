@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, Clock3, MapPin } from 'lucide-react';
+import type { Locale } from '@/i18n/config';
+import { formatDateByLocale } from '@/i18n/format';
+import { useLocale, useTranslations } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
@@ -21,32 +24,32 @@ interface BoletimAnterior {
   itens: BoletimAnteriorItem[];
 }
 
-function formatarDataExtenso(valor: string) {
+function formatarDataExtenso(valor: string, locale: Locale) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return valor;
 
   const [, ano, mes, dia] = match;
   const data = new Date(Number(ano), Number(mes) - 1, Number(dia));
 
-  return new Intl.DateTimeFormat('pt-BR', {
+  return formatDateByLocale(data, locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(data);
+  });
 }
 
-async function lerJsonSeguro(response: Response) {
+async function lerJsonSeguro(response: Response, t: (key: string) => string) {
   const texto = await response.text();
   const contentType = response.headers.get('content-type') || '';
 
   if (!contentType.includes('application/json')) {
-    throw new Error('Resposta inválida do servidor.');
+    throw new Error(t('history.invalidResponse'));
   }
 
   try {
     return JSON.parse(texto);
   } catch {
-    throw new Error('Não foi possível ler a resposta do servidor.');
+    throw new Error(t('history.invalidJson'));
   }
 }
 
@@ -60,6 +63,8 @@ function extrairPartesLiturgicas(conteudo: string) {
 }
 
 export default function BoletinsAnterioresPage() {
+  const locale = useLocale();
+  const t = useTranslations();
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
   const [igrejaAtualId, setIgrejaAtualId] = useState<string | null>(null);
   const [boletins, setBoletins] = useState<BoletimAnterior[]>([]);
@@ -111,10 +116,10 @@ export default function BoletinsAnterioresPage() {
     const carregarIgrejas = async () => {
       try {
         const response = await fetch('/api/igrejas/selecionaveis');
-        const data = await lerJsonSeguro(response);
+        const data = await lerJsonSeguro(response, t);
 
         if (!response.ok) {
-          throw new Error(data.error || 'Erro ao carregar igrejas.');
+          throw new Error(data.error || t('history.loadChurchesError'));
         }
 
         if (!active) return;
@@ -137,7 +142,7 @@ export default function BoletinsAnterioresPage() {
       } catch (error) {
         console.error('Erro ao carregar igrejas:', error);
         if (!active) return;
-        setErro('Não foi possível carregar as igrejas.');
+        setErro(t('history.loadChurchesError'));
       }
     };
 
@@ -146,7 +151,7 @@ export default function BoletinsAnterioresPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!igrejaAtualId) return;
@@ -161,10 +166,10 @@ export default function BoletinsAnterioresPage() {
         const response = await fetch(`/api/boletins-anteriores?${params.toString()}`, {
           headers: await buildAuthenticatedHeaders(),
         });
-        const data = await lerJsonSeguro(response);
+        const data = await lerJsonSeguro(response, t);
 
         if (!response.ok) {
-          throw new Error(data.error || 'Erro ao carregar boletins anteriores.');
+          throw new Error(data.error || t('history.loadHistoryError'));
         }
 
         if (!active) return;
@@ -176,7 +181,7 @@ export default function BoletinsAnterioresPage() {
         if (!active) return;
         setBoletins([]);
         setBoletimSelecionadoId(null);
-        setErro('Não foi possível carregar os boletins anteriores agora.');
+        setErro(t('history.loadHistoryError'));
       } finally {
         if (active) setLoading(false);
       }
@@ -187,7 +192,7 @@ export default function BoletinsAnterioresPage() {
     return () => {
       active = false;
     };
-  }, [igrejaAtualId]);
+  }, [igrejaAtualId, t]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbf9_0%,#f4f4f1_45%,#fbfbf9_100%)]">
@@ -198,15 +203,15 @@ export default function BoletinsAnterioresPage() {
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800"
           >
             <ArrowLeft className="w-4 h-4" />
-            Voltar ao boletim atual
+            {t('history.backToCurrent')}
           </Link>
 
           <header className="rounded-[28px] border border-white/70 bg-white/90 px-5 py-6 shadow-[0_20px_60px_rgba(23,53,43,0.08)] sm:px-7">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
-              Historico
+              {t('history.eyebrow')}
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
-              Boletins anteriores
+              {t('history.title')}
             </h1>
             {igrejaSelecionada && (
               <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-600">
@@ -221,7 +226,7 @@ export default function BoletinsAnterioresPage() {
           {loading ? (
             <div className="flex flex-col items-center py-24 gap-3">
               <div className="w-8 h-8 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm">Carregando histórico...</p>
+              <p className="text-slate-400 text-sm">{t('history.loading')}</p>
             </div>
           ) : erro ? (
             <div className="rounded-[28px] border border-rose-200 bg-white/85 px-6 py-12 text-center text-rose-700">
@@ -229,20 +234,20 @@ export default function BoletinsAnterioresPage() {
             </div>
           ) : boletins.length === 0 ? (
             <div className="rounded-[28px] border border-slate-200 bg-white/85 px-6 py-12 text-center text-slate-500">
-              Nenhum boletim anterior disponível para esta igreja.
+              {t('history.empty')}
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
               <aside className="rounded-[28px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:p-5">
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Edições
+                    {t('history.editions')}
                   </h2>
                   <Link
                     href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
                     className="text-sm font-medium text-emerald-800 hover:text-emerald-900"
                   >
-                    Atual
+                    {t('history.current')}
                   </Link>
                 </div>
 
@@ -262,9 +267,9 @@ export default function BoletinsAnterioresPage() {
                         }`}
                       >
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold">{formatarDataExtenso(boletim.data)}</p>
+                          <p className="text-sm font-semibold">{formatarDataExtenso(boletim.data, locale)}</p>
                           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                            Boletim anterior
+                            {t('history.pastBulletin')}
                           </p>
                         </div>
                         <ChevronRight className="h-4 w-4" />
@@ -279,21 +284,23 @@ export default function BoletinsAnterioresPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
                       <Clock3 className="w-3.5 h-3.5" />
-                      {formatarDataExtenso(boletimSelecionado.data)}
+                      {formatarDataExtenso(boletimSelecionado.data, locale)}
                     </span>
                     <Link
                       href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
                       className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-emerald-200 hover:text-emerald-800"
                     >
                       <ArrowLeft className="h-4 w-4" />
-                      Voltar ao atual
+                      {t('history.backToCurrentShort')}
                     </Link>
                   </div>
 
                   {boletimSelecionado.imagemUrl && (
                     <img
                       src={boletimSelecionado.imagemUrl}
-                      alt={`Boletim de ${formatarDataExtenso(boletimSelecionado.data)}`}
+                      alt={t('history.imageAlt', {
+                        date: formatarDataExtenso(boletimSelecionado.data, locale),
+                      })}
                       className="mt-4 w-full max-h-[24rem] rounded-2xl object-contain bg-slate-50"
                     />
                   )}

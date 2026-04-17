@@ -1,0 +1,125 @@
+{
+  "app": {
+    "name": "OIKOS Hub",
+    "description": "Multi-church system for bulletins, worship services, teams, and community management",
+    "tagline": "Integrated Multi-church Management"
+  },
+  "language": {
+    "label": "Language",
+    "helper": "System language",
+    "changed": "Language updated",
+    "names": {
+      "pt": "Português",
+      "es": "Español",
+      "en": "English"
+    }
+  },
+  "header": {
+    "back": "Back",
+    "home": "Home",
+    "activeChurch": "Active church",
+    "profile": "My Profile",
+    "admin": "Administration",
+    "signOut": "Sign out",
+    "fallbackUser": "User"
+  },
+  "login": {
+    "syncTitle": "Preparing your access...",
+    "syncDescription": "We are validating your profile and linking your account.",
+    "welcomeBack": "Welcome back!",
+    "firstAccess": "First access",
+    "signInDescription": "Sign in with your credentials",
+    "signUpDescription": "Create your account with the same email approved by administration",
+    "tabSignIn": "Sign in",
+    "tabFirstAccess": "First access",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "submitLoading": "Processing...",
+    "submitSignIn": "Sign in",
+    "submitSignUp": "Create account",
+    "continueWith": "or continue with",
+    "or": "or",
+    "backToHome": "Back to the home page",
+    "firstAccessHintTitle": "ℹ️ First access?",
+    "firstAccessHintBody": "An administrator must approve your email first. After that, you can create your account here or sign in with Google/Microsoft using the same email.",
+    "placeholderEmail": "your@email.com",
+    "expiredSession": "Your session expired. Sign in again to continue.",
+    "pendingAccess": "Your access has not been approved yet.",
+    "loadChurchError": "Error loading churches.",
+    "loginError": "Sign-in error",
+    "invalidCredentials": "Incorrect email or password.",
+    "emailNotConfirmed": "Please confirm your email before signing in.",
+    "googleError": "Error signing in with Google",
+    "microsoftError": "Error signing in with Microsoft",
+    "passwordMinLength": "Password must be at least 6 characters long.",
+    "passwordMismatch": "Passwords do not match.",
+    "signUpError": "Error creating your account.",
+    "signUpSuccess": "Account created. If email confirmation is enabled, finish confirmation and then sign in normally."
+  },
+  "home": {
+    "bulletinTitle": "Digital Bulletin",
+    "panel": "Dashboard",
+    "signOut": "Sign out",
+    "signIn": "Sign in",
+    "publicEdition": "Public Edition",
+    "editionOf": "Edition from {date}",
+    "publicBulletin": "Public bulletin",
+    "locationUnknown": "Location not provided",
+    "shareBulletin": "Share bulletin",
+    "pastBulletins": "Previous bulletins"
+  },
+  "history": {
+    "backToCurrent": "Back to current bulletin",
+    "eyebrow": "History",
+    "title": "Previous bulletins",
+    "loading": "Loading history...",
+    "empty": "No previous bulletins are available for this church.",
+    "editions": "Editions",
+    "current": "Current",
+    "pastBulletin": "Previous bulletin",
+    "backToCurrentShort": "Back to current",
+    "imageAlt": "Bulletin from {date}",
+    "loadChurchesError": "Could not load churches.",
+    "loadHistoryError": "Could not load previous bulletins right now.",
+    "invalidResponse": "Invalid server response.",
+    "invalidJson": "Could not read the server response."
+  },
+  "publicRequests": {
+    "backToBulletin": "Back to bulletin",
+    "eyebrow": "Care",
+    "title": "Requests",
+    "writeRequest": "Write your request",
+    "name": "Your name",
+    "category": "Category",
+    "email": "Email",
+    "phone": "Phone",
+    "subject": "Subject",
+    "message": "Message",
+    "messagePlaceholder": "Write your request here...",
+    "chooseChurchHint": "First choose the church from the public bulletin. Then come back to send your request.",
+    "sending": "Sending...",
+    "submit": "Send request",
+    "loadChurchesError": "Error loading churches.",
+    "churchNotFound": "We could not find a public church for this link.",
+    "loadAvailableChurchesError": "Could not load churches.",
+    "sendError": "Error sending request.",
+    "success": "Request sent successfully to {church}. The team will care for you with attention.",
+    "categories": {
+      "oracao": "Prayer",
+      "aconselhamento": "Counseling",
+      "visita": "Visit",
+      "outro": "Other"
+    }
+  },
+  "invites": {
+    "disabledTitle": "Invites disabled",
+    "disabledDescription": "This link can no longer be used because the invite flow was removed from the system.",
+    "goToLogin": "Go to login"
+  },
+  "addressAutocomplete": {
+    "placeholder": "Type the address or neighborhood...",
+    "searching": "Searching addresses...",
+    "selected": "Address selected"
+  }
+}

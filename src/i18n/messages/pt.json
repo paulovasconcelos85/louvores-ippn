@@ -1,0 +1,125 @@
+{
+  "app": {
+    "name": "OIKOS Hub",
+    "description": "Sistema multi-igreja para boletins, cultos, escalas e gestão comunitária",
+    "tagline": "Gestão Integral Multi-igreja"
+  },
+  "language": {
+    "label": "Idioma",
+    "helper": "Idioma do sistema",
+    "changed": "Idioma atualizado",
+    "names": {
+      "pt": "Português",
+      "es": "Español",
+      "en": "English"
+    }
+  },
+  "header": {
+    "back": "Voltar",
+    "home": "Home",
+    "activeChurch": "Igreja ativa",
+    "profile": "Meu Perfil",
+    "admin": "Administração",
+    "signOut": "Sair",
+    "fallbackUser": "Usuário"
+  },
+  "login": {
+    "syncTitle": "Preparando seu acesso...",
+    "syncDescription": "Estamos validando seu cadastro e vinculando sua conta.",
+    "welcomeBack": "Bem-vindo de volta!",
+    "firstAccess": "Primeiro acesso",
+    "signInDescription": "Entre com suas credenciais",
+    "signUpDescription": "Crie sua conta com o mesmo e-mail liberado pela administração",
+    "tabSignIn": "Entrar",
+    "tabFirstAccess": "Primeiro acesso",
+    "email": "E-mail",
+    "password": "Senha",
+    "confirmPassword": "Confirmar senha",
+    "submitLoading": "Processando...",
+    "submitSignIn": "Entrar",
+    "submitSignUp": "Criar conta",
+    "continueWith": "ou continue com",
+    "or": "ou",
+    "backToHome": "Voltar para a página inicial",
+    "firstAccessHintTitle": "ℹ️ Primeiro acesso?",
+    "firstAccessHintBody": "O administrador precisa liberar seu e-mail primeiro. Depois disso, você pode criar sua conta aqui ou entrar com Google/Microsoft usando o mesmo e-mail.",
+    "placeholderEmail": "seu@email.com",
+    "expiredSession": "Sua sessão expirou. Entre novamente para continuar.",
+    "pendingAccess": "Seu acesso ainda não foi liberado.",
+    "loadChurchError": "Erro ao carregar igrejas.",
+    "loginError": "Erro ao fazer login",
+    "invalidCredentials": "E-mail ou senha incorretos.",
+    "emailNotConfirmed": "Por favor, confirme seu e-mail antes de acessar.",
+    "googleError": "Erro ao fazer login com Google",
+    "microsoftError": "Erro ao fazer login com Microsoft",
+    "passwordMinLength": "A senha deve ter no mínimo 6 caracteres.",
+    "passwordMismatch": "As senhas não conferem.",
+    "signUpError": "Erro ao criar sua conta.",
+    "signUpSuccess": "Conta criada. Se houver confirmação por e-mail ativa, conclua a confirmação e depois entre normalmente."
+  },
+  "home": {
+    "bulletinTitle": "Boletim Eletrônico",
+    "panel": "Painel",
+    "signOut": "Sair",
+    "signIn": "Entrar",
+    "publicEdition": "Edição Pública",
+    "editionOf": "Edição de {date}",
+    "publicBulletin": "Boletim público",
+    "locationUnknown": "Localização não informada",
+    "shareBulletin": "Compartilhar boletim",
+    "pastBulletins": "Boletins anteriores"
+  },
+  "history": {
+    "backToCurrent": "Voltar ao boletim atual",
+    "eyebrow": "Histórico",
+    "title": "Boletins anteriores",
+    "loading": "Carregando histórico...",
+    "empty": "Nenhum boletim anterior disponível para esta igreja.",
+    "editions": "Edições",
+    "current": "Atual",
+    "pastBulletin": "Boletim anterior",
+    "backToCurrentShort": "Voltar ao atual",
+    "imageAlt": "Boletim de {date}",
+    "loadChurchesError": "Não foi possível carregar as igrejas.",
+    "loadHistoryError": "Não foi possível carregar os boletins anteriores agora.",
+    "invalidResponse": "Resposta inválida do servidor.",
+    "invalidJson": "Não foi possível ler a resposta do servidor."
+  },
+  "publicRequests": {
+    "backToBulletin": "Voltar ao boletim",
+    "eyebrow": "Atendimento",
+    "title": "Pedidos",
+    "writeRequest": "Escreva seu pedido",
+    "name": "Seu nome",
+    "category": "Categoria",
+    "email": "E-mail",
+    "phone": "Telefone",
+    "subject": "Assunto",
+    "message": "Mensagem",
+    "messagePlaceholder": "Escreva aqui seu pedido...",
+    "chooseChurchHint": "Primeiro escolha a igreja pelo boletim público. Depois volte para enviar seu pedido.",
+    "sending": "Enviando...",
+    "submit": "Enviar pedido",
+    "loadChurchesError": "Erro ao carregar igrejas.",
+    "churchNotFound": "Não encontramos uma igreja pública com esse link.",
+    "loadAvailableChurchesError": "Não foi possível carregar as igrejas.",
+    "sendError": "Erro ao enviar pedido.",
+    "success": "Pedido enviado com sucesso para {church}. A equipe vai acompanhar com carinho.",
+    "categories": {
+      "oracao": "Oração",
+      "aconselhamento": "Aconselhamento",
+      "visita": "Visita",
+      "outro": "Outro"
+    }
+  },
+  "invites": {
+    "disabledTitle": "Convites Desativados",
+    "disabledDescription": "Este link não pode mais ser usado porque o fluxo de convites foi removido do sistema.",
+    "goToLogin": "Ir para o Login"
+  },
+  "addressAutocomplete": {
+    "placeholder": "Digite o endereço ou bairro...",
+    "searching": "Buscando endereços...",
+    "selected": "Endereço selecionado"
+  }
+}

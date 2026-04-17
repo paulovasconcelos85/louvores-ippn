@@ -2,10 +2,16 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { syncApprovedUserAccess } from '@/lib/access-sync';
+import {
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_COOKIE_NAME,
+  normalizeLocale,
+} from '@/i18n/config';
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const locale = normalizeLocale(requestUrl.searchParams.get('lang'));
   // 1. Pegamos o parâmetro 'next' da URL, ou mandamos para /admin por padrão
   const next = requestUrl.searchParams.get('next') ?? '/admin';
 
@@ -42,14 +48,37 @@ export async function GET(request: Request) {
         if (syncResult.status !== 'granted') {
           const loginUrl = new URL('/login', request.url);
           loginUrl.searchParams.set('erro', syncResult.message);
+          if (locale) {
+            loginUrl.searchParams.set('lang', locale);
+          }
           return NextResponse.redirect(loginUrl);
         }
       }
 
-      return NextResponse.redirect(new URL(next, request.url));
+      const response = NextResponse.redirect(new URL(next, request.url));
+
+      if (locale) {
+        response.cookies.set(LOCALE_COOKIE_NAME, locale, {
+          path: '/',
+          maxAge: LOCALE_COOKIE_MAX_AGE,
+          sameSite: 'lax',
+        });
+      }
+
+      return response;
     }
   }
 
   // Em caso de erro, volta para o login
-  return NextResponse.redirect(new URL('/login', request.url));
+  const fallbackResponse = NextResponse.redirect(new URL('/login', request.url));
+
+  if (locale) {
+    fallbackResponse.cookies.set(LOCALE_COOKIE_NAME, locale, {
+      path: '/',
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: 'lax',
+    });
+  }
+
+  return fallbackResponse;
 }

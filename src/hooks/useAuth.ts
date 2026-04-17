@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import type { Locale } from '@/i18n/config';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,10 +27,16 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const getOAuthRedirectUrl = () =>
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback`
-      : 'http://localhost:3000/auth/callback';
+  const getOAuthRedirectUrl = (locale?: Locale) => {
+    const baseUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : 'http://localhost:3000/auth/callback';
+
+    if (!locale) return baseUrl;
+
+    return `${baseUrl}?lang=${encodeURIComponent(locale)}`;
+  };
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -52,11 +59,11 @@ export function useAuth() {
     return { error };
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (locale?: Locale) => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: getOAuthRedirectUrl(),
+        redirectTo: getOAuthRedirectUrl(locale),
         queryParams: {
           prompt: 'select_account',
         },
@@ -66,11 +73,11 @@ export function useAuth() {
   };
 
 
-  const signInWithAzure = async () => {
+  const signInWithAzure = async (locale?: Locale) => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
-        redirectTo: getOAuthRedirectUrl(),
+        redirectTo: getOAuthRedirectUrl(locale),
         scopes: 'email',
         queryParams: {
           prompt: 'select_account',

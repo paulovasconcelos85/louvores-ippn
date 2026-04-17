@@ -7,32 +7,27 @@ import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslations } from '@/i18n/provider';
 
 type CategoriaPedido = 'oracao' | 'aconselhamento' | 'visita' | 'outro';
 
-const CATEGORIAS: Array<{ value: CategoriaPedido; label: string }> = [
-  { value: 'oracao', label: 'Oração' },
-  { value: 'aconselhamento', label: 'Aconselhamento' },
-  { value: 'visita', label: 'Visita' },
-  { value: 'outro', label: 'Outro' },
-];
-
-async function lerJsonSeguro(response: Response) {
+async function lerJsonSeguro(response: Response, t: (key: string) => string) {
   const texto = await response.text();
   const contentType = response.headers.get('content-type') || '';
 
   if (!contentType.includes('application/json')) {
-    throw new Error('Resposta inválida do servidor.');
+    throw new Error(t('history.invalidResponse'));
   }
 
   try {
     return JSON.parse(texto);
   } catch {
-    throw new Error('Não foi possível ler a resposta do servidor.');
+    throw new Error(t('history.invalidJson'));
   }
 }
 
 export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }) {
+  const t = useTranslations();
   const { user } = useAuth();
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
   const [igrejaAtualId, setIgrejaAtualId] = useState<string>('');
@@ -50,6 +45,16 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
   const igrejaAtual = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
     [igrejas, igrejaAtualId]
+  );
+
+  const categorias = useMemo<Array<{ value: CategoriaPedido; label: string }>>(
+    () => [
+      { value: 'oracao', label: t('publicRequests.categories.oracao') },
+      { value: 'aconselhamento', label: t('publicRequests.categories.aconselhamento') },
+      { value: 'visita', label: t('publicRequests.categories.visita') },
+      { value: 'outro', label: t('publicRequests.categories.outro') },
+    ],
+    [t]
   );
 
   useEffect(() => {
@@ -70,10 +75,10 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
           forcedSlug ? fetch(`/api/igrejas/slug/${encodeURIComponent(forcedSlug)}`) : Promise.resolve(null),
         ]);
 
-        const data = await lerJsonSeguro(responseLista);
+        const data = await lerJsonSeguro(responseLista, t);
 
         if (!responseLista.ok) {
-          throw new Error(data.error || 'Erro ao carregar igrejas.');
+          throw new Error(data.error || t('publicRequests.loadChurchesError'));
         }
 
         if (!active) return;
@@ -83,10 +88,10 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
         let igrejaPorSlug: IgrejaSelecionavel | null = null;
 
         if (responseSlug) {
-          const dataSlug = await lerJsonSeguro(responseSlug);
+          const dataSlug = await lerJsonSeguro(responseSlug, t);
 
           if (!responseSlug.ok) {
-            throw new Error(dataSlug.error || 'Não encontramos uma igreja pública com esse link.');
+            throw new Error(dataSlug.error || t('publicRequests.churchNotFound'));
           }
 
           igrejaPorSlug = (dataSlug.igreja || null) as IgrejaSelecionavel | null;
@@ -106,7 +111,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
           typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
 
         if (forcedSlug && !igrejaPorSlug) {
-          setErro('Não encontramos uma igreja pública com esse link.');
+          setErro(t('publicRequests.churchNotFound'));
           setIgrejaAtualId('');
           return;
         }
@@ -129,7 +134,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
         }
       } catch (error: any) {
         if (!active) return;
-        setErro(error.message || 'Não foi possível carregar as igrejas.');
+        setErro(error.message || t('publicRequests.loadAvailableChurchesError'));
       } finally {
         if (active) setLoadingIgrejas(false);
       }
@@ -140,7 +145,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
     return () => {
       active = false;
     };
-  }, [forcedSlug]);
+  }, [forcedSlug, t]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -165,20 +170,22 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
         }),
       });
 
-      const data = await lerJsonSeguro(response);
+      const data = await lerJsonSeguro(response, t);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar pedido.');
+        throw new Error(data.error || t('publicRequests.sendError'));
       }
 
       setSucesso(
-        `Pedido enviado com sucesso para ${data.igreja?.nome || 'a igreja selecionada'}. A equipe vai acompanhar com carinho.`
+        t('publicRequests.success', {
+          church: data.igreja?.nome || igrejaAtual?.nome || '',
+        })
       );
       setAssunto('');
       setMensagem('');
       setCategoria('oracao');
     } catch (error: any) {
-      setErro(error.message || 'Erro ao enviar pedido.');
+      setErro(error.message || t('publicRequests.sendError'));
     } finally {
       setEnviando(false);
     }
@@ -193,18 +200,18 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800"
           >
             <ArrowLeft className="h-4 w-4" />
-            Voltar ao boletim
+            {t('publicRequests.backToBulletin')}
           </Link>
 
           <section className="rounded-[30px] border border-white/70 bg-[linear-gradient(135deg,#0f3d31_0%,#195142_45%,#2b6c59_100%)] px-6 py-8 text-white shadow-[0_24px_70px_rgba(15,61,49,0.18)] sm:px-8">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-100/85">
-              Atendimento
+              {t('publicRequests.eyebrow')}
             </p>
             <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-2xl space-y-3">
                 <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight sm:text-4xl">
                   <HeartHandshake className="h-8 w-8 text-amber-300" />
-                  Pedidos
+                  {t('publicRequests.title')}
                 </h1>
               </div>
 
@@ -223,7 +230,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
           <div className="mx-auto max-w-2xl">
             <section className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-7">
               <div className="mb-6">
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Escreva seu pedido</h2>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{t('publicRequests.writeRequest')}</h2>
               </div>
 
               {erro && (
@@ -240,14 +247,14 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
 
               {!loadingIgrejas && !igrejaAtualId && !erro && (
                 <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Primeiro escolha a igreja pelo boletim público. Depois volte para enviar seu pedido.
+                  {t('publicRequests.chooseChurchHint')}
                 </div>
               )}
 
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-slate-700">Seu nome</span>
+                    <span className="text-sm font-medium text-slate-700">{t('publicRequests.name')}</span>
                     <input
                       value={nome}
                       onChange={(event) => setNome(event.target.value)}
@@ -257,13 +264,13 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
                   </label>
 
                   <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-slate-700">Categoria</span>
+                    <span className="text-sm font-medium text-slate-700">{t('publicRequests.category')}</span>
                     <select
                       value={categoria}
                       onChange={(event) => setCategoria(event.target.value as CategoriaPedido)}
                       className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                     >
-                      {CATEGORIAS.map((item) => (
+                      {categorias.map((item) => (
                         <option key={item.value} value={item.value}>
                           {item.label}
                         </option>
@@ -274,7 +281,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-slate-700">E-mail</span>
+                    <span className="text-sm font-medium text-slate-700">{t('publicRequests.email')}</span>
                     <div className="relative">
                       <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
@@ -287,7 +294,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
                   </label>
 
                   <label className="block space-y-1.5">
-                    <span className="text-sm font-medium text-slate-700">Telefone</span>
+                    <span className="text-sm font-medium text-slate-700">{t('publicRequests.phone')}</span>
                     <div className="relative">
                       <Phone className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
@@ -300,7 +307,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
                 </div>
 
                 <label className="block space-y-1.5">
-                  <span className="text-sm font-medium text-slate-700">Assunto</span>
+                  <span className="text-sm font-medium text-slate-700">{t('publicRequests.subject')}</span>
                   <input
                     value={assunto}
                     onChange={(event) => setAssunto(event.target.value)}
@@ -309,13 +316,13 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
                 </label>
 
                 <label className="block space-y-1.5">
-                  <span className="text-sm font-medium text-slate-700">Mensagem</span>
+                  <span className="text-sm font-medium text-slate-700">{t('publicRequests.message')}</span>
                   <textarea
                     value={mensagem}
                     onChange={(event) => setMensagem(event.target.value)}
                     rows={7}
                     className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    placeholder="Escreva aqui seu pedido..."
+                    placeholder={t('publicRequests.messagePlaceholder')}
                     required
                   />
                 </label>
@@ -326,7 +333,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
                   className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#365c4d] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#28463b] disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                 >
                   <SendHorizonal className="h-4 w-4" />
-                  {enviando ? 'Enviando...' : 'Enviar pedido'}
+                  {enviando ? t('publicRequests.sending') : t('publicRequests.submit')}
                 </button>
               </form>
             </section>
