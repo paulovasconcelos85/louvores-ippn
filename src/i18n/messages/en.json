@@ -21,7 +21,8 @@
     "profile": "My Profile",
     "admin": "Administration",
     "signOut": "Sign out",
-    "fallbackUser": "User"
+    "fallbackUser": "User",
+    "loadChurchesError": "Error loading churches."
   },
   "login": {
     "syncTitle": "Preparing your access...",
@@ -121,5 +122,75 @@
     "placeholder": "Type the address or neighborhood...",
     "searching": "Searching addresses...",
     "selected": "Address selected"
+  },
+  "dashboard": {
+    "title": "Worship Dashboard",
+    "subtitleWithChurch": "Complete analysis of plays and trends for {church}",
+    "subtitleGeneric": "Complete analysis of plays and trends",
+    "filters": "Filters",
+    "year": "Year",
+    "month": "Month",
+    "allYears": "All years",
+    "allMonths": "All months",
+    "loading": "Loading insights...",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{count} days ago",
+    "recentSongsTitle": "Songs from the Last 4 Weeks",
+    "recentSongsCount": "{count} songs",
+    "recentSongsEmpty": "No songs were found in the last 4 weeks.",
+    "noChartData": "No data was found for the selected filters.",
+    "noKeyRecorded": "No key was recorded",
+    "rankingEmpty": "There are no plays yet to build the ranking.",
+    "songFallback": "Song {id}",
+    "songWithoutName": "Untitled song",
+    "untitled": "Untitled",
+    "hymnWithNumber": "Hymn {number} - {title}",
+    "hymnWithoutNumber": "Hymn - {title}",
+    "stats": {
+      "totalExecutions": "Total Plays",
+      "uniqueSongs": "Unique Songs",
+      "totalServices": "Total Services",
+      "averagePerService": "Average/Service",
+      "mostPlayed": "Most Played"
+    },
+    "charts": {
+      "topSongs": "Top 10 Most Played Songs",
+      "topDistribution": "Top 5 Distribution",
+      "monthlyTrend": "Monthly Trend",
+      "topKeys": "Most Played Keys",
+      "fullRanking": "Full Ranking"
+    },
+    "table": {
+      "position": "#",
+      "song": "Song",
+      "executions": "Plays",
+      "percentTotal": "% of Total"
+    }
+  },
+  "profile": {
+    "title": "My Profile",
+    "admin": "Admin",
+    "emailReadonly": "Email (read-only)",
+    "name": "Name",
+    "phone": "Phone",
+    "phonePlaceholder": "(92) 98139-4605",
+    "saving": "Saving...",
+    "save": "Save Profile",
+    "cancel": "Cancel",
+    "skillsTitle": "My Skills",
+    "skillsDescription": "Select the areas where you can serve.",
+    "linkedPersonNotFound": "The person linked to this account was not found.",
+    "updateSuccess": "Profile updated successfully.",
+    "loadError": "Error loading profile: {message}",
+    "saveError": "Error saving profile: {message}",
+    "tagError": "Error updating skill: {message}",
+    "categories": {
+      "lideranca": "📖 Leadership",
+      "instrumento": "🎸 Instruments",
+      "vocal": "🎤 Vocals",
+      "tecnica": "🎛️ Tech",
+      "apoio": "👥 Support"
+    }
   }
 }

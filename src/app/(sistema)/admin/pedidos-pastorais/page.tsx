@@ -16,6 +16,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
+import { getIntlLocale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
 
 type PedidoPastoral = {
   id: string;
@@ -54,40 +56,23 @@ type IgrejaResumo = {
 
 type StatusFiltro = 'todos' | 'novo' | 'em_andamento' | 'concluido';
 
-const STATUS_LABELS: Record<StatusFiltro, string> = {
-  todos: 'Todos',
-  novo: 'Novos',
-  em_andamento: 'Em andamento',
-  concluido: 'Concluídos',
-};
-
-const CATEGORIA_LABELS: Record<PedidoPastoral['categoria'], string> = {
-  oracao: 'Oração',
-  aconselhamento: 'Aconselhamento',
-  visita: 'Visita',
-  outro: 'Outro',
-};
-
 const STATUS_BADGES: Record<PedidoPastoral['status'], string> = {
   novo: 'bg-amber-100 text-amber-900 border border-amber-200',
   em_andamento: 'bg-blue-100 text-blue-900 border border-blue-200',
   concluido: 'bg-emerald-100 text-emerald-900 border border-emerald-200',
 };
 
-function formatarData(value: string) {
-  return new Date(value).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 export default function AdminPedidosPastoraisPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, usuarioPermitido, isSuperAdmin } = usePermissions();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
 
   const [igrejaId, setIgrejaId] = useState<string | null>(null);
   const [igreja, setIgreja] = useState<IgrejaResumo>(null);
@@ -107,6 +92,27 @@ export default function AdminPedidosPastoraisPage() {
 
   const loading = authLoading || permLoading;
   const podeAcessarPedidos = isSuperAdmin || ['pastor', 'seminarista'].includes(usuarioPermitido?.cargo || '');
+  const statusLabels: Record<StatusFiltro, string> = {
+    todos: tr('Todos', 'Todos', 'All'),
+    novo: tr('Novos', 'Nuevos', 'New'),
+    em_andamento: tr('Em andamento', 'En progreso', 'In progress'),
+    concluido: tr('Concluídos', 'Completados', 'Completed'),
+  };
+  const categoriaLabels: Record<PedidoPastoral['categoria'], string> = {
+    oracao: tr('Oração', 'Oración', 'Prayer'),
+    aconselhamento: tr('Aconselhamento', 'Consejería', 'Counseling'),
+    visita: tr('Visita', 'Visita', 'Visit'),
+    outro: tr('Outro', 'Otro', 'Other'),
+  };
+  const formatarData = useCallback((value: string) => {
+    return new Date(value).toLocaleString(intlLocale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [intlLocale]);
 
   useEffect(() => {
     if (loading) return;
@@ -143,7 +149,14 @@ export default function AdminPedidosPastoraisPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao carregar pedidos.');
+        throw new Error(
+          data.error ||
+            tr(
+              'Erro ao carregar pedidos.',
+              'Error al cargar pedidos.',
+              'Error loading requests.'
+            )
+        );
       }
 
       setPedidos(data.pedidos || []);
@@ -156,11 +169,18 @@ export default function AdminPedidosPastoraisPage() {
         }
       }
     } catch (error: any) {
-      setErro(error.message || 'Erro ao carregar pedidos.');
+      setErro(
+        error.message ||
+          tr(
+            'Erro ao carregar pedidos.',
+            'Error al cargar pedidos.',
+            'Error loading requests.'
+          )
+      );
     } finally {
       setLoadingPedidos(false);
     }
-  }, [user, podeAcessarPedidos, igrejaId, statusFiltro]);
+  }, [user, podeAcessarPedidos, igrejaId, statusFiltro, tr]);
 
   useEffect(() => {
     if (!loading && user && podeAcessarPedidos) {
@@ -213,19 +233,45 @@ export default function AdminPedidosPastoraisPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao atualizar pedido.');
+        throw new Error(
+          data.error ||
+            tr(
+              'Erro ao atualizar pedido.',
+              'Error al actualizar el pedido.',
+              'Error updating request.'
+            )
+        );
       }
 
-      setMensagem('Status do pedido atualizado.');
+      setMensagem(
+        tr(
+          'Status do pedido atualizado.',
+          'Estado del pedido actualizado.',
+          'Request status updated.'
+        )
+      );
       await carregarPedidos();
     } catch (error: any) {
-      setErro(error.message || 'Erro ao atualizar pedido.');
+      setErro(
+        error.message ||
+          tr(
+            'Erro ao atualizar pedido.',
+            'Error al actualizar el pedido.',
+            'Error updating request.'
+          )
+      );
     } finally {
       setPedidoAtualizandoId(null);
     }
   }
 
-  const igrejaNome = useMemo(() => igreja?.nome_abreviado || igreja?.nome || 'igreja ativa', [igreja]);
+  const igrejaNome = useMemo(
+    () =>
+      igreja?.nome_abreviado ||
+      igreja?.nome ||
+      tr('igreja ativa', 'iglesia activa', 'active church'),
+    [igreja, tr]
+  );
 
   if (loading || !user || !podeAcessarPedidos) return null;
 
@@ -237,10 +283,14 @@ export default function AdminPedidosPastoraisPage() {
             <div>
               <h1 className="flex items-center gap-3 text-3xl font-bold">
                 <BookHeart className="h-8 w-8" />
-                Pedidos
+                {tr('Pedidos', 'Pedidos', 'Requests')}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-sky-100 sm:text-base">
-                Caixa de entrada para acompanhar novos pedidos de oração, aconselhamento e visitas de{' '}
+                {tr(
+                  'Caixa de entrada para acompanhar novos pedidos de oração, aconselhamento e visitas de ',
+                  'Bandeja de entrada para seguir nuevos pedidos de oración, consejería y visitas de ',
+                  'Inbox to track new prayer, counseling, and visit requests from '
+                )}
                 {igrejaNome}.
               </p>
             </div>
@@ -251,7 +301,7 @@ export default function AdminPedidosPastoraisPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20"
             >
               <RefreshCcw className="h-4 w-4" />
-              Atualizar
+              {tr('Atualizar', 'Actualizar', 'Refresh')}
             </button>
           </div>
         </div>
@@ -279,7 +329,7 @@ export default function AdminPedidosPastoraisPage() {
                 }`}
               >
                 <p className={`text-sm font-semibold ${statusFiltro === status ? 'text-sky-100' : 'text-slate-600'}`}>
-                  {STATUS_LABELS[status]}
+                  {statusLabels[status]}
                 </p>
                 <p className="mt-2 text-3xl font-bold">{total}</p>
               </button>
@@ -301,14 +351,20 @@ export default function AdminPedidosPastoraisPage() {
 
         {loadingPedidos ? (
           <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500">
-            Carregando pedidos...
+            {tr('Carregando pedidos...', 'Cargando pedidos...', 'Loading requests...')}
           </div>
         ) : pedidos.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <MessageSquareHeart className="mx-auto h-10 w-10 text-slate-300" />
-            <p className="mt-4 text-lg font-semibold text-slate-900">Nenhum pedido nesta fila</p>
+            <p className="mt-4 text-lg font-semibold text-slate-900">
+              {tr('Nenhum pedido nesta fila', 'Ningún pedido en esta cola', 'No requests in this queue')}
+            </p>
             <p className="mt-1 text-sm text-slate-500">
-              Quando chegarem novos pedidos para a igreja ativa, eles aparecerão aqui.
+              {tr(
+                'Quando chegarem novos pedidos para a igreja ativa, eles aparecerão aqui.',
+                'Cuando lleguen nuevos pedidos para la iglesia activa, aparecerán aquí.',
+                'When new requests arrive for the active church, they will appear here.'
+              )}
             </p>
           </div>
         ) : (
@@ -319,24 +375,29 @@ export default function AdminPedidosPastoraisPage() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGES[pedido.status]}`}>
-                        {STATUS_LABELS[pedido.status]}
+                        {statusLabels[pedido.status]}
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {CATEGORIA_LABELS[pedido.categoria]}
+                        {categoriaLabels[pedido.categoria]}
                       </span>
                       {pedido.deseja_retorno && (
                         <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                          Deseja retorno
+                          {tr('Deseja retorno', 'Desea respuesta', 'Wants a response')}
                         </span>
                       )}
                     </div>
 
                     <div>
                       <h2 className="text-xl font-bold text-slate-900">
-                        {pedido.assunto?.trim() || `Pedido de ${CATEGORIA_LABELS[pedido.categoria]}`}
+                        {pedido.assunto?.trim() ||
+                          tr(
+                            `Pedido de ${categoriaLabels[pedido.categoria]}`,
+                            `Pedido de ${categoriaLabels[pedido.categoria]}`,
+                            `${categoriaLabels[pedido.categoria]} request`
+                          )}
                       </h2>
                       <p className="mt-1 text-sm text-slate-500">
-                        Recebido em {formatarData(pedido.criado_em)}
+                        {tr('Recebido em', 'Recibido el', 'Received on')} {formatarData(pedido.criado_em)}
                       </p>
                     </div>
 
@@ -347,15 +408,15 @@ export default function AdminPedidosPastoraisPage() {
                       </p>
                       <p className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-slate-400" />
-                        {pedido.email_solicitante || pedido.pessoa?.email || 'Sem e-mail'}
+                        {pedido.email_solicitante || pedido.pessoa?.email || tr('Sem e-mail', 'Sin correo', 'No email')}
                       </p>
                       <p className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-slate-400" />
-                        {pedido.telefone_solicitante || pedido.pessoa?.telefone || 'Sem telefone'}
+                        {pedido.telefone_solicitante || pedido.pessoa?.telefone || tr('Sem telefone', 'Sin teléfono', 'No phone')}
                       </p>
                       <p className="flex items-center gap-2">
                         <Clock3 className="h-4 w-4 text-slate-400" />
-                        Atualizado em {formatarData(pedido.atualizado_em)}
+                        {tr('Atualizado em', 'Actualizado el', 'Updated on')} {formatarData(pedido.atualizado_em)}
                       </p>
                     </div>
 
@@ -365,9 +426,15 @@ export default function AdminPedidosPastoraisPage() {
                   </div>
 
                   <div className="min-w-[230px] rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Andamento</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {tr('Andamento', 'Seguimiento', 'Progress')}
+                    </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Marque o estágio atual para organizar a caixa de entrada pastoral.
+                      {tr(
+                        'Marque o estágio atual para organizar a caixa de entrada pastoral.',
+                        'Marca la etapa actual para organizar la bandeja pastoral.',
+                        'Mark the current stage to organize the pastoral inbox.'
+                      )}
                     </p>
 
                     <div className="mt-4 space-y-2">
@@ -384,15 +451,31 @@ export default function AdminPedidosPastoraisPage() {
                           }`}
                         >
                           {status === 'concluido' ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
-                          {STATUS_LABELS[status]}
+                          {statusLabels[status]}
                         </button>
                       ))}
                     </div>
 
                     {(pedido.pessoa?.id || pedido.usuario_acesso?.id) && (
                       <div className="mt-4 border-t border-slate-200 pt-4 text-xs text-slate-500">
-                        {pedido.pessoa?.id && <p>Pessoa vinculada ao cadastro da igreja.</p>}
-                        {pedido.usuario_acesso?.id && <p>Solicitante identificado com acesso ao sistema.</p>}
+                        {pedido.pessoa?.id && (
+                          <p>
+                            {tr(
+                              'Pessoa vinculada ao cadastro da igreja.',
+                              'Persona vinculada al registro de la iglesia.',
+                              'Person linked to the church record.'
+                            )}
+                          </p>
+                        )}
+                        {pedido.usuario_acesso?.id && (
+                          <p>
+                            {tr(
+                              'Solicitante identificado com acesso ao sistema.',
+                              'Solicitante identificado con acceso al sistema.',
+                              'Requester identified with system access.'
+                            )}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

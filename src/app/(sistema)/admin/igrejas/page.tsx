@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useLocale } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 
 type IgrejaResumo = {
@@ -108,19 +109,6 @@ const DIAS_SEMANA = [
   'sabado',
 ];
 
-const PAISES_DISPONIVEIS = [
-  { value: 'BR', label: 'Brasil' },
-  { value: 'PT', label: 'Portugal' },
-  { value: 'US', label: 'Estados Unidos' },
-  { value: 'CA', label: 'Canadá' },
-];
-
-const MODOS_REPERTORIO = [
-  { value: 'livre', label: 'Contemporâneo' },
-  { value: 'hinario', label: 'Hinário' },
-  { value: 'misto', label: 'Misto' },
-];
-
 const TIMEZONES_DISPONIVEIS = [
   { value: 'America/Manaus', label: 'America/Manaus' },
   { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo' },
@@ -130,16 +118,6 @@ const TIMEZONES_DISPONIVEIS = [
   { value: 'America/New_York', label: 'America/New_York' },
   { value: 'America/Chicago', label: 'America/Chicago' },
   { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
-];
-
-const DIAS_PUBLICACAO = [
-  { value: '0', label: 'Domingo' },
-  { value: '1', label: 'Segunda-feira' },
-  { value: '2', label: 'Terça-feira' },
-  { value: '3', label: 'Quarta-feira' },
-  { value: '4', label: 'Quinta-feira' },
-  { value: '5', label: 'Sexta-feira' },
-  { value: '6', label: 'Sábado' },
 ];
 
 const TIPOS_REDE = ['instagram', 'youtube', 'facebook', 'spotify', 'site', 'outro'];
@@ -464,36 +442,6 @@ function parseListaUrls(value: string) {
     .filter(Boolean);
 }
 
-function getSubdivisionLabel(pais: string) {
-  switch (pais) {
-    case 'BR':
-      return 'UF';
-    case 'US':
-      return 'Estado';
-    case 'CA':
-      return 'Província';
-    case 'PT':
-      return 'Distrito';
-    default:
-      return 'Região';
-  }
-}
-
-function getSubdivisionPlaceholder(pais: string) {
-  switch (pais) {
-    case 'BR':
-      return 'Ex.: AM, SP, RJ';
-    case 'US':
-      return 'Ex.: Florida, Texas, California';
-    case 'CA':
-      return 'Ex.: Ontario, Quebec, Alberta';
-    case 'PT':
-      return 'Ex.: Lisboa, Porto, Braga';
-    default:
-      return 'Informe a região';
-  }
-}
-
 function buildEnderecoCompletoIgreja(form: IgrejaForm) {
   return [
     form.logradouro.trim(),
@@ -531,13 +479,29 @@ function buildHorarioPublicacao(hora: string, minuto: string) {
   return `${hora}:${minuto}`;
 }
 
-function formatHorarioPublicacaoLabel(hora: string, minuto: string) {
-  if (!hora || !minuto) return 'Selecione hora e minuto';
+function formatHorarioPublicacaoLabel(
+  hora: string,
+  minuto: string,
+  tr: (pt: string, es: string, en: string) => string
+) {
+  if (!hora || !minuto) {
+    return tr(
+      'Selecione hora e minuto',
+      'Selecciona hora y minuto',
+      'Select hour and minute'
+    );
+  }
   return minuto === '00' ? `${Number(hora)}h` : `${Number(hora)}h${minuto}`;
 }
 
 export default function AdminIgrejasPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, isSuperAdmin } = usePermissions();
 
@@ -559,7 +523,7 @@ export default function AdminIgrejasPage() {
     }
   }, [loading, user, isSuperAdmin, router]);
 
-  async function carregarIgrejas() {
+  const carregarIgrejas = useCallback(async () => {
     try {
       setLoadingList(true);
       const response = await fetch('/api/admin/igrejas', {
@@ -568,23 +532,23 @@ export default function AdminIgrejasPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || 'Erro ao carregar igrejas.');
+        throw new Error(payload.error || tr('Erro ao carregar igrejas.', 'Error al cargar iglesias.', 'Error loading churches.'));
       }
 
       setIgrejas(payload.igrejas || []);
       setIgrejaSelecionadaId((current) => current || payload.igrejas?.[0]?.id || 'new');
     } catch (error: any) {
-      setErro(error.message || 'Erro ao carregar igrejas.');
+      setErro(error.message || tr('Erro ao carregar igrejas.', 'Error al cargar iglesias.', 'Error loading churches.'));
     } finally {
       setLoadingList(false);
     }
-  }
+  }, [tr]);
 
   useEffect(() => {
     if (!loading && user && isSuperAdmin) {
       carregarIgrejas();
     }
-  }, [loading, user, isSuperAdmin]);
+  }, [carregarIgrejas, loading, user, isSuperAdmin]);
 
   useEffect(() => {
     if (!igrejaSelecionadaId || igrejaSelecionadaId === 'new') {
@@ -606,7 +570,7 @@ export default function AdminIgrejasPage() {
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Erro ao carregar detalhes da igreja.');
+          throw new Error(payload.error || tr('Erro ao carregar detalhes da igreja.', 'Error al cargar los detalles de la iglesia.', 'Error loading church details.'));
         }
 
         if (!ativo) return;
@@ -614,7 +578,7 @@ export default function AdminIgrejasPage() {
         setNovoTipoLiturgico('');
       } catch (error: any) {
         if (ativo) {
-          setErro(error.message || 'Erro ao carregar detalhes da igreja.');
+          setErro(error.message || tr('Erro ao carregar detalhes da igreja.', 'Error al cargar los detalles de la iglesia.', 'Error loading church details.'));
         }
       } finally {
         if (ativo) setLoadingDetail(false);
@@ -626,16 +590,83 @@ export default function AdminIgrejasPage() {
     return () => {
       ativo = false;
     };
-  }, [igrejaSelecionadaId]);
+  }, [igrejaSelecionadaId, tr]);
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaSelecionadaId) || null,
     [igrejas, igrejaSelecionadaId]
   );
 
-  const subdivisionLabel = useMemo(() => getSubdivisionLabel(form.pais), [form.pais]);
-  const subdivisionPlaceholder = useMemo(() => getSubdivisionPlaceholder(form.pais), [form.pais]);
+  const subdivisionLabel = useMemo(() => {
+    switch (form.pais) {
+      case 'BR':
+        return 'UF';
+      case 'US':
+        return tr('Estado', 'Estado', 'State');
+      case 'CA':
+        return tr('Província', 'Provincia', 'Province');
+      case 'PT':
+        return tr('Distrito', 'Distrito', 'District');
+      default:
+        return tr('Região', 'Región', 'Region');
+    }
+  }, [form.pais, tr]);
+  const subdivisionPlaceholder = useMemo(() => {
+    switch (form.pais) {
+      case 'BR':
+        return tr('Ex.: AM, SP, RJ', 'Ej.: AM, SP, RJ', 'Ex.: AM, SP, RJ');
+      case 'US':
+        return tr('Ex.: Florida, Texas, California', 'Ej.: Florida, Texas, California', 'Ex.: Florida, Texas, California');
+      case 'CA':
+        return tr('Ex.: Ontario, Quebec, Alberta', 'Ej.: Ontario, Quebec, Alberta', 'Ex.: Ontario, Quebec, Alberta');
+      case 'PT':
+        return tr('Ex.: Lisboa, Porto, Braga', 'Ej.: Lisboa, Porto, Braga', 'Ex.: Lisbon, Porto, Braga');
+      default:
+        return tr('Informe a região', 'Informa la región', 'Provide the region');
+    }
+  }, [form.pais, tr]);
   const enderecoCompletoPreview = useMemo(() => buildEnderecoCompletoIgreja(form), [form]);
+  const countryOptions = useMemo(
+    () => [
+      { value: 'BR', label: tr('Brasil', 'Brasil', 'Brazil') },
+      { value: 'PT', label: tr('Portugal', 'Portugal', 'Portugal') },
+      { value: 'US', label: tr('Estados Unidos', 'Estados Unidos', 'United States') },
+      { value: 'CA', label: tr('Canadá', 'Canadá', 'Canada') },
+    ],
+    [tr]
+  );
+  const repertoryOptions = useMemo(
+    () => [
+      { value: 'livre', label: tr('Contemporâneo', 'Contemporáneo', 'Contemporary') },
+      { value: 'hinario', label: tr('Hinário', 'Himnario', 'Hymnal') },
+      { value: 'misto', label: tr('Misto', 'Mixto', 'Mixed') },
+    ],
+    [tr]
+  );
+  const publicationDayOptions = useMemo(
+    () => [
+      { value: '0', label: tr('Domingo', 'Domingo', 'Sunday') },
+      { value: '1', label: tr('Segunda-feira', 'Lunes', 'Monday') },
+      { value: '2', label: tr('Terça-feira', 'Martes', 'Tuesday') },
+      { value: '3', label: tr('Quarta-feira', 'Miércoles', 'Wednesday') },
+      { value: '4', label: tr('Quinta-feira', 'Jueves', 'Thursday') },
+      { value: '5', label: tr('Sexta-feira', 'Viernes', 'Friday') },
+      { value: '6', label: tr('Sábado', 'Sábado', 'Saturday') },
+    ],
+    [tr]
+  );
+  const weekdayLabelMap = useMemo<Record<string, string>>(
+    () => ({
+      domingo: tr('Domingo', 'Domingo', 'Sunday'),
+      segunda: tr('Segunda-feira', 'Lunes', 'Monday'),
+      terca: tr('Terça-feira', 'Martes', 'Tuesday'),
+      quarta: tr('Quarta-feira', 'Miércoles', 'Wednesday'),
+      quinta: tr('Quinta-feira', 'Jueves', 'Thursday'),
+      sexta: tr('Sexta-feira', 'Viernes', 'Friday'),
+      sabado: tr('Sábado', 'Sábado', 'Saturday'),
+    }),
+    [tr]
+  );
   const horarioParts = useMemo(
     () => getHorarioParts(form.horario_publicacao_boletim),
     [form.horario_publicacao_boletim]
@@ -805,7 +836,7 @@ export default function AdminIgrejasPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao salvar igreja.');
+        throw new Error(data.error || tr('Erro ao salvar igreja.', 'Error al guardar la iglesia.', 'Error saving church.'));
       }
 
       await carregarIgrejas();
@@ -815,9 +846,13 @@ export default function AdminIgrejasPage() {
         setIgrejaSelecionadaId(novaIgrejaId);
       }
 
-      setMensagem(isNew ? 'Igreja criada com sucesso.' : 'Igreja atualizada com sucesso.');
+      setMensagem(
+        isNew
+          ? tr('Igreja criada com sucesso.', 'Iglesia creada con éxito.', 'Church created successfully.')
+          : tr('Igreja atualizada com sucesso.', 'Iglesia actualizada con éxito.', 'Church updated successfully.')
+      );
     } catch (error: any) {
-      setErro(error.message || 'Erro ao salvar igreja.');
+      setErro(error.message || tr('Erro ao salvar igreja.', 'Error al guardar la iglesia.', 'Error saving church.'));
     } finally {
       setSaving(false);
     }
@@ -832,10 +867,10 @@ export default function AdminIgrejasPage() {
           <div>
             <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-900">
               <Church className="h-8 w-8 text-emerald-700" />
-              Gestão de Igrejas
+              {tr('Gestão de Igrejas', 'Gestión de Iglesias', 'Church Management')}
             </h1>
             <p className="mt-1 text-slate-600">
-              Cadastre e edite dados da igreja, agenda de cultos, redes sociais e modelo de liturgia.
+              {tr('Cadastre e edite dados da igreja, agenda de cultos, redes sociais e modelo de liturgia.', 'Registra y edita datos de la iglesia, agenda de cultos, redes sociales y modelo de liturgia.', 'Register and edit church data, worship schedule, social networks, and liturgy model.')}
             </p>
           </div>
 
@@ -850,14 +885,14 @@ export default function AdminIgrejasPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
             >
               <Plus className="h-4 w-4" />
-              Nova Igreja
+              {tr('Nova Igreja', 'Nueva Iglesia', 'New Church')}
             </button>
             <button
               onClick={() => router.push('/admin')}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               <ArrowLeft className="h-4 w-4" />
-              Voltar
+              {tr('Voltar', 'Volver', 'Back')}
             </button>
           </div>
         </div>
@@ -877,8 +912,8 @@ export default function AdminIgrejasPage() {
         <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]">
           <aside className="sticky top-6 self-start rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Igrejas</h2>
-              {loadingList && <span className="text-xs text-slate-400">Carregando...</span>}
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{tr('Igrejas', 'Iglesias', 'Churches')}</h2>
+              {loadingList && <span className="text-xs text-slate-400">{tr('Carregando...', 'Cargando...', 'Loading...')}</span>}
             </div>
 
             <div className="space-y-2">
@@ -914,7 +949,7 @@ export default function AdminIgrejasPage() {
                             : 'bg-slate-200 text-slate-600'
                         }`}
                       >
-                        {igreja.ativo ? 'Ativa' : 'Inativa'}
+                        {igreja.ativo ? tr('Ativa', 'Activa', 'Active') : tr('Inativa', 'Inactiva', 'Inactive')}
                       </span>
                     </div>
                   </button>
@@ -928,12 +963,14 @@ export default function AdminIgrejasPage() {
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">
-                    {igrejaSelecionadaId === 'new' ? 'Nova igreja' : igrejaSelecionada?.nome || 'Detalhes da igreja'}
+                    {igrejaSelecionadaId === 'new'
+                      ? tr('Nova igreja', 'Nueva iglesia', 'New church')
+                      : igrejaSelecionada?.nome || tr('Detalhes da igreja', 'Detalles de la iglesia', 'Church details')}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     {loadingDetail
-                      ? 'Carregando detalhes...'
-                      : 'Edite aqui os dados centrais da igreja e as estruturas ligadas a ela.'}
+                      ? tr('Carregando detalhes...', 'Cargando detalles...', 'Loading details...')
+                      : tr('Edite aqui os dados centrais da igreja e as estruturas ligadas a ela.', 'Edita aquí los datos centrales de la iglesia y las estructuras vinculadas.', 'Edit the church core data and the related structures here.')}
                   </p>
                 </div>
                 <button
@@ -942,7 +979,7 @@ export default function AdminIgrejasPage() {
                   className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" />
-                  {saving ? 'Salvando...' : 'Salvar'}
+                  {saving ? tr('Salvando...', 'Guardando...', 'Saving...') : tr('Salvar', 'Guardar', 'Save')}
                 </button>
               </div>
 
@@ -950,45 +987,43 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-emerald-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Identidade</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Identidade', 'Identidad', 'Identity')}</h3>
                   </div>
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-                    <p className="font-semibold">Como preencher os nomes da igreja</p>
+                    <p className="font-semibold">{tr('Como preencher os nomes da igreja', 'Cómo completar los nombres de la iglesia', 'How to fill in the church names')}</p>
                     <p className="mt-1">
-                      Use o <strong>nome de exibição</strong> como nome principal no sistema. O <strong>slug</strong> é o identificador da URL.
-                      O <strong>nome curto</strong> aparece em listas, seletores e espaços pequenos. O <strong>nome jurídico/oficial</strong>
-                      só é necessário quando houver um nome formal maior para documentos ou apresentação institucional.
+                      {tr('Use o ', 'Usa el ', 'Use the ')}<strong>{tr('nome de exibição', 'nombre visible', 'display name')}</strong>{tr(' como nome principal no sistema. O ', ' como nombre principal en el sistema. El ', ' as the main name in the system. The ')}<strong>slug</strong>{tr(' é o identificador da URL. O ', ' es el identificador de la URL. El ', ' is the URL identifier. The ')}<strong>{tr('nome curto', 'nombre corto', 'short name')}</strong>{tr(' aparece em listas, seletores e espaços pequenos. O ', ' aparece en listas, selectores y espacios pequeños. El ', ' appears in lists, selectors, and small spaces. The ')}<strong>{tr('nome jurídico/oficial', 'nombre jurídico/oficial', 'legal/official name')}</strong>{tr(' só é necessário quando houver um nome formal maior para documentos ou apresentação institucional.', ' solo es necesario cuando exista un nombre formal más largo para documentos o presentación institucional.', ' is only necessary when there is a longer formal name for documents or institutional presentation.')}
                     </p>
                   </div>
                   <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
                     <Input
-                      label="Nome de exibição"
+                      label={tr('Nome de exibição', 'Nombre visible', 'Display name')}
                       value={form.nome}
                       onChange={(value) => updateForm('nome', value)}
-                      placeholder="Nome principal que o sistema vai mostrar"
+                      placeholder={tr('Nome principal que o sistema vai mostrar', 'Nombre principal que mostrará el sistema', 'Main name that the system will show')}
                     />
                     <Input
-                      label="Identificador da URL"
+                      label={tr('Identificador da URL', 'Identificador de la URL', 'URL identifier')}
                       value={form.slug}
                       onChange={(value) => updateForm('slug', slugify(value))}
-                      placeholder="Ex.: ip-manaus-centro"
+                      placeholder={tr('Ex.: ip-manaus-centro', 'Ej.: ip-manaus-centro', 'Ex.: ip-manaus-centro')}
                     />
                     <Input
-                      label="Nome curto"
+                      label={tr('Nome curto', 'Nombre corto', 'Short name')}
                       value={form.nome_abreviado}
                       onChange={(value) => updateForm('nome_abreviado', value)}
-                      placeholder="Versão resumida para listas, menus e cabeçalhos"
+                      placeholder={tr('Versão resumida para listas, menus e cabeçalhos', 'Versión resumida para listas, menús y encabezados', 'Short version for lists, menus, and headers')}
                     />
                     <Input
-                      label="Nome jurídico ou oficial"
+                      label={tr('Nome jurídico ou oficial', 'Nombre jurídico u oficial', 'Legal or official name')}
                       value={form.nome_completo}
                       onChange={(value) => updateForm('nome_completo', value)}
-                      placeholder="Use só se existir um nome formal maior que o de exibição"
+                      placeholder={tr('Use só se existir um nome formal maior que o de exibição', 'Úsalo solo si existe un nombre formal más largo que el visible', 'Use only if there is a formal name longer than the display name')}
                     />
                   </div>
                   <div className="grid gap-5 xl:grid-cols-2">
                     <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                      <span className="text-sm font-medium text-slate-700">Igreja ativa</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Igreja ativa', 'Iglesia activa', 'Active church')}</span>
                       <input
                         type="checkbox"
                         checked={form.ativo}
@@ -997,7 +1032,7 @@ export default function AdminIgrejasPage() {
                       />
                     </label>
                     <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                      <span className="text-sm font-medium text-slate-700">Visível no público</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Visível no público', 'Visible al público', 'Visible publicly')}</span>
                       <input
                         type="checkbox"
                         checked={form.visivel_publico}
@@ -1011,24 +1046,24 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <MapPinned className="h-4 w-4 text-blue-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Localização</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Localização', 'Ubicación', 'Location')}</h3>
                   </div>
                   <div className="grid gap-5 xl:grid-cols-3">
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">País</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('País', 'País', 'Country')}</span>
                       <select
                         value={form.pais}
                         onChange={(event) => updateForm('pais', event.target.value)}
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        {PAISES_DISPONIVEIS.map((pais) => (
+                        {countryOptions.map((pais) => (
                           <option key={pais.value} value={pais.value}>
                             {pais.label}
                           </option>
                         ))}
                       </select>
                     </label>
-                    <Input label="Cidade" value={form.cidade} onChange={(value) => updateForm('cidade', value)} />
+                    <Input label={tr('Cidade', 'Ciudad', 'City')} value={form.cidade} onChange={(value) => updateForm('cidade', value)} />
                     <Input
                       label={subdivisionLabel}
                       value={form.uf}
@@ -1037,18 +1072,18 @@ export default function AdminIgrejasPage() {
                     />
                   </div>
                   <div className="grid gap-5 xl:grid-cols-2">
-                    <Input label="Logradouro" value={form.logradouro} onChange={(value) => updateForm('logradouro', value)} />
-                    <Input label="Complemento" value={form.complemento} onChange={(value) => updateForm('complemento', value)} />
-                    <Input label="Bairro" value={form.bairro} onChange={(value) => updateForm('bairro', value)} />
+                    <Input label={tr('Logradouro', 'Dirección', 'Street')} value={form.logradouro} onChange={(value) => updateForm('logradouro', value)} />
+                    <Input label={tr('Complemento', 'Complemento', 'Additional info')} value={form.complemento} onChange={(value) => updateForm('complemento', value)} />
+                    <Input label={tr('Bairro', 'Barrio', 'District')} value={form.bairro} onChange={(value) => updateForm('bairro', value)} />
                     <Input label="CEP" value={form.cep} onChange={(value) => updateForm('cep', value)} />
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <p className="text-sm font-medium text-slate-700">Endereço completo gerado automaticamente</p>
+                    <p className="text-sm font-medium text-slate-700">{tr('Endereço completo gerado automaticamente', 'Dirección completa generada automáticamente', 'Full address generated automatically')}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Montado a partir de logradouro, complemento, bairro, cidade, {subdivisionLabel.toLowerCase()} e país.
+                      {tr('Montado a partir de logradouro, complemento, bairro, cidade, ', 'Generado a partir de dirección, complemento, barrio, ciudad, ', 'Built from street, additional info, district, city, ')}{subdivisionLabel.toLowerCase()}{tr(' e país.', ' y país.', ', and country.')}
                     </p>
                     <div className="mt-3 min-h-16 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                      {enderecoCompletoPreview || 'Preencha os campos acima para gerar o endereço completo.'}
+                      {enderecoCompletoPreview || tr('Preencha os campos acima para gerar o endereço completo.', 'Completa los campos anteriores para generar la dirección completa.', 'Fill in the fields above to generate the full address.')}
                     </div>
                   </div>
                 </section>
@@ -1056,19 +1091,18 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4 text-violet-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Contato e presença digital</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Contato e presença digital', 'Contacto y presencia digital', 'Contact and digital presence')}</h3>
                   </div>
                   <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-900">
-                    <p className="font-semibold">Redes sociais não ficam limitadas aqui.</p>
+                    <p className="font-semibold">{tr('Redes sociais não ficam limitadas aqui.', 'Las redes sociales no se limitan aquí.', 'Social networks are not limited here.')}</p>
                     <p className="mt-1">
-                      Neste bloco ficam os contatos principais da igreja. Para cadastrar uma ou várias redes sociais,
-                      use a seção <strong>Redes sociais</strong> logo abaixo.
+                      {tr('Neste bloco ficam os contatos principais da igreja. Para cadastrar uma ou várias redes sociais, use a seção ', 'En este bloque van los contactos principales de la iglesia. Para registrar una o varias redes sociales, usa la sección ', 'This block contains the church main contact information. To add one or more social networks, use the ')}<strong>{tr('Redes sociais', 'Redes sociales', 'Social networks')}</strong>{tr(' logo abaixo.', ' a continuación.', ' section below.')}
                     </p>
                   </div>
                   <div className="grid gap-5 xl:grid-cols-3 2xl:grid-cols-4">
-                    <Input label="Telefone" value={form.telefone} onChange={(value) => updateForm('telefone', value)} />
+                    <Input label={tr('Telefone', 'Teléfono', 'Phone')} value={form.telefone} onChange={(value) => updateForm('telefone', value)} />
                     <Input label="WhatsApp" value={form.whatsapp} onChange={(value) => updateForm('whatsapp', value)} />
-                    <Input label="E-mail" value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
+                    <Input label={tr('E-mail', 'Correo electrónico', 'Email')} value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
                   </div>
                 </section>
@@ -1076,69 +1110,68 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Link2 className="h-4 w-4 text-rose-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Apresentação pública</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Apresentação pública', 'Presentación pública', 'Public presentation')}</h3>
                   </div>
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-                    <p className="font-semibold">Esse bloco aparece na homepage como “Sobre a Igreja”.</p>
+                    <p className="font-semibold">{tr('Esse bloco aparece na homepage como “Sobre a Igreja”.', 'Este bloque aparece en la página principal como “Sobre la Iglesia”.', 'This block appears on the homepage as “About the Church”.')}</p>
                     <p className="mt-1">
-                      O link só aparece no público quando houver <strong>título</strong> ou <strong>texto</strong>. As mídias
-                      são opcionais e entram como apoio visual da apresentação.
+                      {tr('O link só aparece no público quando houver ', 'El enlace solo aparece al público cuando exista ', 'The link only appears publicly when there is ')}<strong>{tr('título', 'título', 'title')}</strong>{tr(' ou ', ' o ', ' or ')}<strong>{tr('texto', 'texto', 'text')}</strong>{tr('. As mídias são opcionais e entram como apoio visual da apresentação.', '. Los medios son opcionales y sirven como apoyo visual de la presentación.', '. Media is optional and works as visual support for the presentation.')}
                     </p>
                   </div>
                   <div className="grid gap-5 xl:grid-cols-2">
                     <Input
-                      label="Título da apresentação"
+                      label={tr('Título da apresentação', 'Título de la presentación', 'Presentation title')}
                       value={form.apresentacao_titulo}
                       onChange={(value) => updateForm('apresentacao_titulo', value)}
-                      placeholder="Ex.: Uma comunidade para adorar, servir e acolher"
+                      placeholder={tr('Ex.: Uma comunidade para adorar, servir e acolher', 'Ej.: Una comunidad para adorar, servir y acoger', 'Ex.: A community to worship, serve, and welcome')}
                     />
                     <Input
-                      label="Imagem principal"
+                      label={tr('Imagem principal', 'Imagen principal', 'Main image')}
                       value={form.apresentacao_imagem_url}
                       onChange={(value) => updateForm('apresentacao_imagem_url', value)}
                       placeholder="https://..."
                     />
                   </div>
                   <Textarea
-                    label="Texto institucional"
+                    label={tr('Texto institucional', 'Texto institucional', 'Institutional text')}
                     value={form.apresentacao_texto}
                     onChange={(value) => updateForm('apresentacao_texto', value)}
                     rows={6}
                   />
                   <div className="grid gap-5 xl:grid-cols-2">
                     <Input
-                      label="Vídeo do YouTube"
+                      label={tr('Vídeo do YouTube', 'Video de YouTube', 'YouTube video')}
                       value={form.apresentacao_youtube_url}
                       onChange={(value) => updateForm('apresentacao_youtube_url', value)}
                       placeholder="https://www.youtube.com/watch?v=..."
                     />
                     <Textarea
-                      label="Galeria de fotos"
+                      label={tr('Galeria de fotos', 'Galería de fotos', 'Photo gallery')}
                       value={form.apresentacao_galeria}
                       onChange={(value) => updateForm('apresentacao_galeria', value)}
                       rows={4}
                     />
                   </div>
                   <p className="text-xs text-slate-500">
-                    Na galeria, use uma URL por linha. Se o texto institucional estiver vazio, o link “Sobre a igreja” não será exibido.
+                    {tr('Na galeria, use uma URL por linha. Se o texto institucional estiver vazio, o link “Sobre a igreja” não será exibido.', 'En la galería, usa una URL por línea. Si el texto institucional está vacío, el enlace “Sobre la iglesia” no se mostrará.', 'In the gallery, use one URL per line. If the institutional text is empty, the “About the church” link will not be shown.')}
                   </p>
                 </section>
 
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Settings2 className="h-4 w-4 text-amber-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Configurações da igreja</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Configurações da igreja', 'Configuraciones de la iglesia', 'Church settings')}</h3>
                   </div>
                   <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">Modo de repertório</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Modo de repertório', 'Modo de repertorio', 'Repertoire mode')}</span>
                       <select
                         value={form.modo_repertorio}
                         onChange={(event) => updateForm('modo_repertorio', event.target.value)}
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        <option value="">Selecione</option>
-                        {MODOS_REPERTORIO.map((modo) => (
+                        <option value="">{tr('Selecione', 'Selecciona', 'Select')}</option>
+                        {repertoryOptions.map((modo) => (
                           <option key={modo.value} value={modo.value}>
                             {modo.label}
                           </option>
@@ -1146,13 +1179,13 @@ export default function AdminIgrejasPage() {
                       </select>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">Timezone do boletim</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Timezone do boletim', 'Zona horaria del boletín', 'Bulletin timezone')}</span>
                       <select
                         value={form.timezone_boletim}
                         onChange={(event) => updateForm('timezone_boletim', event.target.value)}
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        <option value="">Selecione</option>
+                        <option value="">{tr('Selecione', 'Selecciona', 'Select')}</option>
                         {TIMEZONES_DISPONIVEIS.map((timezone) => (
                           <option key={timezone.value} value={timezone.value}>
                             {timezone.label}
@@ -1161,14 +1194,14 @@ export default function AdminIgrejasPage() {
                       </select>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">Dia de publicação do boletim</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Dia de publicação do boletim', 'Día de publicación del boletín', 'Bulletin publication day')}</span>
                       <select
                         value={form.dia_publicacao_boletim}
                         onChange={(event) => updateForm('dia_publicacao_boletim', event.target.value)}
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        <option value="">Selecione</option>
-                        {DIAS_PUBLICACAO.map((dia) => (
+                        <option value="">{tr('Selecione', 'Selecciona', 'Select')}</option>
+                        {publicationDayOptions.map((dia) => (
                           <option key={dia.value} value={dia.value}>
                             {dia.label}
                           </option>
@@ -1178,7 +1211,7 @@ export default function AdminIgrejasPage() {
                   </div>
                   <div className="grid gap-5 xl:grid-cols-[220px_220px_minmax(0,1fr)]">
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">Hora de publicação</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Hora de publicação', 'Hora de publicación', 'Publication time')}</span>
                       <select
                         value={horarioParts.hora}
                         onChange={(event) =>
@@ -1189,7 +1222,7 @@ export default function AdminIgrejasPage() {
                         }
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        <option value="">Hora</option>
+                        <option value="">{tr('Hora', 'Hora', 'Hour')}</option>
                         {Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0')).map((hora) => (
                           <option key={hora} value={hora}>
                             {hora}h
@@ -1198,7 +1231,7 @@ export default function AdminIgrejasPage() {
                       </select>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-sm font-medium text-slate-700">Minutos</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Minutos', 'Minutos', 'Minutes')}</span>
                       <select
                         value={horarioParts.minuto}
                         onChange={(event) =>
@@ -1209,7 +1242,7 @@ export default function AdminIgrejasPage() {
                         }
                         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       >
-                        <option value="">Min</option>
+                        <option value="">{tr('Min', 'Min', 'Min')}</option>
                         {Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0')).map((minuto) => (
                           <option key={minuto} value={minuto}>
                             {minuto}
@@ -1218,14 +1251,18 @@ export default function AdminIgrejasPage() {
                       </select>
                     </label>
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <p className="text-sm font-medium text-slate-700">Formato exibido</p>
+                      <p className="text-sm font-medium text-slate-700">{tr('Formato exibido', 'Formato mostrado', 'Displayed format')}</p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {formatHorarioPublicacaoLabel(horarioParts.hora, horarioParts.minuto)}
+                        {formatHorarioPublicacaoLabel(
+                          horarioParts.hora,
+                          horarioParts.minuto,
+                          tr
+                        )}
                       </p>
                     </div>
                   </div>
                   <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
-                    <span className="text-sm font-medium text-slate-700">Permite cadastro de cânticos</span>
+                      <span className="text-sm font-medium text-slate-700">{tr('Permite cadastro de cânticos', 'Permite registro de cánticos', 'Allows song registration')}</span>
                     <input
                       type="checkbox"
                       checked={form.permite_cadastro_canticos}
@@ -1238,13 +1275,13 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <CalendarClock className="h-4 w-4 text-rose-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Agenda de cultos</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Agenda de cultos', 'Agenda de cultos', 'Service schedule')}</h3>
                   </div>
                   <div className="space-y-3">
                     {form.cultos.map((culto, index) => (
                       <div key={`culto-${index}`} className="rounded-2xl border border-slate-200 p-5">
                         <div className="mb-3 flex items-center justify-between">
-                          <p className="text-sm font-semibold text-slate-700">Culto {index + 1}</p>
+                          <p className="text-sm font-semibold text-slate-700">{tr(`Culto ${index + 1}`, `Culto ${index + 1}`, `Service ${index + 1}`)}</p>
                           <button
                             type="button"
                             onClick={() =>
@@ -1256,12 +1293,12 @@ export default function AdminIgrejasPage() {
                             className="inline-flex items-center gap-1 text-sm font-medium text-red-600"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Remover
+                            {tr('Remover', 'Eliminar', 'Remove')}
                           </button>
                         </div>
                         <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
                           <Input
-                            label="Nome"
+                            label={tr('Nome', 'Nombre', 'Name')}
                             value={culto.nome}
                             onChange={(value) =>
                               updateForm(
@@ -1273,7 +1310,7 @@ export default function AdminIgrejasPage() {
                             }
                           />
                           <label className="block space-y-1">
-                            <span className="text-sm font-medium text-slate-700">Dia da semana</span>
+                            <span className="text-sm font-medium text-slate-700">{tr('Dia da semana', 'Día de la semana', 'Weekday')}</span>
                             <select
                               value={culto.dia_semana}
                               onChange={(event) =>
@@ -1290,13 +1327,13 @@ export default function AdminIgrejasPage() {
                             >
                               {DIAS_SEMANA.map((dia) => (
                                 <option key={dia} value={dia}>
-                                  {dia}
+                                  {weekdayLabelMap[dia] || dia}
                                 </option>
                               ))}
                             </select>
                           </label>
                           <Input
-                            label="Horário"
+                            label={tr('Horário', 'Horario', 'Time')}
                             value={culto.horario}
                             onChange={(value) =>
                               updateForm(
@@ -1309,7 +1346,7 @@ export default function AdminIgrejasPage() {
                             type="time"
                           />
                           <Input
-                            label="Ordem"
+                            label={tr('Ordem', 'Orden', 'Order')}
                             value={String(culto.ordem)}
                             onChange={(value) =>
                               updateForm(
@@ -1324,7 +1361,7 @@ export default function AdminIgrejasPage() {
                         </div>
                         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_240px]">
                           <Textarea
-                            label="Descrição"
+                            label={tr('Descrição', 'Descripción', 'Description')}
                             value={culto.descricao}
                             onChange={(value) =>
                               updateForm(
@@ -1337,7 +1374,7 @@ export default function AdminIgrejasPage() {
                             rows={2}
                           />
                           <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
-                            <span className="text-sm font-medium text-slate-700">Ativo</span>
+                            <span className="text-sm font-medium text-slate-700">{tr('Ativo', 'Activo', 'Active')}</span>
                             <input
                               type="checkbox"
                               checked={culto.ativo}
@@ -1383,13 +1420,13 @@ export default function AdminIgrejasPage() {
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Link2 className="h-4 w-4 text-cyan-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Redes sociais</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Redes sociais', 'Redes sociales', 'Social networks')}</h3>
                   </div>
                   <div className="space-y-3">
                     {form.redesSociais.map((rede, index) => (
                       <div key={`rede-${index}`} className="grid gap-5 rounded-2xl border border-slate-200 p-5 xl:grid-cols-[220px_minmax(0,1fr)_130px_180px]">
                         <label className="block space-y-1">
-                          <span className="text-sm font-medium text-slate-700">Tipo</span>
+                          <span className="text-sm font-medium text-slate-700">{tr('Tipo', 'Tipo', 'Type')}</span>
                           <select
                             value={rede.tipo}
                             onChange={(event) =>
@@ -1422,7 +1459,7 @@ export default function AdminIgrejasPage() {
                           }
                         />
                         <Input
-                          label="Ordem"
+                          label={tr('Ordem', 'Orden', 'Order')}
                           value={String(rede.ordem)}
                           onChange={(value) =>
                             updateForm(
@@ -1451,7 +1488,7 @@ export default function AdminIgrejasPage() {
                               }
                               className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
                             />
-                            Ativa
+                            {tr('Ativa', 'Activa', 'Active')}
                           </label>
                           <button
                             type="button"
@@ -1480,36 +1517,34 @@ export default function AdminIgrejasPage() {
                     className="inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     <Plus className="h-4 w-4" />
-                    Adicionar rede
+                    {tr('Adicionar rede', 'Agregar red', 'Add network')}
                   </button>
                 </section>
 
                 <section className="space-y-5">
                   <div className="flex items-center gap-2">
                     <Church className="h-4 w-4 text-indigo-700" />
-                    <h3 className="text-lg font-semibold text-slate-900">Liturgia da igreja</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{tr('Liturgia da igreja', 'Liturgia de la iglesia', 'Church liturgy')}</h3>
                   </div>
 
                     <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 xl:p-6">
                     <div className="mb-5 rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4">
-                      <p className="text-sm font-semibold text-indigo-950">Fluxo simples para configurar a liturgia</p>
+                      <p className="text-sm font-semibold text-indigo-950">{tr('Fluxo simples para configurar a liturgia', 'Flujo simple para configurar la liturgia', 'Simple flow to configure the liturgy')}</p>
                       <p className="mt-1 text-sm text-indigo-900">
-                        1. Adicione os tipos que a igreja usa. 2. Cada tipo entra automaticamente na ordem do culto.
-                        3. Depois, só reorganize e ajuste os textos padrão.
+                        {tr('1. Adicione os tipos que a igreja usa. 2. Cada tipo entra automaticamente na ordem do culto. 3. Depois, só reorganize e ajuste os textos padrão.', '1. Agrega los tipos que usa la iglesia. 2. Cada tipo entra automáticamente en el orden del culto. 3. Después, solo reorganiza y ajusta los textos estándar.', '1. Add the types the church uses. 2. Each type enters the service order automatically. 3. Then just reorder and adjust the default texts.')}
                       </p>
                     </div>
 
                     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.45fr)]">
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6">
-                      <p className="mb-2 text-sm font-semibold text-slate-900">1. Tipos disponíveis</p>
+                      <p className="mb-2 text-sm font-semibold text-slate-900">{tr('1. Tipos disponíveis', '1. Tipos disponibles', '1. Available types')}</p>
                       <p className="mb-4 text-sm text-slate-500">
-                        Adicione aqui as partes que a igreja usa na liturgia. Ao adicionar um tipo, ele já entra
-                        automaticamente na ordem padrão do culto.
+                        {tr('Adicione aqui as partes que a igreja usa na liturgia. Ao adicionar um tipo, ele já entra automaticamente na ordem padrão do culto.', 'Agrega aquí las partes que la iglesia usa en la liturgia. Al agregar un tipo, ya entra automáticamente en el orden estándar del culto.', 'Add here the parts the church uses in the liturgy. When you add a type, it automatically enters the default service order.')}
                       </p>
 
                       <div className="mb-4 flex flex-wrap gap-2">
                         {form.tiposLiturgicos.length === 0 && (
-                          <span className="text-sm text-slate-400">Nenhum tipo cadastrado.</span>
+                          <span className="text-sm text-slate-400">{tr('Nenhum tipo cadastrado.', 'Ningún tipo registrado.', 'No type registered.')}</span>
                         )}
                         {form.tiposLiturgicos.map((tipo) => (
                           <span
@@ -1532,7 +1567,7 @@ export default function AdminIgrejasPage() {
                         <input
                           value={novoTipoLiturgico}
                           onChange={(event) => setNovoTipoLiturgico(event.target.value)}
-                          placeholder="Ex.: Leitura responsiva"
+                          placeholder={tr('Ex.: Leitura responsiva', 'Ej.: Lectura responsiva', 'Ex.: Responsive reading')}
                           className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         />
                         <button
@@ -1544,13 +1579,13 @@ export default function AdminIgrejasPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
                         >
                           <Plus className="h-4 w-4" />
-                          Adicionar tipo
+                          {tr('Adicionar tipo', 'Agregar tipo', 'Add type')}
                         </button>
                       </div>
 
                       <div className="mt-4 rounded-2xl bg-slate-50 p-4">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Sugestões rápidas
+                          {tr('Sugestões rápidas', 'Sugerencias rápidas', 'Quick suggestions')}
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {TIPOS_LITURGICOS_SUGERIDOS.map((tipo) => {
@@ -1581,9 +1616,9 @@ export default function AdminIgrejasPage() {
                     <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6">
                       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-slate-900">2. Ordem padrão do culto</p>
+                          <p className="text-sm font-semibold text-slate-900">{tr('2. Ordem padrão do culto', '2. Orden estándar del culto', '2. Default service order')}</p>
                           <p className="mt-1 text-sm text-slate-500">
-                            Aqui você só organiza a sequência e define o texto padrão de cada parte do culto.
+                            {tr('Aqui você só organiza a sequência e define o texto padrão de cada parte do culto.', 'Aquí solo organizas la secuencia y defines el texto estándar de cada parte del culto.', 'Here you just organize the sequence and define the default text for each service part.')}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -1594,7 +1629,7 @@ export default function AdminIgrejasPage() {
                               className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
                             >
                               <Plus className="h-4 w-4" />
-                              Gerar ordem inicial
+                              {tr('Gerar ordem inicial', 'Generar orden inicial', 'Generate initial order')}
                             </button>
                           )}
                           <button
@@ -1603,7 +1638,7 @@ export default function AdminIgrejasPage() {
                             className="inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             <Plus className="h-4 w-4" />
-                            Adicionar item extra
+                            {tr('Adicionar item extra', 'Agregar ítem extra', 'Add extra item')}
                           </button>
                         </div>
                       </div>
@@ -1611,14 +1646,13 @@ export default function AdminIgrejasPage() {
                       <div className="space-y-4">
                         {form.modelosLiturgia.length === 0 && form.tiposLiturgicos.length === 0 && (
                           <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-400">
-                            Adicione os tipos litúrgicos na coluna à esquerda para começar.
+                            {tr('Adicione os tipos litúrgicos na coluna à esquerda para começar.', 'Agrega los tipos litúrgicos en la columna izquierda para comenzar.', 'Add liturgical types in the left column to get started.')}
                           </div>
                         )}
 
                         {form.modelosLiturgia.length === 0 && form.tiposLiturgicos.length > 0 && (
                           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-                            Você já tem tipos cadastrados. Clique em <strong>Gerar ordem inicial</strong> para montar
-                            a sequência automaticamente.
+                            {tr('Você já tem tipos cadastrados. Clique em ', 'Ya tienes tipos registrados. Haz clic en ', 'You already have registered types. Click ')}<strong>{tr('Gerar ordem inicial', 'Generar orden inicial', 'Generate initial order')}</strong>{tr(' para montar a sequência automaticamente.', ' para montar la secuencia automáticamente.', ' to build the sequence automatically.')}
                           </div>
                         )}
 
@@ -1630,9 +1664,9 @@ export default function AdminIgrejasPage() {
                                   {index + 1}
                                 </span>
                                 <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-slate-900">Item da ordem</p>
+                                  <p className="text-sm font-semibold text-slate-900">{tr('Item da ordem', 'Ítem del orden', 'Order item')}</p>
                                   <p className="text-xs text-slate-500">
-                                    Use as setas ou escolha a nova posição para reorganizar a sequência.
+                                    {tr('Use as setas ou escolha a nova posição para reorganizar a sequência.', 'Usa las flechas o elige la nueva posición para reorganizar la secuencia.', 'Use the arrows or choose the new position to reorder the sequence.')}
                                   </p>
                                 </div>
                               </div>
@@ -1659,14 +1693,14 @@ export default function AdminIgrejasPage() {
                                   className="inline-flex items-center gap-1 text-sm font-medium text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                  Remover
+                                  {tr('Remover', 'Eliminar', 'Remove')}
                                 </button>
                               </div>
                             </div>
 
                             <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_160px] 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_180px]">
                               <label className="block space-y-1">
-                                <span className="text-sm font-medium text-slate-700">Tipo litúrgico</span>
+                                <span className="text-sm font-medium text-slate-700">{tr('Tipo litúrgico', 'Tipo litúrgico', 'Liturgical type')}</span>
                                 <select
                                   value={modelo.tipo}
                                   onChange={(event) => {
@@ -1679,7 +1713,7 @@ export default function AdminIgrejasPage() {
                                   }}
                                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                                 >
-                                  <option value="">Selecione um tipo</option>
+                                  <option value="">{tr('Selecione um tipo', 'Selecciona un tipo', 'Select a type')}</option>
                                   {form.tiposLiturgicos.map((tipo) => (
                                     <option key={tipo} value={tipo}>
                                       {tipo}
@@ -1689,14 +1723,14 @@ export default function AdminIgrejasPage() {
                               </label>
 
                               <Input
-                                label="Título exibido no culto"
+                                label={tr('Título exibido no culto', 'Título mostrado en el culto', 'Title shown in the service')}
                                 value={modelo.bloco}
                                 onChange={(value) => patchModeloLiturgia(index, { bloco: value })}
-                                placeholder="Opcional. Se não mudar, pode repetir o tipo"
+                                placeholder={tr('Opcional. Se não mudar, pode repetir o tipo', 'Opcional. Si no cambia, puede repetir el tipo', 'Optional. If unchanged, it can repeat the type')}
                               />
 
                               <label className="block space-y-1">
-                                <span className="text-sm font-medium text-slate-700">Posição na ordem</span>
+                                <span className="text-sm font-medium text-slate-700">{tr('Posição na ordem', 'Posición en el orden', 'Position in order')}</span>
                                 <select
                                   value={String(index + 1)}
                                   onChange={(event) =>
@@ -1716,13 +1750,13 @@ export default function AdminIgrejasPage() {
                             <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
                               <div className="grid min-w-0 gap-4">
                                 <Textarea
-                                  label="Texto público"
+                                  label={tr('Texto público', 'Texto público', 'Public text')}
                                   value={modelo.conteudo_publico_padrao}
                                   onChange={(value) => patchModeloLiturgia(index, { conteudo_publico_padrao: value })}
                                   rows={2}
                                 />
                                 <Textarea
-                                  label="Texto interno"
+                                  label={tr('Texto interno', 'Texto interno', 'Internal text')}
                                   value={modelo.descricao_interna_padrao}
                                   onChange={(value) =>
                                     patchModeloLiturgia(index, {
@@ -1734,7 +1768,7 @@ export default function AdminIgrejasPage() {
                                 />
                               </div>
                               <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
-                                <span className="text-sm font-medium text-slate-700">Tem cântico</span>
+                                <span className="text-sm font-medium text-slate-700">{tr('Tem cântico', 'Tiene cántico', 'Has song')}</span>
                                 <input
                                   type="checkbox"
                                   checked={modelo.tem_cantico}

@@ -29,7 +29,8 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePessoas, Pessoa } from '@/hooks/usePessoas';
-import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
+import { useLocale } from '@/i18n/provider';
+import { CargoTipo, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 import { UsuariosHubPanel } from '@/components/UsuariosHubPanel';
@@ -52,6 +53,9 @@ const CARGOS_GESTAO_GLOBAL: CargoTipo[] = ['membro', 'diacono', 'musico', 'staff
 
 export default function GerenciarPessoas() {
   const router = useRouter();
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) =>
+    locale === 'es' ? es : locale === 'en' ? en : pt;
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes, usuarioPermitido } = usePermissions();
   const { 
@@ -92,6 +96,19 @@ export default function GerenciarPessoas() {
   const [todasTags, setTodasTags] = useState<Tag[]>([]);
   const [tagsUsuario, setTagsUsuario] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(false);
+
+  const getCargoLabel = (cargo: CargoTipo) =>
+    ({
+      membro: tr('Membro', 'Miembro', 'Member'),
+      diacono: tr('Diácono', 'Diácono', 'Deacon'),
+      presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
+      pastor: tr('Pastor', 'Pastor', 'Pastor'),
+      seminarista: tr('Seminarista', 'Seminarista', 'Seminarian'),
+      staff: tr('Staff', 'Staff', 'Staff'),
+      musico: tr('Músico', 'Músico', 'Musician'),
+      admin: tr('Administrador', 'Administrador', 'Administrator'),
+      superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
+    } satisfies Record<CargoTipo, string>)[cargo];
 
   const totalLoading = authLoading || permLoading;
   const ehGestaoGlobal = permissoes.isSuperAdmin || usuarioPermitido?.cargo === 'admin';
@@ -204,7 +221,7 @@ export default function GerenciarPessoas() {
     if (!pessoaEditando) return;
     const tagSelecionada = todasTags.find((tag) => tag.id === tagId);
     if (!ehGestaoGlobal && tagSelecionada && TAGS_RESTRITAS.includes(tagSelecionada.nome)) {
-      setMensagem('❌ Apenas gestão global pode atribuir tags de liderança e pregação.');
+      setMensagem(`❌ ${tr('Apenas gestão global pode atribuir tags de liderança e pregação.', 'Solo la gestión global puede asignar etiquetas de liderazgo y predicación.', 'Only global management can assign leadership and preaching tags.')}`);
       return;
     }
     const jaTemTag = tagsUsuario.includes(tagId);
@@ -229,7 +246,7 @@ export default function GerenciarPessoas() {
         setTagsUsuario(prev => [...prev, tagId]);
       }
     } catch {
-      setMensagem(`❌ Erro ao alterar habilidade`);
+      setMensagem(`❌ ${tr('Erro ao alterar habilidade.', 'Error al cambiar habilidad.', 'Error changing skill.')}`);
     }
   };
 
@@ -239,7 +256,7 @@ export default function GerenciarPessoas() {
     setMensagem('');
     try {
       if (!ehGestaoGlobal && !apenasMembro && !cargosDisponiveis.includes(novoCargo)) {
-        throw new Error('A gestão local não pode atribuir este cargo.');
+        throw new Error(tr('A gestão local não pode atribuir este cargo.', 'La gestión local no puede asignar este cargo.', 'Local management cannot assign this role.'));
       }
 
       const resultado = await criarPessoa({
@@ -249,7 +266,7 @@ export default function GerenciarPessoas() {
         telefone: novoTelefone ? unformatPhoneNumber(novoTelefone.trim()) : undefined
       });
       if (resultado.success) {
-        setMensagem(`✅ ${novoNome} cadastrado com sucesso!`);
+        setMensagem(`✅ ${tr(`${novoNome} cadastrado com sucesso!`, `${novoNome} registrado con éxito.`, `${novoNome} registered successfully.`)}`);
         setNovoEmail('');
         setNovoNome('');
         setNovoTelefone('');
@@ -261,7 +278,7 @@ export default function GerenciarPessoas() {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
+      setMensagem(`❌ ${tr('Erro:', 'Error:', 'Error:')} ${error.message}`);
     } finally {
       setSalvando(false);
     }
@@ -271,47 +288,51 @@ export default function GerenciarPessoas() {
     try {
       const resultado = await atualizarPessoa(id, { ativo });
       if (resultado.success) {
-        setMensagem(ativo ? '✅ Pessoa ativada' : '⚠️ Pessoa desativada');
+        setMensagem(
+          ativo
+            ? `✅ ${tr('Pessoa ativada.', 'Persona activada.', 'Person activated.')}`
+            : `⚠️ ${tr('Pessoa desativada.', 'Persona desactivada.', 'Person deactivated.')}`
+        );
         listarPessoas();
       } else {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
+      setMensagem(`❌ ${tr('Erro:', 'Error:', 'Error:')} ${error.message}`);
     }
   };
 
   const removerPessoa = async (id: string, nome: string, temAcesso: boolean) => {
     if (temAcesso) {
-      setMensagem('❌ Não é possível remover pessoa com acesso ao sistema. Desative-a primeiro.');
+      setMensagem(`❌ ${tr('Não é possível remover pessoa com acesso ao sistema. Desative-a primeiro.', 'No es posible eliminar una persona con acceso al sistema. Desactívala primero.', 'You cannot remove a person with system access. Deactivate them first.')}`);
       return;
     }
-    if (!confirm(`Tem certeza que deseja REMOVER ${nome}?`)) return;
+    if (!confirm(tr(`Tem certeza que deseja REMOVER ${nome}?`, `¿Seguro que deseas ELIMINAR a ${nome}?`, `Are you sure you want to REMOVE ${nome}?`))) return;
     try {
       const resultado = await deletarPessoa(id);
       if (resultado.success) {
-        setMensagem('🗑️ Pessoa removida com sucesso');
+        setMensagem(`🗑️ ${tr('Pessoa removida com sucesso.', 'Persona eliminada con éxito.', 'Person removed successfully.')}`);
         listarPessoas();
       } else {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
+      setMensagem(`❌ ${tr('Erro:', 'Error:', 'Error:')} ${error.message}`);
     }
   };
 
   const liberarAcessoPessoa = async (pessoa: Pessoa) => {
     if (pessoa.tem_acesso) {
-      setMensagem('ℹ️ Esta pessoa já possui acesso liberado.');
+      setMensagem(`ℹ️ ${tr('Esta pessoa já possui acesso liberado.', 'Esta persona ya tiene acceso habilitado.', 'This person already has granted access.')}`);
       return;
     }
 
     if (!pessoa.email) {
-      setMensagem('❌ Adicione um e-mail antes de liberar o acesso.');
+      setMensagem(`❌ ${tr('Adicione um e-mail antes de liberar o acesso.', 'Agrega un correo antes de habilitar el acceso.', 'Add an email before granting access.')}`);
       return;
     }
 
-    if (!confirm(`Liberar acesso para ${pessoa.nome} usando ${pessoa.email}?`)) return;
+    if (!confirm(tr(`Liberar acesso para ${pessoa.nome} usando ${pessoa.email}?`, `¿Habilitar acceso para ${pessoa.nome} usando ${pessoa.email}?`, `Grant access to ${pessoa.nome} using ${pessoa.email}?`))) return;
 
     try {
       setLiberandoAcessoId(pessoa.id);
@@ -324,7 +345,7 @@ export default function GerenciarPessoas() {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
+      setMensagem(`❌ ${tr('Erro:', 'Error:', 'Error:')} ${error.message}`);
     } finally {
       setLiberandoAcessoId(null);
     }
@@ -358,7 +379,7 @@ export default function GerenciarPessoas() {
     setSalvando(true);
     try {
       if (!ehGestaoGlobal && !cargosDisponiveis.includes(editandoCargo)) {
-        throw new Error('A gestão local não pode atribuir este cargo.');
+        throw new Error(tr('A gestão local não pode atribuir este cargo.', 'La gestión local no puede asignar este cargo.', 'Local management cannot assign this role.'));
       }
 
       const resultado = await atualizarPessoa(pessoaEditando.id, {
@@ -368,14 +389,14 @@ export default function GerenciarPessoas() {
         cargo: editandoCargo
       });
       if (resultado.success) {
-        setMensagem(`✅ ${editandoNome} atualizado com sucesso!`);
+        setMensagem(`✅ ${tr(`${editandoNome} atualizado com sucesso!`, `${editandoNome} actualizado con éxito.`, `${editandoNome} updated successfully.`)}`);
         fecharModalEdicao();
         listarPessoas();
       } else {
         setMensagem(`❌ ${resultado.error}`);
       }
     } catch (error: any) {
-      setMensagem(`❌ Erro: ${error.message}`);
+      setMensagem(`❌ ${tr('Erro:', 'Error:', 'Error:')} ${error.message}`);
     } finally {
       setSalvando(false);
     }
@@ -386,7 +407,7 @@ export default function GerenciarPessoas() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Verificando permissões...</p>
+          <p className="mt-4 text-slate-600">{tr('Verificando permissões...', 'Verificando permisos...', 'Checking permissions...')}</p>
         </div>
       </div>
     );
@@ -399,11 +420,13 @@ export default function GerenciarPessoas() {
   const pessoasBase = pessoasFiltradas.filter((pessoa) => !pessoa.tem_acesso);
   const acessosBase = pessoasFiltradas.filter((pessoa) => pessoa.tem_acesso);
   const listaExibida = visaoGestao === 'pessoas' ? pessoasBase : acessosBase;
-  const tituloSecao = visaoGestao === 'pessoas' ? 'Pessoas da Igreja' : 'Acessos e Permissões';
+  const tituloSecao = visaoGestao === 'pessoas'
+    ? tr('Pessoas da Igreja', 'Personas de la Iglesia', 'Church People')
+    : tr('Acessos e Permissões', 'Accesos y Permisos', 'Access and Permissions');
   const descricaoSecao =
     visaoGestao === 'pessoas'
-      ? 'Cadastros internos, membros sem login e organização da base da igreja.'
-      : 'Usuários com acesso ao sistema, perfis, cargos e habilitações.';
+      ? tr('Cadastros internos, membros sem login e organização da base da igreja.', 'Registros internos, miembros sin inicio de sesión y organización de la base de la iglesia.', 'Internal records, members without login, and church database organization.')
+      : tr('Usuários com acesso ao sistema, perfis, cargos e habilitações.', 'Usuarios con acceso al sistema, perfiles, cargos y habilidades.', 'Users with system access, profiles, roles, and skills.');
   const badgeSecao = visaoGestao === 'pessoas' ? pessoasBase.length : acessosBase.length;
 
   return (
@@ -415,16 +438,16 @@ export default function GerenciarPessoas() {
             <div>
               <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-8 h-8 text-emerald-700" />
-                Gerenciar Pessoas
+                {tr('Gerenciar Pessoas', 'Gestionar Personas', 'Manage People')}
               </h1>
-              <p className="text-slate-600 mt-1">Membros da igreja e usuários do sistema</p>
+              <p className="text-slate-600 mt-1">{tr('Membros da igreja e usuários do sistema', 'Miembros de la iglesia y usuarios del sistema', 'Church members and system users')}</p>
             </div>
             <button 
               onClick={() => router.push('/admin')} 
               className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Voltar
+              {tr('Voltar', 'Volver', 'Back')}
             </button>
           </div>
 
@@ -433,7 +456,7 @@ export default function GerenciarPessoas() {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-sm text-emerald-800">
                 <User className="w-4 h-4" />
-                Logado como: <span className="font-semibold">{usuarioPermitido?.nome || user.email}</span>
+                {tr('Logado como:', 'Conectado como:', 'Signed in as:')} <span className="font-semibold">{usuarioPermitido?.nome || user.email}</span>
               </div>
               {usuarioPermitido?.cargo && (
                 <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${getCargoCor(usuarioPermitido.cargo)}`}>
@@ -443,20 +466,22 @@ export default function GerenciarPessoas() {
               <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
                 ehGestaoGlobal ? 'bg-slate-900 text-white' : 'bg-amber-100 text-amber-900'
               }`}>
-                {ehGestaoGlobal ? 'Gestão global' : 'Gestão local da igreja'}
+                {ehGestaoGlobal
+                  ? tr('Gestão global', 'Gestión global', 'Global management')
+                  : tr('Gestão local da igreja', 'Gestión local de la iglesia', 'Local church management')}
               </span>
             </div>
             <p className="mt-3 text-sm text-emerald-900">
               {ehGestaoGlobal
-                ? 'Você pode gerenciar acessos, cargos e tags sensíveis conforme o contexto da igreja selecionada.'
-                : 'Você pode cuidar do cadastro e dos acessos da igreja ativa, mas cargos administrativos e tags sensíveis continuam centralizados.'}
+                ? tr('Você pode gerenciar acessos, cargos e tags sensíveis conforme o contexto da igreja selecionada.', 'Puedes gestionar accesos, cargos y etiquetas sensibles según el contexto de la iglesia seleccionada.', 'You can manage access, roles, and sensitive tags according to the selected church context.')
+                : tr('Você pode cuidar do cadastro e dos acessos da igreja ativa, mas cargos administrativos e tags sensíveis continuam centralizados.', 'Puedes cuidar el registro y los accesos de la iglesia activa, pero los cargos administrativos y las etiquetas sensibles siguen centralizados.', 'You can manage the active church records and access, but administrative roles and sensitive tags remain centralized.')}
             </p>
           </div>
 
           {ehGestaoLocal && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-              <p className="font-semibold mb-1">Escopo da gestão local</p>
-              <p>Pastores, presbíteros e secretaria ajudam no cadastro e na liberação de acesso da igreja ativa. Promoções administrativas e tags de liderança continuam reservadas à gestão global.</p>
+              <p className="font-semibold mb-1">{tr('Escopo da gestão local', 'Alcance de la gestión local', 'Scope of local management')}</p>
+              <p>{tr('Pastores, presbíteros e secretaria ajudam no cadastro e na liberação de acesso da igreja ativa. Promoções administrativas e tags de liderança continuam reservadas à gestão global.', 'Pastores, presbíteros y secretaría ayudan con el registro y la liberación de acceso de la iglesia activa. Las promociones administrativas y etiquetas de liderazgo siguen reservadas a la gestión global.', 'Pastors, elders, and office staff help with registration and access release for the active church. Administrative promotions and leadership tags remain reserved for global management.')}</p>
             </div>
           )}
 
@@ -471,7 +496,7 @@ export default function GerenciarPessoas() {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Cadastros da igreja
+                {tr('Cadastros da igreja', 'Registros de la iglesia', 'Church records')}
               </button>
               <button
                 type="button"
@@ -482,7 +507,7 @@ export default function GerenciarPessoas() {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Hub macro
+                {tr('Hub macro', 'Hub macro', 'Macro hub')}
               </button>
             </div>
           )}
@@ -496,21 +521,21 @@ export default function GerenciarPessoas() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-slate-200 p-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-600">Total de Pessoas</p>
+                <p className="text-sm text-slate-600">{tr('Total de Pessoas', 'Total de Personas', 'Total People')}</p>
                 <Users className="w-5 h-5 text-slate-400" />
               </div>
               <p className="text-2xl font-bold text-slate-900">{pessoas.length}</p>
             </div>
             <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-emerald-600">Com Acesso</p>
+                <p className="text-sm text-emerald-600">{tr('Com Acesso', 'Con Acceso', 'With Access')}</p>
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
               </div>
               <p className="text-2xl font-bold text-emerald-900">{countComAcesso}</p>
             </div>
             <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-blue-600">Membros (Sem Acesso)</p>
+                <p className="text-sm text-blue-600">{tr('Membros (Sem Acesso)', 'Miembros (Sin Acceso)', 'Members (No Access)')}</p>
                 <UserX className="w-5 h-5 text-blue-400" />
               </div>
               <p className="text-2xl font-bold text-blue-900">{countSemAcesso}</p>
@@ -525,7 +550,7 @@ export default function GerenciarPessoas() {
                 visaoGestao === 'pessoas' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Pessoas da igreja
+              {tr('Pessoas da igreja', 'Personas de la iglesia', 'Church people')}
             </button>
             <button
               type="button"
@@ -534,7 +559,7 @@ export default function GerenciarPessoas() {
                 visaoGestao === 'acessos' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Acessos e permissões
+              {tr('Acessos e permissões', 'Accesos y permisos', 'Access and permissions')}
             </button>
           </div>
 
@@ -558,7 +583,11 @@ export default function GerenciarPessoas() {
               className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center gap-2"
             >
               {mostrarFormulario ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-              {mostrarFormulario ? 'Cancelar' : visaoGestao === 'pessoas' ? 'Adicionar Pessoa' : 'Adicionar Acesso'}
+              {mostrarFormulario
+                ? tr('Cancelar', 'Cancelar', 'Cancel')
+                : visaoGestao === 'pessoas'
+                  ? tr('Adicionar Pessoa', 'Agregar Persona', 'Add Person')
+                  : tr('Adicionar Acesso', 'Agregar Acceso', 'Add Access')}
             </button>
           </div>
 
@@ -567,7 +596,9 @@ export default function GerenciarPessoas() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-in fade-in slide-in-from-top-4 duration-200">
               <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-700" />
-                {visaoGestao === 'pessoas' ? 'Nova Pessoa da Igreja' : 'Novo Usuário / Acesso'}
+                {visaoGestao === 'pessoas'
+                  ? tr('Nova Pessoa da Igreja', 'Nueva Persona de la Iglesia', 'New Church Person')
+                  : tr('Novo Usuário / Acesso', 'Nuevo Usuario / Acceso', 'New User / Access')}
               </h3>
               <form onSubmit={adicionarPessoa} className="space-y-4">
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
@@ -579,8 +610,8 @@ export default function GerenciarPessoas() {
                       className="w-5 h-5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" 
                     />
                     <div>
-                      <p className="font-semibold text-emerald-900">Cadastrar apenas como Membro</p>
-                      <p className="text-sm text-emerald-700">Apenas registro na base de dados, sem login no sistema.</p>
+                      <p className="font-semibold text-emerald-900">{tr('Cadastrar apenas como Membro', 'Registrar solo como Miembro', 'Register only as Member')}</p>
+                      <p className="text-sm text-emerald-700">{tr('Apenas registro na base de dados, sem login no sistema.', 'Solo registro en la base de datos, sin acceso al sistema.', 'Database record only, without system login.')}</p>
                     </div>
                   </label>
                 </div>
@@ -588,7 +619,7 @@ export default function GerenciarPessoas() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   {!apenasMembro && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">E-mail *</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{tr('E-mail', 'Correo electrónico', 'Email')} *</label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                         <input 
@@ -597,13 +628,13 @@ export default function GerenciarPessoas() {
                           onChange={(e) => setNovoEmail(e.target.value)} 
                           required={!apenasMembro} 
                           className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 outline-none" 
-                          placeholder="exemplo@email.com"
+                          placeholder={tr('exemplo@email.com', 'ejemplo@email.com', 'example@email.com')}
                         />
                       </div>
                     </div>
                   )}
                   <div className={apenasMembro ? 'sm:col-span-2' : ''}>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Nome Completo *</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Nome Completo', 'Nombre Completo', 'Full Name')} *</label>
                     <div className="relative">
                       <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                       <input 
@@ -612,7 +643,7 @@ export default function GerenciarPessoas() {
                         onChange={(e) => setNovoNome(e.target.value)} 
                         required 
                         className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 outline-none" 
-                        placeholder="Nome da pessoa"
+                        placeholder={tr('Nome da pessoa', 'Nombre de la persona', 'Person name')}
                       />
                     </div>
                   </div>
@@ -620,7 +651,7 @@ export default function GerenciarPessoas() {
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Telefone</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Telefone', 'Teléfono', 'Phone')}</label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                       <input 
@@ -636,7 +667,7 @@ export default function GerenciarPessoas() {
                   {/* Campo de Cargo só aparece se NÃO for "apenas membro" */}
                   {!apenasMembro && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Cargo / Função *</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Cargo / Função', 'Cargo / Función', 'Role / Function')} *</label>
                       <div className="relative">
                         <Briefcase className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                         <select 
@@ -660,7 +691,7 @@ export default function GerenciarPessoas() {
                   disabled={salvando}
                   className="w-full sm:w-auto bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 font-medium"
                 >
-                  {salvando ? 'Cadastrando...' : 'Cadastrar Pessoa'}
+                  {salvando ? tr('Cadastrando...', 'Registrando...', 'Registering...') : tr('Cadastrar Pessoa', 'Registrar Persona', 'Register Person')}
                 </button>
               </form>
             </div>
@@ -674,7 +705,7 @@ export default function GerenciarPessoas() {
                 {tituloSecao}
               </h3>
               <span className="text-sm bg-white/20 text-white px-3 py-1 rounded-full font-medium">
-                {badgeSecao} itens
+                {badgeSecao} {tr('itens', 'elementos', 'items')}
               </span>
             </div>
 
@@ -686,7 +717,9 @@ export default function GerenciarPessoas() {
                   <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder={visaoGestao === 'pessoas' ? 'Buscar por nome, cargo ou telefone...' : 'Buscar por nome, email, cargo ou telefone...'}
+                    placeholder={visaoGestao === 'pessoas'
+                      ? tr('Buscar por nome, cargo ou telefone...', 'Buscar por nombre, cargo o teléfono...', 'Search by name, role, or phone...')
+                      : tr('Buscar por nome, email, cargo ou telefone...', 'Buscar por nombre, correo, cargo o teléfono...', 'Search by name, email, role, or phone...')}
                     value={filtroTexto}
                     onChange={(e) => setFiltroTexto(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -699,9 +732,9 @@ export default function GerenciarPessoas() {
                     onChange={(e) => setFiltroAcesso(e.target.value as any)}
                     className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
-                    <option value="todos">Todos</option>
-                    <option value="com_acesso">Com Acesso</option>
-                    <option value="sem_acesso">Sem Acesso</option>
+                    <option value="todos">{tr('Todos', 'Todos', 'All')}</option>
+                    <option value="com_acesso">{tr('Com Acesso', 'Con Acceso', 'With Access')}</option>
+                    <option value="sem_acesso">{tr('Sem Acesso', 'Sin Acceso', 'Without Access')}</option>
                   </select>
 
                   <label className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer">
@@ -711,7 +744,7 @@ export default function GerenciarPessoas() {
                       onChange={(e) => setMostrarInativos(e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span className="text-sm text-slate-700 font-medium">Inativos</span>
+                    <span className="text-sm text-slate-700 font-medium">{tr('Inativos', 'Inactivos', 'Inactive')}</span>
                   </label>
                 </div>
               </div>
@@ -719,12 +752,14 @@ export default function GerenciarPessoas() {
               {pessoasLoading ? (
                 <div className="text-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700 mx-auto"></div>
-                  <p className="mt-2 text-slate-500 text-sm">Carregando...</p>
+                  <p className="mt-2 text-slate-500 text-sm">{tr('Carregando...', 'Cargando...', 'Loading...')}</p>
                 </div>
               ) : listaExibida.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>{visaoGestao === 'pessoas' ? 'Nenhuma pessoa sem acesso encontrada' : 'Nenhum acesso encontrado'}</p>
+                  <p>{visaoGestao === 'pessoas'
+                    ? tr('Nenhuma pessoa sem acesso encontrada', 'No se encontró ninguna persona sin acceso', 'No person without access found')
+                    : tr('Nenhum acesso encontrado', 'No se encontró ningún acceso', 'No access found')}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -732,17 +767,17 @@ export default function GerenciarPessoas() {
                     <thead>
                       <tr className="border-b-2 border-slate-100">
                         <th onClick={() => handleSort('nome')} className="text-left px-4 py-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-50">
-                          <div className="flex items-center gap-2">Nome {getSortIcon('nome')}</div>
+                          <div className="flex items-center gap-2">{tr('Nome', 'Nombre', 'Name')} {getSortIcon('nome')}</div>
                         </th>
                         <th onClick={() => handleSort('email')} className="text-left px-4 py-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-50 hidden lg:table-cell">
-                          <div className="flex items-center gap-2">Email {getSortIcon('email')}</div>
+                          <div className="flex items-center gap-2">{tr('Email', 'Email', 'Email')} {getSortIcon('email')}</div>
                         </th>
                         <th onClick={() => handleSort('cargo')} className="text-left px-4 py-3 font-semibold text-slate-600 cursor-pointer hover:bg-slate-50">
-                          <div className="flex items-center gap-2">Cargo {getSortIcon('cargo')}</div>
+                          <div className="flex items-center gap-2">{tr('Cargo', 'Cargo', 'Role')} {getSortIcon('cargo')}</div>
                         </th>
-                        <th className="text-center px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Acesso</th>
-                        <th className="text-center px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Status</th>
-                        <th className="text-center px-4 py-3 font-semibold text-slate-600">Ações</th>
+                        <th className="text-center px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">{tr('Acesso', 'Acceso', 'Access')}</th>
+                        <th className="text-center px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">{tr('Status', 'Estado', 'Status')}</th>
+                        <th className="text-center px-4 py-3 font-semibold text-slate-600">{tr('Ações', 'Acciones', 'Actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -755,12 +790,12 @@ export default function GerenciarPessoas() {
                               </div>
                               <div>
                                 <div className="font-semibold text-slate-900">{pessoa.nome}</div>
-                                <div className="text-xs text-slate-500 lg:hidden">{pessoa.email || 'Sem email'}</div>
+                                <div className="text-xs text-slate-500 lg:hidden">{pessoa.email || tr('Sem email', 'Sin correo', 'No email')}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-4 text-slate-600 text-sm hidden lg:table-cell">
-                            {pessoa.email || <span className="text-slate-400 italic">Sem email</span>}
+                            {pessoa.email || <span className="text-slate-400 italic">{tr('Sem email', 'Sin correo', 'No email')}</span>}
                           </td>
                           <td className="px-4 py-4">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getCargoCor(pessoa.cargo as CargoTipo)}`}>
@@ -769,14 +804,14 @@ export default function GerenciarPessoas() {
                           </td>
                           <td className="px-4 py-4 text-center hidden md:table-cell">
                             {pessoa.tem_acesso ? 
-                              <span className="text-emerald-600 text-xs font-bold uppercase tracking-wider">Acesso OK</span> : 
-                              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Cadastro local</span>
+                              <span className="text-emerald-600 text-xs font-bold uppercase tracking-wider">{tr('Acesso OK', 'Acceso OK', 'Access OK')}</span> : 
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">{tr('Cadastro local', 'Registro local', 'Local record')}</span>
                             }
                           </td>
                           <td className="px-4 py-4 text-center hidden md:table-cell">
                             {pessoa.ativo ? 
-                              <span className="inline-flex items-center gap-1.5 text-green-600 text-xs font-bold"><Play className="w-3 h-3 fill-current" /> Ativo</span> : 
-                              <span className="inline-flex items-center gap-1.5 text-red-400 text-xs font-bold"><Pause className="w-3 h-3 fill-current" /> Inativo</span>
+                              <span className="inline-flex items-center gap-1.5 text-green-600 text-xs font-bold"><Play className="w-3 h-3 fill-current" /> {tr('Ativo', 'Activo', 'Active')}</span> : 
+                              <span className="inline-flex items-center gap-1.5 text-red-400 text-xs font-bold"><Pause className="w-3 h-3 fill-current" /> {tr('Inativo', 'Inactivo', 'Inactive')}</span>
                             }
                           </td>
                           <td className="px-4 py-4">
@@ -786,7 +821,7 @@ export default function GerenciarPessoas() {
                                   onClick={() => liberarAcessoPessoa(pessoa)}
                                   disabled={liberandoAcessoId === pessoa.id || !pessoa.email}
                                   className="p-2 hover:bg-emerald-50 text-emerald-700 rounded-lg transition-colors disabled:opacity-30"
-                                  title="Liberar acesso"
+                                  title={tr('Liberar acesso', 'Habilitar acceso', 'Grant access')}
                                 >
                                   {liberandoAcessoId === pessoa.id ? (
                                     <div className="animate-spin w-4 h-4 border-2 border-emerald-700 border-b-transparent rounded-full" />
@@ -795,13 +830,13 @@ export default function GerenciarPessoas() {
                                   )}
                                 </button>
                               )}
-                              <button onClick={() => abrirModalEdicao(pessoa)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors" title="Editar">
+                              <button onClick={() => abrirModalEdicao(pessoa)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors" title={tr('Editar', 'Editar', 'Edit')}>
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button 
                                 onClick={() => alterarStatus(pessoa.id, !pessoa.ativo)} 
                                 className={`p-2 rounded-lg transition-colors ${pessoa.ativo ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-green-50 text-green-600'}`}
-                                title={pessoa.ativo ? 'Pausar/Inativar' : 'Ativar'}
+                                title={pessoa.ativo ? tr('Pausar/Inativar', 'Pausar/Desactivar', 'Pause/Deactivate') : tr('Ativar', 'Activar', 'Activate')}
                               >
                                 {pessoa.ativo ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                               </button>
@@ -809,7 +844,7 @@ export default function GerenciarPessoas() {
                                 onClick={() => removerPessoa(pessoa.id, pessoa.nome, pessoa.tem_acesso)} 
                                 disabled={pessoa.tem_acesso}
                                 className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors disabled:opacity-20"
-                                title="Remover"
+                                title={tr('Remover', 'Eliminar', 'Remove')}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -828,27 +863,27 @@ export default function GerenciarPessoas() {
           <div className="bg-slate-900 rounded-xl p-6 text-slate-400 border border-slate-800">
             <div className="flex items-center gap-2 text-white font-bold mb-4">
               <Info className="w-5 h-5 text-emerald-500" />
-              Guia de Gerenciamento
+              {tr('Guia de Gerenciamento', 'Guía de Gestión', 'Management Guide')}
             </div>
             <div className="grid sm:grid-cols-2 gap-8 text-sm">
               <div className="space-y-2">
                 <p className="text-white font-semibold flex items-center gap-2">
-                  <User className="w-4 h-4 text-blue-400" /> Membros da Igreja
+                  <User className="w-4 h-4 text-blue-400" /> {tr('Membros da Igreja', 'Miembros de la Iglesia', 'Church Members')}
                 </p>
                 <ul className="space-y-1 list-inside list-disc opacity-80">
-                  <li>Pessoas registradas para organização interna</li>
-                  <li>Não possuem senha ou acesso ao painel</li>
-                  <li>Ganham acesso quando um administrador libera o e-mail para login</li>
+                  <li>{tr('Pessoas registradas para organização interna', 'Personas registradas para organización interna', 'People registered for internal organization')}</li>
+                  <li>{tr('Não possuem senha ou acesso ao painel', 'No tienen contraseña ni acceso al panel', 'They do not have a password or panel access')}</li>
+                  <li>{tr('Ganham acesso quando um administrador libera o e-mail para login', 'Obtienen acceso cuando un administrador habilita el correo para iniciar sesión', 'They gain access when an administrator enables the email for login')}</li>
                 </ul>
               </div>
               <div className="space-y-2">
                 <p className="text-white font-semibold flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Usuários com Acesso
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> {tr('Usuários com Acesso', 'Usuarios con Acceso', 'Users with Access')}
                 </p>
                 <ul className="space-y-1 list-inside list-disc opacity-80">
-                  <li>Podem entrar com e-mail e senha, Google ou Microsoft</li>
-                  <li>Permissões de visualização baseadas no cargo e no vínculo com a igreja</li>
-                  <li>Podem ser inativados para bloqueio imediato de acesso</li>
+                  <li>{tr('Podem entrar com e-mail e senha, Google ou Microsoft', 'Pueden ingresar con correo y contraseña, Google o Microsoft', 'They can sign in with email and password, Google, or Microsoft')}</li>
+                  <li>{tr('Permissões de visualização baseadas no cargo e no vínculo com a igreja', 'Permisos de visualización basados en el cargo y el vínculo con la iglesia', 'Viewing permissions based on role and church relationship')}</li>
+                  <li>{tr('Podem ser inativados para bloqueio imediato de acesso', 'Pueden desactivarse para bloquear el acceso de inmediato', 'They can be deactivated for immediate access blocking')}</li>
                 </ul>
               </div>
             </div>
@@ -863,9 +898,11 @@ export default function GerenciarPessoas() {
                     <Edit2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">Editar Pessoa</h3>
+                    <h3 className="text-xl font-bold text-slate-900">{tr('Editar Pessoa', 'Editar Persona', 'Edit Person')}</h3>
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
-                      {pessoaEditando.tem_acesso ? 'Usuário do Sistema' : 'Membro da Igreja'}
+                      {pessoaEditando.tem_acesso
+                        ? tr('Usuário do Sistema', 'Usuario del Sistema', 'System User')
+                        : tr('Membro da Igreja', 'Miembro de la Iglesia', 'Church Member')}
                     </p>
                   </div>
                 </div>
@@ -878,11 +915,11 @@ export default function GerenciarPessoas() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Nome Completo</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">{tr('Nome Completo', 'Nombre Completo', 'Full Name')}</label>
                       <input type="text" value={editandoNome} onChange={(e) => setEditandoNome(e.target.value)} required className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">E-mail</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">{tr('E-mail', 'Correo electrónico', 'Email')}</label>
                       <input 
                         type="email" 
                         value={editandoEmail} 
@@ -891,13 +928,13 @@ export default function GerenciarPessoas() {
                         className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50" 
                       />
                       {!ehGestaoGlobal && (
-                        <p className="mt-1 text-xs text-slate-500">A gestão local não altera e-mail.</p>
+                        <p className="mt-1 text-xs text-slate-500">{tr('A gestão local não altera e-mail.', 'La gestión local no cambia el correo.', 'Local management does not change email.')}</p>
                       )}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Cargo / Função</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">{tr('Cargo / Função', 'Cargo / Función', 'Role / Function')}</label>
                       <select
                         value={editandoCargo}
                         onChange={(e) => setEditandoCargo(e.target.value as CargoTipo)}
@@ -911,11 +948,11 @@ export default function GerenciarPessoas() {
                         ))}
                       </select>
                       {!ehGestaoGlobal && (
-                        <p className="mt-1 text-xs text-slate-500">Cargos pastorais e administrativos ficam sob gestão global.</p>
+                        <p className="mt-1 text-xs text-slate-500">{tr('Cargos pastorais e administrativos ficam sob gestão global.', 'Los cargos pastorales y administrativos quedan bajo gestión global.', 'Pastoral and administrative roles remain under global management.')}</p>
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Telefone</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">{tr('Telefone', 'Teléfono', 'Phone')}</label>
                       <input type="tel" value={editandoTelefone} onChange={(e) => setEditandoTelefone(formatPhoneNumber(e.target.value))} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" />
                     </div>
                   </div>
@@ -925,7 +962,7 @@ export default function GerenciarPessoas() {
                 <div className="space-y-4">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                     <Music className="w-4 h-4 text-emerald-600" />
-                    Habilidades & Funções
+                    {tr('Habilidades & Funções', 'Habilidades y Funciones', 'Skills & Functions')}
                     {loadingTags && <div className="animate-spin w-3 h-3 border border-slate-400 border-b-transparent rounded-full ml-auto" />}
                   </label>
                   
@@ -947,16 +984,16 @@ export default function GerenciarPessoas() {
                     ))}
                   </div>
                   {!ehGestaoGlobal && (
-                    <p className="text-xs text-slate-500">Tags de liderança e pregação ficam ocultas para a gestão local.</p>
+                    <p className="text-xs text-slate-500">{tr('Tags de liderança e pregação ficam ocultas para a gestão local.', 'Las etiquetas de liderazgo y predicación quedan ocultas para la gestión local.', 'Leadership and preaching tags remain hidden for local management.')}</p>
                   )}
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t border-slate-100">
                   <button type="submit" disabled={salvando} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all disabled:opacity-50">
-                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                    {salvando ? tr('Salvando...', 'Guardando...', 'Saving...') : tr('Salvar Alterações', 'Guardar Cambios', 'Save Changes')}
                   </button>
                   <button type="button" onClick={fecharModalEdicao} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all">
-                    Cancelar
+                    {tr('Cancelar', 'Cancelar', 'Cancel')}
                   </button>
                 </div>
               </form>

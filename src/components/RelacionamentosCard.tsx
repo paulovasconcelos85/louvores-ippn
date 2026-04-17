@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { useLocale } from '@/i18n/provider';
 import { Users, Plus, Trash2, Search } from 'lucide-react';
 
 type TipoRelacionamento =
@@ -13,34 +14,6 @@ type TipoRelacionamento =
   | 'cunhado' | 'cunhada' | 'sogro' | 'sogra'
   | 'genro' | 'nora' | 'tio' | 'tia'
   | 'sobrinho' | 'sobrinha' | 'primo' | 'prima';
-
-const TIPO_LABELS: Record<TipoRelacionamento, string> = {
-  conjuge: 'Cônjuge',
-  pai: 'Pai',
-  mae: 'Mãe',
-  filho: 'Filho',
-  filha: 'Filha',
-  irmao: 'Irmão',
-  irma: 'Irmã',
-  avo_paterno: 'Avô Paterno',
-  avo_paterna: 'Avó Paterna',
-  avo_materno: 'Avô Materno',
-  avo_materna: 'Avó Materna',
-  neto: 'Neto',
-  neta: 'Neta',
-  cunhado: 'Cunhado',
-  cunhada: 'Cunhada',
-  sogro: 'Sogro',
-  sogra: 'Sogra',
-  genro: 'Genro',
-  nora: 'Nora',
-  tio: 'Tio',
-  tia: 'Tia',
-  sobrinho: 'Sobrinho',
-  sobrinha: 'Sobrinha',
-  primo: 'Primo',
-  prima: 'Prima',
-};
 
 const GRAU_COR: Record<string, string> = {
   conjuge: 'bg-pink-100 text-pink-800 border-pink-300',
@@ -101,6 +74,39 @@ export default function RelacionamentosCard({
   podeEditar,
   onNavegar,
 }: Props) {
+  const locale = useLocale();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
+  const tipoLabels: Record<TipoRelacionamento, string> = {
+    conjuge: tr('Cônjuge', 'Cónyuge', 'Spouse'),
+    pai: tr('Pai', 'Padre', 'Father'),
+    mae: tr('Mãe', 'Madre', 'Mother'),
+    filho: tr('Filho', 'Hijo', 'Son'),
+    filha: tr('Filha', 'Hija', 'Daughter'),
+    irmao: tr('Irmão', 'Hermano', 'Brother'),
+    irma: tr('Irmã', 'Hermana', 'Sister'),
+    avo_paterno: tr('Avô Paterno', 'Abuelo Paterno', 'Paternal Grandfather'),
+    avo_paterna: tr('Avó Paterna', 'Abuela Paterna', 'Paternal Grandmother'),
+    avo_materno: tr('Avô Materno', 'Abuelo Materno', 'Maternal Grandfather'),
+    avo_materna: tr('Avó Materna', 'Abuela Materna', 'Maternal Grandmother'),
+    neto: tr('Neto', 'Nieto', 'Grandson'),
+    neta: tr('Neta', 'Nieta', 'Granddaughter'),
+    cunhado: tr('Cunhado', 'Cuñado', 'Brother-in-law'),
+    cunhada: tr('Cunhada', 'Cuñada', 'Sister-in-law'),
+    sogro: tr('Sogro', 'Suegro', 'Father-in-law'),
+    sogra: tr('Sogra', 'Suegra', 'Mother-in-law'),
+    genro: tr('Genro', 'Yerno', 'Son-in-law'),
+    nora: tr('Nora', 'Nuera', 'Daughter-in-law'),
+    tio: tr('Tio', 'Tío', 'Uncle'),
+    tia: tr('Tia', 'Tía', 'Aunt'),
+    sobrinho: tr('Sobrinho', 'Sobrino', 'Nephew'),
+    sobrinha: tr('Sobrinha', 'Sobrina', 'Niece'),
+    primo: tr('Primo', 'Primo', 'Cousin'),
+    prima: tr('Prima', 'Prima', 'Cousin'),
+  };
   const [relacionamentos, setRelacionamentos] = useState<Relacionamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
@@ -114,11 +120,7 @@ export default function RelacionamentosCard({
   const [tipoSelecionado, setTipoSelecionado] = useState<TipoRelacionamento>('conjuge');
   const [salvando, setSalvando] = useState(false);
 
-  useEffect(() => {
-    carregarRelacionamentos();
-  }, [membroId]);
-
-  const carregarRelacionamentos = async () => {
+  const carregarRelacionamentos = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -132,7 +134,14 @@ export default function RelacionamentosCard({
       const pessoasPayload = await pessoasResponse.json();
 
       if (!pessoasResponse.ok) {
-        throw new Error(pessoasPayload.error || 'Erro ao carregar pessoas');
+        throw new Error(
+          pessoasPayload.error ||
+            tr(
+              'Erro ao carregar pessoas',
+              'Error al cargar personas',
+              'Error loading people'
+            )
+        );
       }
 
       const pessoasMap = new Map(
@@ -170,7 +179,11 @@ export default function RelacionamentosCard({
     } finally {
       setLoading(false);
     }
-  };
+  }, [membroId, tr]);
+
+  useEffect(() => {
+    void carregarRelacionamentos();
+  }, [carregarRelacionamentos]);
 
   // Busca pessoas com debounce simples
   useEffect(() => {
@@ -193,7 +206,14 @@ export default function RelacionamentosCard({
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Erro ao buscar pessoas');
+          throw new Error(
+            payload.error ||
+              tr(
+                'Erro ao buscar pessoas',
+                'Error al buscar personas',
+                'Error searching people'
+              )
+          );
         }
 
         setPessoas(
@@ -206,7 +226,7 @@ export default function RelacionamentosCard({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [busca, membroId]);
+  }, [busca, membroId, tr]);
 
   const salvar = async () => {
     if (!pessoaSelecionada) return;
@@ -224,7 +244,13 @@ export default function RelacionamentosCard({
 
       if (error) {
         if (error.code === '23505') {
-          setMensagem('Este relacionamento já está cadastrado.');
+          setMensagem(
+            tr(
+              'Este relacionamento já está cadastrado.',
+              'Esta relación ya está registrada.',
+              'This relationship is already registered.'
+            )
+          );
         } else {
           throw error;
         }
@@ -238,14 +264,30 @@ export default function RelacionamentosCard({
       await carregarRelacionamentos();
     } catch (err) {
       console.error(err);
-      setMensagem('Erro ao salvar relacionamento.');
+      setMensagem(
+        tr(
+          'Erro ao salvar relacionamento.',
+          'Error al guardar la relación.',
+          'Error saving relationship.'
+        )
+      );
     } finally {
       setSalvando(false);
     }
   };
 
   const excluir = async (id: string, pessoaRelacionadaId: string) => {
-    if (!confirm('Remover este relacionamento? O inverso também será removido.')) return;
+    if (
+      !confirm(
+        tr(
+          'Remover este relacionamento? O inverso também será removido.',
+          '¿Eliminar esta relación? La relación inversa también será eliminada.',
+          'Remove this relationship? The reverse relationship will also be removed.'
+        )
+      )
+    ) {
+      return;
+    }
     try {
       // Remove os dois lados
       await supabase
@@ -261,7 +303,7 @@ export default function RelacionamentosCard({
 
   // Agrupa por tipo para exibição
   const agrupados = relacionamentos.reduce<Record<string, Relacionamento[]>>((acc, r) => {
-    const label = TIPO_LABELS[r.tipo] ?? r.tipo;
+    const label = tipoLabels[r.tipo] ?? r.tipo;
     if (!acc[label]) acc[label] = [];
     acc[label].push(r);
     return acc;
@@ -272,7 +314,7 @@ export default function RelacionamentosCard({
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-slate-900 flex items-center gap-2">
           <Users className="w-5 h-5 text-slate-600" />
-          Família
+          {tr('Família', 'Familia', 'Family')}
         </h3>
         {podeEditar && (
           <button
@@ -280,7 +322,7 @@ export default function RelacionamentosCard({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
-            Adicionar
+            {tr('Adicionar', 'Agregar', 'Add')}
           </button>
         )}
       </div>
@@ -292,7 +334,13 @@ export default function RelacionamentosCard({
       ) : relacionamentos.length === 0 ? (
         <div className="text-center py-6 text-slate-500">
           <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-          <p className="text-sm">Nenhum relacionamento cadastrado</p>
+          <p className="text-sm">
+            {tr(
+              'Nenhum relacionamento cadastrado',
+              'No hay relaciones registradas',
+              'No relationships registered'
+            )}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -323,7 +371,7 @@ export default function RelacionamentosCard({
                             GRAU_COR[r.tipo] ?? 'bg-slate-100 text-slate-700 border-slate-300'
                           }`}
                         >
-                          {TIPO_LABELS[r.tipo]}
+                          {tipoLabels[r.tipo]}
                         </span>
                       </div>
                     </button>
@@ -350,7 +398,7 @@ export default function RelacionamentosCard({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
-                Adicionar Relacionamento
+                {tr('Adicionar Relacionamento', 'Agregar Relación', 'Add Relationship')}
               </h3>
               <button
                 onClick={() => {
@@ -375,7 +423,7 @@ export default function RelacionamentosCard({
               {/* Busca de pessoa */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Buscar membro *
+                  {tr('Buscar membro', 'Buscar miembro', 'Search member')} *
                 </label>
                 {pessoaSelecionada ? (
                   <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -394,7 +442,7 @@ export default function RelacionamentosCard({
                       }}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                     >
-                      Trocar
+                      {tr('Trocar', 'Cambiar', 'Change')}
                     </button>
                   </div>
                 ) : (
@@ -404,7 +452,7 @@ export default function RelacionamentosCard({
                       type="text"
                       value={busca}
                       onChange={(e) => setBusca(e.target.value)}
-                      placeholder="Digite o nome..."
+                      placeholder={tr('Digite o nome...', 'Escribe el nombre...', 'Type the name...')}
                       className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       autoFocus
                     />
@@ -435,7 +483,7 @@ export default function RelacionamentosCard({
                     )}
                     {busca.length >= 2 && !buscando && pessoas.length === 0 && (
                       <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-4 py-3 text-sm text-slate-500">
-                        Nenhum membro encontrado
+                        {tr('Nenhum membro encontrado', 'No se encontraron miembros', 'No members found')}
                       </div>
                     )}
                   </div>
@@ -445,14 +493,15 @@ export default function RelacionamentosCard({
               {/* Tipo */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  {membroNome} é <strong>__</strong> de {pessoaSelecionada?.nome ?? '...'}
+                  {membroNome} {tr('é', 'es', 'is')} <strong>__</strong>{' '}
+                  {tr('de', 'de', 'of')} {pessoaSelecionada?.nome ?? '...'}
                 </label>
                 <select
                   value={tipoSelecionado}
                   onChange={(e) => setTipoSelecionado(e.target.value as TipoRelacionamento)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 >
-                  {(Object.entries(TIPO_LABELS) as [TipoRelacionamento, string][]).map(
+                  {(Object.entries(tipoLabels) as [TipoRelacionamento, string][]).map(
                     ([val, label]) => (
                       <option key={val} value={val}>
                         {label}
@@ -461,7 +510,11 @@ export default function RelacionamentosCard({
                   )}
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  O relacionamento inverso será criado automaticamente.
+                  {tr(
+                    'O relacionamento inverso será criado automaticamente.',
+                    'La relación inversa se creará automáticamente.',
+                    'The reverse relationship will be created automatically.'
+                  )}
                 </p>
               </div>
 
@@ -471,7 +524,9 @@ export default function RelacionamentosCard({
                   disabled={!pessoaSelecionada || salvando}
                   className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
-                  {salvando ? 'Salvando...' : 'Salvar'}
+                  {salvando
+                    ? tr('Salvando...', 'Guardando...', 'Saving...')
+                    : tr('Salvar', 'Guardar', 'Save')}
                 </button>
                 <button
                   onClick={() => {
@@ -482,7 +537,7 @@ export default function RelacionamentosCard({
                   }}
                   className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
                 >
-                  Cancelar
+                  {tr('Cancelar', 'Cancelar', 'Cancel')}
                 </button>
               </div>
             </div>

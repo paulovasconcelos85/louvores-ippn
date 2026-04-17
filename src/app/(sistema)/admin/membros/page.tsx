@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
-import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
+import { CargoTipo, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import FamiliaView from '@/components/FamiliaView';
+import { getIntlLocale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
   Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen
@@ -73,8 +75,15 @@ function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: s
 
 export default function PastorarMembrosPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
 
   const [membros, setMembros] = useState<Membro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,11 +108,7 @@ export default function PastorarMembrosPage() {
     if (!totalLoading && user && !podeAcessar) router.push('/admin');
   }, [user, totalLoading, podeAcessar, router]);
 
-  useEffect(() => {
-    if (user && podeAcessar) carregarMembros();
-  }, [user, podeAcessar]);
-
-  const carregarMembros = async () => {
+  const carregarMembros = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -116,17 +121,34 @@ export default function PastorarMembrosPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || 'Erro ao carregar membros');
+        throw new Error(
+          payload.error ||
+            tr(
+              'Erro ao carregar membros',
+              'Error al cargar miembros',
+              'Error loading members'
+            )
+        );
       }
 
       setMembros(payload.data || []);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
-      setMensagem('Erro ao carregar membros');
+      setMensagem(
+        tr(
+          'Erro ao carregar membros',
+          'Error al cargar miembros',
+          'Error loading members'
+        )
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [tr]);
+
+  useEffect(() => {
+    if (user && podeAcessar) void carregarMembros();
+  }, [user, podeAcessar, carregarMembros]);
 
   // ── Helpers de data ──
   const calcularIdade = (dataNascimento: string | null) => {
@@ -156,10 +178,31 @@ export default function PastorarMembrosPage() {
   };
 
   const formatarData = (data: string | null) =>
-    data ? new Date(data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+    data
+      ? new Date(`${data}T00:00:00`).toLocaleDateString(intlLocale)
+      : tr('-', '-', '-');
 
   const getStatusLabel = (status: string) =>
-    ({ ativo: 'Ativo', afastado: 'Afastado', falecido: 'Falecido', visitante: 'Visitante', congregado: 'Congregado' }[status] || status);
+    ({
+      ativo: tr('Ativo', 'Activo', 'Active'),
+      afastado: tr('Afastado', 'Alejado', 'Away'),
+      falecido: tr('Falecido', 'Fallecido', 'Deceased'),
+      visitante: tr('Visitante', 'Visitante', 'Visitor'),
+      congregado: tr('Congregado', 'Congregante', 'Congregant'),
+    }[status] || status);
+
+  const getCargoLabelLocalized = (cargo: CargoTipo) =>
+    ({
+      membro: tr('Membro', 'Miembro', 'Member'),
+      diacono: tr('Diácono', 'Diácono', 'Deacon'),
+      musico: tr('Músico', 'Músico', 'Musician'),
+      staff: tr('Staff', 'Staff', 'Staff'),
+      seminarista: tr('Seminarista', 'Seminarista', 'Seminarian'),
+      presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
+      pastor: tr('Pastor', 'Pastor', 'Pastor'),
+      admin: tr('Administrador', 'Administrador', 'Administrator'),
+      superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
+    } satisfies Record<CargoTipo, string>)[cargo];
 
   const getStatusCor = (status: string) =>
     ({ ativo: 'bg-green-100 text-green-800 border-green-300', afastado: 'bg-yellow-100 text-yellow-800 border-yellow-300', falecido: 'bg-gray-100 text-gray-800 border-gray-300', visitante: 'bg-blue-100 text-blue-800 border-blue-300', congregado: 'bg-purple-100 text-purple-800 border-purple-300' }[status] || 'bg-slate-100 text-slate-800 border-slate-300');
@@ -204,13 +247,36 @@ export default function PastorarMembrosPage() {
   );
 
   const abrirWhatsApp = (telefone: string | null, nome: string) => {
-    if (!telefone) { setMensagem('Este membro não possui telefone cadastrado'); return; }
+    if (!telefone) {
+      setMensagem(
+        tr(
+          'Este membro não possui telefone cadastrado',
+          'Este miembro no tiene teléfono registrado',
+          'This member has no phone number on file'
+        )
+      );
+      return;
+    }
     const num = telefone.replace(/\D/g, '');
-    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(`Olá ${nome}! Que a paz do Senhor esteja contigo!`)}`, '_blank');
+    const msg = tr(
+      `Olá ${nome}! Que a paz do Senhor esteja contigo!`,
+      `Hola ${nome}. Que la paz del Senor esté contigo.`,
+      `Hello ${nome}. May the Lord's peace be with you.`
+    );
+    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const ligarPara = (telefone: string | null) => {
-    if (!telefone) { setMensagem('Este membro não possui telefone cadastrado'); return; }
+    if (!telefone) {
+      setMensagem(
+        tr(
+          'Este membro não possui telefone cadastrado',
+          'Este miembro no tiene teléfono registrado',
+          'This member has no phone number on file'
+        )
+      );
+      return;
+    }
     window.location.href = `tel:${telefone}`;
   };
 
@@ -219,7 +285,13 @@ export default function PastorarMembrosPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto" />
-          <p className="mt-4 text-slate-600">Verificando permissões...</p>
+          <p className="mt-4 text-slate-600">
+            {tr(
+              'Verificando permissões...',
+              'Verificando permisos...',
+              'Checking permissions...'
+            )}
+          </p>
         </div>
       </div>
     );
@@ -235,17 +307,25 @@ export default function PastorarMembrosPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Users className="w-8 h-8 text-blue-600" /> Pastorear Membros
+              <Users className="w-8 h-8 text-blue-600" />{' '}
+              {tr('Pastorear Membros', 'Pastorear Miembros', 'Member Care')}
             </h1>
-            <p className="text-slate-600 mt-1">Acompanhamento e cuidado pastoral da igreja</p>
+            <p className="text-slate-600 mt-1">
+              {tr(
+                'Acompanhamento e cuidado pastoral da igreja',
+                'Seguimiento y cuidado pastoral de la iglesia',
+                'Pastoral follow-up and care for the church'
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/admin/membros/novo')}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm">
-              <span className="text-lg leading-none">+</span> Adicionar
+              <span className="text-lg leading-none">+</span>{' '}
+              {tr('Adicionar', 'Agregar', 'Add')}
             </button>
             <button onClick={() => router.push('/admin')} className="px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors font-medium">
-              ← Voltar
+              ← {tr('Voltar', 'Volver', 'Back')}
             </button>
           </div>
         </div>
@@ -255,7 +335,13 @@ export default function PastorarMembrosPage() {
           <div className={`mb-6 p-4 rounded-lg ${mensagem.includes('sucesso') ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
             <div className="flex items-center justify-between">
               <span className="text-sm">{mensagem}</span>
-              <button onClick={() => setMensagem('')} className="text-current opacity-50 hover:opacity-100">✕</button>
+              <button
+                onClick={() => setMensagem('')}
+                className="text-current opacity-50 hover:opacity-100"
+                aria-label={tr('Fechar mensagem', 'Cerrar mensaje', 'Close message')}
+              >
+                ✕
+              </button>
             </div>
           </div>
         )}
@@ -266,8 +352,20 @@ export default function PastorarMembrosPage() {
             <div className="flex items-center gap-3 mb-4">
               <Cake className="w-8 h-8 text-pink-600" />
               <div>
-                <h3 className="text-xl font-bold text-pink-900">Aniversariantes de Hoje</h3>
-                <p className="text-sm text-pink-700">Não esqueça de parabenizar</p>
+                <h3 className="text-xl font-bold text-pink-900">
+                  {tr(
+                    'Aniversariantes de Hoje',
+                    'Cumpleañeros de Hoy',
+                    "Today's Birthdays"
+                  )}
+                </h3>
+                <p className="text-sm text-pink-700">
+                  {tr(
+                    'Não esqueça de parabenizar',
+                    'No olvides felicitar',
+                    "Don't forget to congratulate them"
+                  )}
+                </p>
               </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -280,7 +378,10 @@ export default function PastorarMembrosPage() {
                       <MembroAvatar nome={membro.nome} fotoUrl={membro.foto_url} />
                       <div>
                         <p className="font-bold text-slate-900">{membro.nome}</p>
-                        <p className="text-sm text-slate-600">{calcularIdade(membro.data_nascimento)} anos</p>
+                        <p className="text-sm text-slate-600">
+                          {calcularIdade(membro.data_nascimento)}{' '}
+                          {tr('anos', 'años', 'years')}
+                        </p>
                         {membro.profissao && <p className="text-xs text-slate-500">{membro.profissao}</p>}
                       </div>
                     </div>
@@ -306,12 +407,12 @@ export default function PastorarMembrosPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
           {[
-            { label: 'Total', val: membros.length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
-            { label: 'Ativos', val: membros.filter(m => m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
-            { label: 'Aniv. Hoje', val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
-            { label: 'Este Mês', val: membros.filter(m => ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
-            { label: 'Batizados', val: membros.filter(m => m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
-            { label: 'Grupos', val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
+            { label: tr('Total', 'Total', 'Total'), val: membros.length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
+            { label: tr('Ativos', 'Activos', 'Active'), val: membros.filter(m => m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: tr('Aniv. Hoje', 'Cumpl. Hoy', 'Birthdays Today'), val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
+            { label: tr('Este Mês', 'Este Mes', 'This Month'), val: membros.filter(m => ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
+            { label: tr('Batizados', 'Bautizados', 'Baptized'), val: membros.filter(m => m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: tr('Grupos', 'Grupos', 'Groups'), val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
           ].map(stat => (
             <div key={stat.label} className={`rounded-lg border p-4 ${stat.cor}`}>
               <p className={`text-xs flex items-center gap-1 mb-1 ${stat.sub}`}>{stat.icone}{stat.label}</p>
@@ -325,59 +426,72 @@ export default function PastorarMembrosPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                <Filter className="w-5 h-5 text-slate-600" /> Filtros
+                <Filter className="w-5 h-5 text-slate-600" />{' '}
+                {tr('Filtros', 'Filtros', 'Filters')}
               </h3>
               <button onClick={() => setFiltrosExpandidos(!filtrosExpandidos)} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                {filtrosExpandidos ? 'Menos filtros ▲' : 'Mais filtros ▼'}
+                {filtrosExpandidos
+                  ? tr('Menos filtros ▲', 'Menos filtros ▲', 'Fewer filters ▲')
+                  : tr('Mais filtros ▼', 'Más filtros ▼', 'More filters ▼')}
               </button>
             </div>
             <div className="space-y-3">
               {/* Busca geral — agora inclui bairro, profissão, grupo */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input type="text" placeholder="Buscar por nome, email, telefone, bairro, profissão, grupo familiar..."
+                <input type="text" placeholder={tr(
+                  'Buscar por nome, email, telefone, bairro, profissão, grupo familiar...',
+                  'Buscar por nombre, correo, teléfono, barrio, profesión o grupo familiar...',
+                  'Search by name, email, phone, neighborhood, profession, or family group...'
+                )}
                   value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div className="grid sm:grid-cols-3 gap-3">
                 <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value as FiltroStatus)}
                   className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="todos">Todos os Status</option>
-                  <option value="ativo">Ativos</option>
-                  <option value="visitante">Visitantes</option>
-                  <option value="congregado">Congregados</option>
-                  <option value="afastado">Afastados</option>
-                  <option value="falecido">Falecidos</option>
+                  <option value="todos">{tr('Todos os Status', 'Todos los estados', 'All statuses')}</option>
+                  <option value="ativo">{tr('Ativos', 'Activos', 'Active')}</option>
+                  <option value="visitante">{tr('Visitantes', 'Visitantes', 'Visitors')}</option>
+                  <option value="congregado">{tr('Congregados', 'Congregantes', 'Congregants')}</option>
+                  <option value="afastado">{tr('Afastados', 'Alejados', 'Away')}</option>
+                  <option value="falecido">{tr('Falecidos', 'Fallecidos', 'Deceased')}</option>
                 </select>
                 <select value={filtroAniversario} onChange={e => setFiltroAniversario(e.target.value as FiltroAniversario)}
                   className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="todos">Todos os Aniversários</option>
-                  <option value="hoje">Hoje</option>
-                  <option value="proximos7dias">Próximos 7 dias</option>
-                  <option value="mes">Este mês</option>
+                  <option value="todos">{tr('Todos os Aniversários', 'Todos los cumpleaños', 'All birthdays')}</option>
+                  <option value="hoje">{tr('Hoje', 'Hoy', 'Today')}</option>
+                  <option value="proximos7dias">{tr('Próximos 7 dias', 'Próximos 7 días', 'Next 7 days')}</option>
+                  <option value="mes">{tr('Este mês', 'Este mes', 'This month')}</option>
                 </select>
                 <label className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-100">
                   <input type="checkbox" checked={mostrarInativos} onChange={e => setMostrarInativos(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">Mostrar inativos</span>
+                  <span className="text-sm text-slate-700 font-medium whitespace-nowrap">
+                    {tr('Mostrar inativos', 'Mostrar inactivos', 'Show inactive')}
+                  </span>
                 </label>
               </div>
               {filtrosExpandidos && (
                 <div className="grid sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
                   <select value={filtroBatismo} onChange={e => setFiltroBatismo(e.target.value as FiltroBatismo)}
                     className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="todos">Batismo: Todos</option>
-                    <option value="batizado">Batizados</option>
-                    <option value="nao_batizado">Não batizados</option>
+                    <option value="todos">{tr('Batismo: Todos', 'Bautismo: Todos', 'Baptism: All')}</option>
+                    <option value="batizado">{tr('Batizados', 'Bautizados', 'Baptized')}</option>
+                    <option value="nao_batizado">{tr('Não batizados', 'No bautizados', 'Not baptized')}</option>
                   </select>
                   <select value={filtroGrupo} onChange={e => setFiltroGrupo(e.target.value)}
                     className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="todos">Todos os grupos</option>
+                    <option value="todos">{tr('Todos os grupos', 'Todos los grupos', 'All groups')}</option>
                     {gruposUnicos.map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" placeholder="Filtrar por profissão..." value={filtroProfissao}
+                    <input type="text" placeholder={tr(
+                      'Filtrar por profissão...',
+                      'Filtrar por profesión...',
+                      'Filter by profession...'
+                    )} value={filtroProfissao}
                       onChange={e => setFiltroProfissao(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
@@ -392,17 +506,19 @@ export default function PastorarMembrosPage() {
           <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 flex items-center justify-between">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Users className="w-6 h-6" />
-              {visaoFamilia ? 'Famílias' : 'Membros'}
+              {visaoFamilia
+                ? tr('Famílias', 'Familias', 'Families')
+                : tr('Membros', 'Miembros', 'Members')}
               {!visaoFamilia && (
                 <span className="ml-2 text-sm font-normal bg-white/20 px-3 py-1 rounded-full">{membrosFiltrados.length}</span>
               )}
             </h3>
             <div className="flex items-center bg-white/20 rounded-lg p-1 gap-1">
               <button onClick={() => setVisaoFamilia(false)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${!visaoFamilia ? 'bg-white text-blue-700' : 'text-white hover:bg-white/10'}`}>Lista</button>
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${!visaoFamilia ? 'bg-white text-blue-700' : 'text-white hover:bg-white/10'}`}>{tr('Lista', 'Lista', 'List')}</button>
               <button onClick={() => setVisaoFamilia(true)}
                 className={`px-3 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 ${visaoFamilia ? 'bg-white text-blue-700' : 'text-white hover:bg-white/10'}`}>
-                <Users className="w-4 h-4" /> Famílias
+                <Users className="w-4 h-4" /> {tr('Famílias', 'Familias', 'Families')}
               </button>
             </div>
           </div>
@@ -413,12 +529,14 @@ export default function PastorarMembrosPage() {
             ) : loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto" />
-                <p className="mt-2 text-slate-600">Carregando membros...</p>
+                <p className="mt-2 text-slate-600">
+                  {tr('Carregando membros...', 'Cargando miembros...', 'Loading members...')}
+                </p>
               </div>
             ) : membrosFiltrados.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 <Search className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                <p>Nenhum membro encontrado</p>
+                <p>{tr('Nenhum membro encontrado', 'No se encontraron miembros', 'No members found')}</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -450,19 +568,21 @@ export default function PastorarMembrosPage() {
                               {membro.sexo && <span className="text-xs text-slate-500">{membro.sexo === 'M' ? '♂' : '♀'}</span>}
                               {ehAniversarioHoje(membro.data_nascimento) && (
                                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-pink-100 text-pink-800 border border-pink-300 flex items-center gap-1">
-                                  <Cake className="w-3 h-3" /> Aniversário
+                                  <Cake className="w-3 h-3" /> {tr('Aniversário', 'Cumpleaños', 'Birthday')}
                                 </span>
                               )}
                               {!ehMembroCargo && (
                                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>
-                                  {getCargoLabel(membro.cargo as CargoTipo)}
+                                  {getCargoLabelLocalized(membro.cargo as CargoTipo)}
                                 </span>
                               )}
                               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusCor(membro.status_membro)}`}>
                                 {getStatusLabel(membro.status_membro)}
                               </span>
                               {membro.batizado && (
-                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">Batizado</span>
+                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">
+                                  {tr('Batizado', 'Bautizado', 'Baptized')}
+                                </span>
                               )}
                             </div>
 
@@ -472,19 +592,21 @@ export default function PastorarMembrosPage() {
                                 {ehAniversarioProximos7Dias(membro.data_nascimento) && !ehAniversarioHoje(membro.data_nascimento) && (
                                   <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5">
                                     <Cake className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                    <span className="text-xs text-blue-800">Aniversário próximo: {formatarData(membro.data_nascimento)}</span>
+                                    <span className="text-xs text-blue-800">
+                                      {tr('Aniversário próximo:', 'Próximo cumpleaños:', 'Upcoming birthday:')} {formatarData(membro.data_nascimento)}
+                                    </span>
                                   </div>
                                 )}
                                 {membro.situacao_saude && (
                                   <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
                                     <Heart className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs text-red-800 line-clamp-1"><strong>Saúde:</strong> {membro.situacao_saude}</p>
+                                    <p className="text-xs text-red-800 line-clamp-1"><strong>{tr('Saúde:', 'Salud:', 'Health:')}</strong> {membro.situacao_saude}</p>
                                   </div>
                                 )}
                                 {membro.observacoes && (
                                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
                                     <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs text-amber-800 line-clamp-1"><strong>Obs:</strong> {membro.observacoes}</p>
+                                    <p className="text-xs text-amber-800 line-clamp-1"><strong>{tr('Obs:', 'Obs.:', 'Notes:')}</strong> {membro.observacoes}</p>
                                   </div>
                                 )}
                               </div>
@@ -495,7 +617,7 @@ export default function PastorarMembrosPage() {
                               {membro.data_nascimento && (
                                 <div className="flex items-center gap-1.5">
                                   <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                  <span>{formatarData(membro.data_nascimento)} ({idade} anos)</span>
+                                  <span>{formatarData(membro.data_nascimento)} ({idade} {tr('anos', 'años', 'years')})</span>
                                 </div>
                               )}
                               {membro.telefone && (
@@ -519,7 +641,7 @@ export default function PastorarMembrosPage() {
                               {membro.grupo_familiar_nome && (
                                 <div className="flex items-center gap-1.5">
                                   <Home className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                  <span className="truncate">Grupo: {membro.grupo_familiar_nome}</span>
+                                  <span className="truncate">{tr('Grupo:', 'Grupo:', 'Group:')} {membro.grupo_familiar_nome}</span>
                                 </div>
                               )}
                               {endereco && (
@@ -561,11 +683,11 @@ export default function PastorarMembrosPage() {
                           </button>
                           <button onClick={e => { e.stopPropagation(); ligarPara(membro.telefone); }} disabled={!membro.telefone}
                             className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1.5 justify-center">
-                            <Phone className="w-3.5 h-3.5" /> Ligar
+                            <Phone className="w-3.5 h-3.5" /> {tr('Ligar', 'Llamar', 'Call')}
                           </button>
                           <button onClick={e => { e.stopPropagation(); router.push(`/admin/membros/${membro.id}`); }}
                             className="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-xs font-medium">
-                            Detalhes
+                            {tr('Detalhes', 'Detalles', 'Details')}
                           </button>
                         </div>
                       </div>

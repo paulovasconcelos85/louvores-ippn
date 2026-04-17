@@ -21,7 +21,8 @@
     "profile": "Mi perfil",
     "admin": "Administración",
     "signOut": "Salir",
-    "fallbackUser": "Usuario"
+    "fallbackUser": "Usuario",
+    "loadChurchesError": "Error al cargar iglesias."
   },
   "login": {
     "syncTitle": "Preparando tu acceso...",
@@ -121,5 +122,75 @@
     "placeholder": "Escribe la dirección o el barrio...",
     "searching": "Buscando direcciones...",
     "selected": "Dirección seleccionada"
+  },
+  "dashboard": {
+    "title": "Panel de Alabanza",
+    "subtitleWithChurch": "Análisis completo de ejecuciones y tendencias de {church}",
+    "subtitleGeneric": "Análisis completo de ejecuciones y tendencias",
+    "filters": "Filtros",
+    "year": "Año",
+    "month": "Mes",
+    "allYears": "Todos los años",
+    "allMonths": "Todos los meses",
+    "loading": "Cargando indicadores...",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "daysAgo": "Hace {count} días",
+    "recentSongsTitle": "Canciones de las Últimas 4 Semanas",
+    "recentSongsCount": "{count} canciones",
+    "recentSongsEmpty": "No se encontraron canciones en las últimas 4 semanas.",
+    "noChartData": "No se encontraron datos para los filtros seleccionados.",
+    "noKeyRecorded": "No hay tono registrado",
+    "rankingEmpty": "Todavía no hay ejecuciones para armar el ranking.",
+    "songFallback": "Canción {id}",
+    "songWithoutName": "Cántico sin nombre",
+    "untitled": "Sin título",
+    "hymnWithNumber": "Himno {number} - {title}",
+    "hymnWithoutNumber": "Himno - {title}",
+    "stats": {
+      "totalExecutions": "Total de Ejecuciones",
+      "uniqueSongs": "Canciones Únicas",
+      "totalServices": "Total de Cultos",
+      "averagePerService": "Promedio/Culto",
+      "mostPlayed": "Más Ejecutado"
+    },
+    "charts": {
+      "topSongs": "Top 10 Canciones Más Ejecutadas",
+      "topDistribution": "Distribución Top 5",
+      "monthlyTrend": "Evolución Mensual",
+      "topKeys": "Tonos Más Tocados",
+      "fullRanking": "Ranking Completo"
+    },
+    "table": {
+      "position": "#",
+      "song": "Cántico",
+      "executions": "Ejecuciones",
+      "percentTotal": "% del Total"
+    }
+  },
+  "profile": {
+    "title": "Mi Perfil",
+    "admin": "Admin",
+    "emailReadonly": "Correo electrónico (no editable)",
+    "name": "Nombre",
+    "phone": "Teléfono",
+    "phonePlaceholder": "(92) 98139-4605",
+    "saving": "Guardando...",
+    "save": "Guardar Perfil",
+    "cancel": "Cancelar",
+    "skillsTitle": "Mis Habilidades",
+    "skillsDescription": "Selecciona las áreas en las que puedes servir.",
+    "linkedPersonNotFound": "No se encontró la persona vinculada a esta cuenta.",
+    "updateSuccess": "Perfil actualizado con éxito.",
+    "loadError": "Error al cargar el perfil: {message}",
+    "saveError": "Error al guardar el perfil: {message}",
+    "tagError": "Error al actualizar habilidad: {message}",
+    "categories": {
+      "lideranca": "📖 Liderazgo",
+      "instrumento": "🎸 Instrumentos",
+      "vocal": "🎤 Voces",
+      "tecnica": "🎛️ Técnica",
+      "apoio": "👥 Apoyo"
+    }
   }
 }

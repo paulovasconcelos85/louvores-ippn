@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { getIntlLocale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
 import {
   Calendar,
   Clock,
-  Church,
   Music,
   Users,
   Plus,
@@ -18,15 +19,11 @@ import {
   FileEdit,
   CheckCircle2,
   AlertCircle,
-  Clock3,
-  Filter,
-  ChevronDown,
   Loader2,
   PartyPopper,
   MessageCircle,
   Link as LinkIcon,
   Image as ImageIcon,
-  Download
 } from 'lucide-react';
 
 interface Escala {
@@ -74,12 +71,20 @@ const CATEGORIAS_MUSICAIS = {
 
 export default function EscalasPage() {
   const router = useRouter();
-  const { user, loading: authLoading, signOut } = useAuth();
-  const { loading: permLoading, permissoes, usuarioPermitido } = usePermissions();
+  const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
+  const { user, loading: authLoading } = useAuth();
+  const { loading: permLoading, permissoes } = usePermissions();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
   
   const [escalas, setEscalas] = useState<Escala[]>([]);
   const [loading, setLoading] = useState(true);
   const [mensagem, setMensagem] = useState('');
+  const [mensagemTipo, setMensagemTipo] = useState<'success' | 'warning' | 'error' | null>(null);
   
   const [filtroPeriodo, setFiltroPeriodo] = useState<'30dias' | '3meses' | 'todos'>('30dias');
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
@@ -105,12 +110,49 @@ export default function EscalasPage() {
   const [debugInfo, setDebugInfo] = useState('');
 
   const totalLoading = authLoading || permLoading;
+  const tipoCultoLabels = useMemo(
+    () => ({
+      dominical_manha: tr('Dominical - Manhã', 'Dominical - Mañana', 'Sunday - Morning'),
+      dominical_noite: tr('Dominical - Noite', 'Dominical - Noche', 'Sunday - Evening'),
+      quarta: tr('Quarta-feira', 'Miércoles', 'Wednesday'),
+      especial: tr('Culto Especial', 'Culto Especial', 'Special Service'),
+    }),
+    [tr]
+  );
+  const statusLabels = useMemo(
+    () => ({
+      rascunho: tr('Rascunho', 'Borrador', 'Draft'),
+      publicada: tr('Publicada', 'Publicada', 'Published'),
+      concluida: tr('Concluída', 'Concluida', 'Completed'),
+    }),
+    [tr]
+  );
+  const formatarDataCurta = useCallback(
+    (value: string) =>
+      new Date(value + 'T00:00:00').toLocaleDateString(intlLocale, {
+        day: '2-digit',
+        month: 'short',
+      }),
+    [intlLocale]
+  );
+  const formatarDataCompleta = useCallback(
+    (value: string) => new Date(value + 'T00:00:00').toLocaleDateString(intlLocale),
+    [intlLocale]
+  );
+  const formatarDataLonga = useCallback(
+    (value: string) =>
+      new Date(value + 'T00:00:00').toLocaleDateString(intlLocale, {
+        day: '2-digit',
+        month: 'long',
+      }),
+    [intlLocale]
+  );
 
   const encontrarProximoDomingoDisponivel = async (): Promise<string> => {
     try {
       const igrejaId = getStoredChurchId();
       if (!igrejaId) {
-        throw new Error('Nenhuma igreja selecionada');
+        throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
       const hoje = new Date();
       hoje.setHours(12, 0, 0, 0);
@@ -139,7 +181,7 @@ export default function EscalasPage() {
       const domingoDisponivel = datasParaVerificar.find(data => !datasComEscala.has(data));
       
       return domingoDisponivel || datasParaVerificar[0];
-    } catch (error) {
+    } catch {
       const hoje = new Date();
       const diaDaSemana = hoje.getDay();
       const diasAteProximoDomingo = diaDaSemana === 0 ? 7 : (7 - diaDaSemana);
@@ -159,26 +201,15 @@ export default function EscalasPage() {
     }
   }, [user, totalLoading, permissoes.podeGerenciarEscalas, router]);
 
-  useEffect(() => {
-    if (user && permissoes.podeGerenciarEscalas) {
-      carregarEscalas();
-    }
-  }, [user, permissoes.podeGerenciarEscalas, filtroPeriodo, filtroStatus, filtroTipo]);
-
-  useEffect(() => {
-    if (data && modalAberto) {
-      buscarCultosNaData();
-    }
-  }, [data, modalAberto]);
-
-  const carregarEscalas = async () => {
+  const carregarEscalas = useCallback(async () => {
     try {
       setLoading(true);
       const igrejaId = getStoredChurchId();
 
       if (!igrejaId) {
         setEscalas([]);
-        setMensagem('Selecione uma igreja para visualizar as escalas');
+        setMensagem(tr('Selecione uma igreja para visualizar as escalas', 'Selecciona una iglesia para ver las escalas', 'Select a church to view schedules'));
+        setMensagemTipo('warning');
         return;
       }
       
@@ -238,22 +269,29 @@ export default function EscalasPage() {
       setEscalas(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar escalas:', error);
-      setMensagem('Erro ao carregar escalas');
+      setMensagem(tr('Erro ao carregar escalas', 'Error al cargar escalas', 'Error loading schedules'));
+      setMensagemTipo('error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroPeriodo, filtroStatus, filtroTipo, tr]);
 
-  const buscarCultosNaData = async () => {
+  const buscarCultosNaData = useCallback(async () => {
     if (!data) return;
     
     setBuscandoCultos(true);
-    setDebugInfo(`Buscando cultos para: ${data}`);
+    setDebugInfo(
+      tr(
+        `Buscando cultos para: ${data}`,
+        `Buscando cultos para: ${data}`,
+        `Searching services for: ${data}`
+      )
+    );
     
     try {
       const igrejaId = getStoredChurchId();
       if (!igrejaId) {
-        throw new Error('Nenhuma igreja selecionada');
+        throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
       const { data: cultos, error } = await supabase
         .from('Louvores IPPN')
@@ -277,27 +315,33 @@ export default function EscalasPage() {
       if (cultosOrdenados.length > 0) {
         setcriarNovoCulto(false);
         setCultoSelecionado(cultosOrdenados[0]['Culto nr.']);
-        setDebugInfo(`Culto #${cultosOrdenados[0]['Culto nr.']} encontrado - será usado`);
+        setDebugInfo(
+          tr(
+            `Culto #${cultosOrdenados[0]['Culto nr.']} encontrado - será usado`,
+            `Culto #${cultosOrdenados[0]['Culto nr.']} encontrado - será usado`,
+            `Service #${cultosOrdenados[0]['Culto nr.']} found - it will be used`
+          )
+        );
       } else {
         setcriarNovoCulto(true);
         setCultoSelecionado(null);
-        setDebugInfo(`Nenhum culto encontrado - novo será criado`);
+        setDebugInfo(tr('Nenhum culto encontrado - novo será criado', 'No se encontró culto - se creará uno nuevo', 'No service found - a new one will be created'));
       }
     } catch (error: any) {
       console.error('Erro:', error);
-      setDebugInfo(`${error?.message || 'Erro'}`);
+      setDebugInfo(`${error?.message || tr('Erro', 'Error', 'Error')}`);
       setcriarNovoCulto(true);
       setCultoSelecionado(null);
     } finally {
       setBuscandoCultos(false);
     }
-  };
+  }, [data, tr]);
 
   const criarCultoAutomaticamente = async (dataEscala: string): Promise<number | null> => {
     try {
       const igrejaId = getStoredChurchId();
       if (!igrejaId) {
-        throw new Error('Nenhuma igreja selecionada');
+        throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
       const { data: novoCulto, error: errorCulto } = await supabase
         .from('Louvores IPPN')
@@ -327,7 +371,7 @@ export default function EscalasPage() {
       await supabase.from('louvor_itens').insert(modeloPadrao);
       
       return cultoId;
-    } catch (error) {
+    } catch {
       console.error('Erro ao criar culto:', error);
       return null;
     }
@@ -349,15 +393,14 @@ export default function EscalasPage() {
       const proximoDomingo = await encontrarProximoDomingoDisponivel();
       setData(proximoDomingo);
       
-      const dataObj = new Date(proximoDomingo + 'T00:00:00');
-      const diaFormatado = dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-      const tituloSugerido = `Culto Dominical - ${diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1)}`;
+      const diaFormatado = formatarDataLonga(proximoDomingo);
+      const tituloSugerido = `${tr('Culto Dominical', 'Culto Dominical', 'Sunday Service')} - ${diaFormatado.charAt(0).toUpperCase() + diaFormatado.slice(1)}`;
       setTitulo(tituloSugerido);
       
       setHoraInicio('09:00');
       setHoraFim('');
       setTipoCulto('dominical_manha');
-    } catch (error) {
+    } catch {
       console.error('Erro ao preparar modal:', error);
       setData('');
       setTitulo('');
@@ -395,12 +438,13 @@ export default function EscalasPage() {
     e.preventDefault();
     setSalvando(true);
     setMensagem('');
+    setMensagemTipo(null);
 
     try {
       const igrejaId = getStoredChurchId();
 
       if (!igrejaId) {
-        throw new Error('Selecione uma igreja antes de salvar a escala');
+        throw new Error(tr('Selecione uma igreja antes de salvar a escala', 'Selecciona una iglesia antes de guardar la escala', 'Select a church before saving the schedule'));
       }
 
       let cultoIdFinal = cultoSelecionado;
@@ -414,11 +458,18 @@ export default function EscalasPage() {
 
         if (verificacao && verificacao.length > 0) {
           cultoIdFinal = verificacao[0]['Culto nr.'];
-          setMensagem(`Culto #${cultoIdFinal} já existia para esta data, vinculando...`);
+          setMensagem(
+            tr(
+              `Culto #${cultoIdFinal} já existia para esta data, vinculando...`,
+              `El culto #${cultoIdFinal} ya existía para esta fecha, vinculando...`,
+              `Service #${cultoIdFinal} already existed for this date, linking...`
+            )
+          );
+          setMensagemTipo('warning');
         } else {
           const novoCultoId = await criarCultoAutomaticamente(data);
           if (!novoCultoId) {
-            throw new Error('Falha ao criar culto automaticamente');
+            throw new Error(tr('Falha ao criar culto automaticamente', 'Error al crear el culto automáticamente', 'Failed to create service automatically'));
           }
           cultoIdFinal = novoCultoId;
         }
@@ -447,8 +498,13 @@ export default function EscalasPage() {
 
         if (error) throw error;
         setMensagem(cultoIdFinal 
-          ? `Escala atualizada e vinculada ao Culto #${cultoIdFinal}!`
-          : 'Escala atualizada com sucesso!');
+          ? tr(
+              `Escala atualizada e vinculada ao Culto #${cultoIdFinal}!`,
+              `¡Escala actualizada y vinculada al Culto #${cultoIdFinal}!`,
+              `Schedule updated and linked to Service #${cultoIdFinal}!`
+            )
+          : tr('Escala atualizada com sucesso!', '¡Escala actualizada con éxito!', 'Schedule updated successfully!'));
+        setMensagemTipo('success');
       } else {
         const { error } = await supabase
           .from('escalas')
@@ -456,22 +512,32 @@ export default function EscalasPage() {
 
         if (error) throw error;
         setMensagem(cultoIdFinal 
-          ? `Escala criada e vinculada ao Culto #${cultoIdFinal} (com liturgia padrão)!`
-          : 'Escala criada com sucesso!');
+          ? tr(
+              `Escala criada e vinculada ao Culto #${cultoIdFinal} (com liturgia padrão)!`,
+              `¡Escala creada y vinculada al Culto #${cultoIdFinal} (con liturgia estándar)!`,
+              `Schedule created and linked to Service #${cultoIdFinal} (with default liturgy)!`
+            )
+          : tr('Escala criada com sucesso!', '¡Escala creada con éxito!', 'Schedule created successfully!'));
+        setMensagemTipo('success');
       }
 
       fecharModal();
       carregarEscalas();
     } catch (error: any) {
       console.error('Erro ao salvar escala:', error);
-      setMensagem(`Erro: ${error.message}`);
+      setMensagem(`${tr('Erro', 'Error', 'Error')}: ${error.message}`);
+      setMensagemTipo('error');
     } finally {
       setSalvando(false);
     }
   };
 
   const deletarEscala = async (id: string, titulo: string) => {
-    if (!confirm(`Tem certeza que deseja DELETAR a escala "${titulo}"?\n\nEsta ação não pode ser desfeita.`)) {
+    if (!confirm(tr(
+      `Tem certeza que deseja DELETAR a escala "${titulo}"?\n\nEsta ação não pode ser desfeita.`,
+      `¿Seguro que deseas ELIMINAR la escala "${titulo}"?\n\nEsta acción no se puede deshacer.`,
+      `Are you sure you want to DELETE the schedule "${titulo}"?\n\nThis action cannot be undone.`
+    ))) {
       return;
     }
 
@@ -484,10 +550,12 @@ export default function EscalasPage() {
         .eq('igreja_id', igrejaId);
 
       if (error) throw error;
-      setMensagem('Escala deletada com sucesso');
+      setMensagem(tr('Escala deletada com sucesso', 'Escala eliminada con éxito', 'Schedule deleted successfully'));
+      setMensagemTipo('success');
       carregarEscalas();
     } catch (error: any) {
-      setMensagem(`Erro: ${error.message}`);
+      setMensagem(`${tr('Erro', 'Error', 'Error')}: ${error.message}`);
+      setMensagemTipo('error');
     }
   };
 
@@ -495,10 +563,7 @@ export default function EscalasPage() {
   const gerarImagemEscala = (escala: Escala) => {
     if (!escala.escalas_funcoes) return;
 
-    const dataFormatada = new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'long'
-    });
+    const dataFormatada = formatarDataLonga(escala.data);
 
     // Agrupar por categoria
     const grupos: Record<string, EscalaFuncao[]> = {};
@@ -514,9 +579,9 @@ export default function EscalasPage() {
 
     // Montar texto formatado
     let texto = `📅 ${escala.titulo.toUpperCase()}\n`;
-    texto += `DATA: ${dataFormatada.toUpperCase()}\n`;
-    texto += `HORÁRIO: ${escala.hora_inicio}\n`;
-    if (escala.culto_id) texto += `CULTO: #${escala.culto_id}\n`;
+    texto += `${tr('DATA', 'FECHA', 'DATE')}: ${dataFormatada.toUpperCase()}\n`;
+    texto += `${tr('HORÁRIO', 'HORARIO', 'TIME')}: ${escala.hora_inicio}\n`;
+    if (escala.culto_id) texto += `${tr('CULTO', 'CULTO', 'SERVICE')}: #${escala.culto_id}\n`;
     texto += `\n${'═'.repeat(30)}\n\n`;
 
     // Ordenar categorias
@@ -538,8 +603,8 @@ export default function EscalasPage() {
     });
 
     texto += `${'═'.repeat(30)}\n`;
-    texto += `Igreja Presbiteriana da Ponta Negra\n`;
-    texto += `Uma igreja da família de Deus`;
+    texto += `${tr('Igreja Presbiteriana da Ponta Negra', 'Iglesia Presbiteriana de Ponta Negra', 'Ponta Negra Presbyterian Church')}\n`;
+    texto += `${tr('Uma igreja da família de Deus', 'Una iglesia de la familia de Dios', "A church in God's family")}`;
 
     // Copiar para clipboard e abrir WhatsApp
     navigator.clipboard.writeText(texto);
@@ -547,28 +612,38 @@ export default function EscalasPage() {
     const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');
     
-    setMensagem('✅ Escala copiada! Abrindo WhatsApp...');
-    setTimeout(() => setMensagem(''), 3000);
+    setMensagem(tr('✅ Escala copiada! Abrindo WhatsApp...', '✅ ¡Escala copiada! Abriendo WhatsApp...', '✅ Schedule copied! Opening WhatsApp...'));
+    setMensagemTipo('success');
+    setTimeout(() => {
+      setMensagem('');
+      setMensagemTipo(null);
+    }, 3000);
   };
 
   const getStatusInfo = (status: string) => {
     const info = {
-      rascunho: { icon: FileEdit, color: 'bg-gray-100 text-gray-800', label: 'Rascunho' },
-      publicada: { icon: CheckCircle2, color: 'bg-blue-100 text-blue-800', label: 'Publicada' },
-      concluida: { icon: PartyPopper, color: 'bg-green-100 text-green-800', label: 'Concluída' }
+      rascunho: { icon: FileEdit, color: 'bg-gray-100 text-gray-800', label: statusLabels.rascunho },
+      publicada: { icon: CheckCircle2, color: 'bg-blue-100 text-blue-800', label: statusLabels.publicada },
+      concluida: { icon: PartyPopper, color: 'bg-green-100 text-green-800', label: statusLabels.concluida }
     };
     return info[status as keyof typeof info] || info.rascunho;
   };
 
   const getTipoCultoLabel = (tipo: string) => {
-    const labels = {
-      dominical_manha: 'Dominical - Manhã',
-      dominical_noite: 'Dominical - Noite',
-      quarta: 'Quarta-feira',
-      especial: 'Culto Especial'
-    };
-    return labels[tipo as keyof typeof labels] || tipo;
+    return tipoCultoLabels[tipo as keyof typeof tipoCultoLabels] || tipo;
   };
+
+  useEffect(() => {
+    if (user && permissoes.podeGerenciarEscalas) {
+      carregarEscalas();
+    }
+  }, [carregarEscalas, user, permissoes.podeGerenciarEscalas]);
+
+  useEffect(() => {
+    if (data && modalAberto) {
+      buscarCultosNaData();
+    }
+  }, [buscarCultosNaData, data, modalAberto]);
 
   // 🎯 Filtrar apenas categorias musicais
   const filtrarApenasMusicais = (funcoes: EscalaFuncao[]) => {
@@ -586,7 +661,9 @@ export default function EscalasPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="animate-spin h-12 w-12 text-emerald-700 mx-auto" />
-          <p className="mt-4 text-slate-600">Verificando permissões...</p>
+          <p className="mt-4 text-slate-600">
+            {tr('Verificando permissões...', 'Verificando permisos...', 'Checking permissions...')}
+          </p>
         </div>
       </div>
     );
@@ -602,9 +679,9 @@ export default function EscalasPage() {
         <div className="space-y-6">
           {mensagem && (
             <div className={`p-4 rounded-lg ${
-              mensagem.includes('sucesso') || mensagem.includes('criada') || mensagem.includes('atualizada') || mensagem.includes('deletada') || mensagem.includes('copiada')
+              mensagemTipo === 'success'
                 ? 'bg-green-50 text-green-800 border border-green-200' 
-                : mensagem.includes('existia') || mensagem.includes('encontrado')
+                : mensagemTipo === 'warning'
                 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200'
                 : 'bg-red-50 text-red-800 border border-red-200'
             }`}>
@@ -617,7 +694,7 @@ export default function EscalasPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-2 flex items-center gap-2">
                   <Calendar size={16} />
-                  Período
+                  {tr('Período', 'Período', 'Period')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -628,7 +705,7 @@ export default function EscalasPage() {
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    Próximos 30 dias
+                    {tr('Próximos 30 dias', 'Próximos 30 días', 'Next 30 days')}
                   </button>
                   <button
                     onClick={() => setFiltroPeriodo('3meses')}
@@ -638,7 +715,7 @@ export default function EscalasPage() {
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    Próximos 3 meses
+                    {tr('Próximos 3 meses', 'Próximos 3 meses', 'Next 3 months')}
                   </button>
                   <button
                     onClick={() => setFiltroPeriodo('todos')}
@@ -648,7 +725,7 @@ export default function EscalasPage() {
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    Todas as escalas
+                    {tr('Todas as escalas', 'Todas las escalas', 'All schedules')}
                   </button>
                 </div>
               </div>
@@ -656,31 +733,35 @@ export default function EscalasPage() {
               <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      {tr('Status', 'Estado', 'Status')}
+                    </label>
                     <select
                       value={filtroStatus}
                       onChange={(e) => setFiltroStatus(e.target.value)}
                       className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                     >
-                      <option value="todas">Todas</option>
-                      <option value="rascunho">Rascunho</option>
-                      <option value="publicada">Publicada</option>
-                      <option value="concluida">Concluída</option>
+                      <option value="todas">{tr('Todas', 'Todas', 'All')}</option>
+                      <option value="rascunho">{statusLabels.rascunho}</option>
+                      <option value="publicada">{statusLabels.publicada}</option>
+                      <option value="concluida">{statusLabels.concluida}</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Tipo</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      {tr('Tipo', 'Tipo', 'Type')}
+                    </label>
                     <select
                       value={filtroTipo}
                       onChange={(e) => setFiltroTipo(e.target.value)}
                       className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                     >
-                      <option value="todos">Todos</option>
-                      <option value="dominical_manha">Dominical - Manhã</option>
-                      <option value="dominical_noite">Dominical - Noite</option>
-                      <option value="quarta">Quarta-feira</option>
-                      <option value="especial">Especial</option>
+                      <option value="todos">{tr('Todos', 'Todos', 'All')}</option>
+                      <option value="dominical_manha">{tipoCultoLabels.dominical_manha}</option>
+                      <option value="dominical_noite">{tipoCultoLabels.dominical_noite}</option>
+                      <option value="quarta">{tipoCultoLabels.quarta}</option>
+                      <option value="especial">{tr('Especial', 'Especial', 'Special')}</option>
                     </select>
                   </div>
                 </div>
@@ -690,7 +771,7 @@ export default function EscalasPage() {
                   className="bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all font-medium flex items-center justify-center gap-2 whitespace-nowrap"
                 >
                   <Plus size={20} />
-                  Criar Nova Escala
+                  {tr('Criar Nova Escala', 'Crear Nueva Escala', 'Create New Schedule')}
                 </button>
               </div>
             </div>
@@ -705,14 +786,18 @@ export default function EscalasPage() {
             ) : escalas.length === 0 ? (
               <div className="col-span-full text-center py-12 bg-white rounded-xl border-2 border-dashed border-slate-300">
                 <Calendar className="mx-auto mb-4 text-slate-400" size={48} />
-                <p className="text-slate-500 text-lg mb-2">Nenhuma escala encontrada</p>
-                <p className="text-slate-400 text-sm mb-4">Comece criando uma nova escala para este mês</p>
+                <p className="text-slate-500 text-lg mb-2">
+                  {tr('Nenhuma escala encontrada', 'No se encontró ninguna escala', 'No schedules found')}
+                </p>
+                <p className="text-slate-400 text-sm mb-4">
+                  {tr('Comece criando uma nova escala para este mês', 'Comienza creando una nueva escala para este mes', 'Start by creating a new schedule for this month')}
+                </p>
                 <button
                   onClick={abrirModalNova}
                   className="bg-emerald-700 text-white px-4 py-2 rounded-lg hover:bg-emerald-800 transition-all text-sm font-medium inline-flex items-center gap-2"
                 >
                   <Plus size={18} />
-                  Criar Primeira Escala
+                  {tr('Criar Primeira Escala', 'Crear Primera Escala', 'Create First Schedule')}
                 </button>
               </div>
             ) : (
@@ -740,17 +825,13 @@ export default function EscalasPage() {
                       <div className="flex items-center gap-3 text-emerald-50 text-sm">
                         <div className="flex items-center gap-1">
                           <Calendar size={14} />
-                          <span>
-                            {new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
-                              day: '2-digit',
-                              month: 'short'
-                            })}
-                          </span>
+                          <span>{formatarDataCurta(escala.data)}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock size={14} />
                           <span>{escala.hora_inicio}</span>
                         </div>
+                        <span className="truncate">{getTipoCultoLabel(escala.tipo_culto)}</span>
                       </div>
                     </div>
 
@@ -759,7 +840,7 @@ export default function EscalasPage() {
                         <div className="flex items-center gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg p-2">
                           <Music size={16} className="text-amber-600" />
                           <span className="font-medium text-amber-900">
-                            Culto #{escala.culto_id}
+                            {tr('Culto', 'Culto', 'Service')} #{escala.culto_id}
                           </span>
                         </div>
                       )}
@@ -769,7 +850,7 @@ export default function EscalasPage() {
                           <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
                             <Users size={16} className="text-slate-600" />
                             <span className="text-xs font-semibold text-slate-600 uppercase">
-                              Equipe ({funcoesVisiveis.length})
+                              {tr('Equipe', 'Equipo', 'Team')} ({funcoesVisiveis.length})
                             </span>
                           </div>
                           <div className="space-y-1.5">
@@ -802,7 +883,7 @@ export default function EscalasPage() {
                       ) : (
                         <div className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded flex items-center justify-center gap-2">
                           <Users size={14} />
-                          Nenhuma pessoa escalada
+                          {tr('Nenhuma pessoa escalada', 'Ninguna persona asignada', 'No assigned people')}
                         </div>
                       )}
 
@@ -821,7 +902,7 @@ export default function EscalasPage() {
                         className="flex-1 px-3 py-2 bg-green-100 text-green-800 rounded text-sm font-medium hover:bg-green-200 transition-colors flex items-center justify-center gap-1.5"
                       >
                         <ImageIcon size={16} />
-                        Compartilhar
+                        {tr('Compartilhar', 'Compartir', 'Share')}
                       </button>
                       <button
                         onClick={() => router.push(`/admin/escalas/${escala.id}`)}
@@ -860,12 +941,12 @@ export default function EscalasPage() {
                 {escalaEditando ? (
                   <>
                     <Edit2 size={24} className="text-emerald-700" />
-                    Editar Escala
+                    {tr('Editar Escala', 'Editar Escala', 'Edit Schedule')}
                   </>
                 ) : (
                   <>
                     <Plus size={24} className="text-emerald-700" />
-                    Nova Escala
+                    {tr('Nova Escala', 'Nueva Escala', 'New Schedule')}
                   </>
                 )}
               </h3>
@@ -883,7 +964,9 @@ export default function EscalasPage() {
                 <div className="flex items-center justify-center py-8">
                   <div className="text-center">
                     <Loader2 className="animate-spin h-8 w-8 text-emerald-700 mx-auto" />
-                    <p className="text-sm text-slate-600 mt-3">Preparando próximo domingo...</p>
+                    <p className="text-sm text-slate-600 mt-3">
+                      {tr('Preparando próximo domingo...', 'Preparando próximo domingo...', 'Preparing next Sunday...')}
+                    </p>
                   </div>
                 </div>
               )}
@@ -892,7 +975,7 @@ export default function EscalasPage() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Título da Escala *
+                      {tr('Título da Escala', 'Título de la Escala', 'Schedule Title')} *
                     </label>
                     <input
                       type="text"
@@ -900,7 +983,7 @@ export default function EscalasPage() {
                       onChange={(e) => setTitulo(e.target.value)}
                       required
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
-                      placeholder="Ex: Culto Dominical - 25 de Janeiro"
+                      placeholder={tr('Ex: Culto Dominical - 25 de Janeiro', 'Ej.: Culto Dominical - 25 de Enero', 'Ex: Sunday Service - January 25')}
                       disabled={salvando}
                     />
                   </div>
@@ -908,7 +991,7 @@ export default function EscalasPage() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Data *
+                        {tr('Data', 'Fecha', 'Date')} *
                       </label>
                       <input
                         type="date"
@@ -922,7 +1005,7 @@ export default function EscalasPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Tipo de Culto *
+                        {tr('Tipo de Culto', 'Tipo de Culto', 'Service Type')} *
                       </label>
                       <select
                         value={tipoCulto}
@@ -930,10 +1013,10 @@ export default function EscalasPage() {
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                         disabled={salvando}
                       >
-                        <option value="dominical_manha">Dominical - Manhã</option>
-                        <option value="dominical_noite">Dominical - Noite</option>
-                        <option value="quarta">Quarta-feira</option>
-                        <option value="especial">Culto Especial</option>
+                        <option value="dominical_manha">{tipoCultoLabels.dominical_manha}</option>
+                        <option value="dominical_noite">{tipoCultoLabels.dominical_noite}</option>
+                        <option value="quarta">{tipoCultoLabels.quarta}</option>
+                        <option value="especial">{tipoCultoLabels.especial}</option>
                       </select>
                     </div>
                   </div>
@@ -941,7 +1024,7 @@ export default function EscalasPage() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Hora Início *
+                        {tr('Hora Início', 'Hora de Inicio', 'Start Time')} *
                       </label>
                       <input
                         type="time"
@@ -955,7 +1038,7 @@ export default function EscalasPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Hora Fim <span className="text-xs text-slate-500">(opcional)</span>
+                        {tr('Hora Fim', 'Hora de Fin', 'End Time')} <span className="text-xs text-slate-500">({tr('opcional', 'opcional', 'optional')})</span>
                       </label>
                       <input
                         type="time"
@@ -970,7 +1053,7 @@ export default function EscalasPage() {
                   <div className="border-t border-slate-200 pt-4">
                     <label className="block text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
                       <Music size={18} />
-                      Vínculo com Programação Musical
+                      {tr('Vínculo com Programação Musical', 'Vínculo con Programación Musical', 'Music Program Link')}
                     </label>
 
                     {debugInfo && (
@@ -983,7 +1066,9 @@ export default function EscalasPage() {
                     {buscandoCultos ? (
                       <div className="text-center py-4">
                         <Loader2 className="animate-spin h-6 w-6 text-emerald-700 mx-auto" />
-                        <p className="text-xs text-slate-500 mt-2">Buscando cultos...</p>
+                        <p className="text-xs text-slate-500 mt-2">
+                          {tr('Buscando cultos...', 'Buscando cultos...', 'Searching services...')}
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -1002,10 +1087,10 @@ export default function EscalasPage() {
                           <div className="flex-1">
                             <p className="font-medium text-slate-900 flex items-center gap-2">
                               <Plus size={16} />
-                              Criar novo culto automaticamente
+                              {tr('Criar novo culto automaticamente', 'Crear nuevo culto automáticamente', 'Create new service automatically')}
                             </p>
                             <p className="text-xs text-slate-600 mt-1">
-                              Um novo culto será criado com liturgia padrão pré-preenchida
+                              {tr('Um novo culto será criado com liturgia padrão pré-preenchida', 'Se creará un nuevo culto con liturgia estándar precargada', 'A new service will be created with pre-filled default liturgy')}
                             </p>
                           </div>
                         </label>
@@ -1028,7 +1113,7 @@ export default function EscalasPage() {
                             <div className="flex-1">
                               <p className="font-medium text-emerald-900 flex items-center gap-2">
                                 <LinkIcon size={16} />
-                                Vincular a culto existente ({cultosDisponiveis.length} encontrado{cultosDisponiveis.length > 1 ? 's' : ''})
+                                {tr('Vincular a culto existente', 'Vincular a culto existente', 'Link to existing service')} ({cultosDisponiveis.length} {tr(cultosDisponiveis.length > 1 ? 'encontrados' : 'encontrado', cultosDisponiveis.length > 1 ? 'encontrados' : 'encontrado', cultosDisponiveis.length > 1 ? 'found' : 'found')})
                               </p>
                               {!criarNovoCulto && (
                                 <select
@@ -1039,7 +1124,7 @@ export default function EscalasPage() {
                                 >
                                   {cultosDisponiveis.map(culto => (
                                     <option key={culto['Culto nr.']} value={culto['Culto nr.']}>
-                                      Culto #{culto['Culto nr.']} - {new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                      {tr('Culto', 'Culto', 'Service')} #{culto['Culto nr.']} - {formatarDataCompleta(culto.Dia)}
                                     </option>
                                   ))}
                                 </select>
@@ -1053,7 +1138,7 @@ export default function EscalasPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Status *
+                      {tr('Status', 'Estado', 'Status')} *
                     </label>
                     <select
                       value={status}
@@ -1061,22 +1146,22 @@ export default function EscalasPage() {
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                       disabled={salvando}
                     >
-                      <option value="rascunho">📝 Rascunho (não visível)</option>
-                      <option value="publicada">✅ Publicada (visível para todos)</option>
-                      <option value="concluida">🎉 Concluída</option>
+                      <option value="rascunho">📝 {tr('Rascunho (não visível)', 'Borrador (no visible)', 'Draft (not visible)')}</option>
+                      <option value="publicada">✅ {tr('Publicada (visível para todos)', 'Publicada (visible para todos)', 'Published (visible to everyone)')}</option>
+                      <option value="concluida">🎉 {statusLabels.concluida}</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Observações <span className="text-xs text-slate-500">(opcional)</span>
+                      {tr('Observações', 'Observaciones', 'Notes')} <span className="text-xs text-slate-500">({tr('opcional', 'opcional', 'optional')})</span>
                     </label>
                     <textarea
                       value={observacoes}
                       onChange={(e) => setObservacoes(e.target.value)}
                       rows={3}
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none resize-none"
-                      placeholder="Anotações, instruções especiais, etc..."
+                      placeholder={tr('Anotações, instruções especiais, etc...', 'Anotaciones, instrucciones especiales, etc...', 'Notes, special instructions, etc...')}
                       disabled={salvando}
                     />
                   </div>
@@ -1089,7 +1174,11 @@ export default function EscalasPage() {
                   disabled={salvando || carregandoModal}
                   className="flex-1 bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
-                  {salvando ? 'Salvando...' : escalaEditando ? 'Salvar Alterações' : 'Criar Escala'}
+                  {salvando
+                    ? tr('Salvando...', 'Guardando...', 'Saving...')
+                    : escalaEditando
+                      ? tr('Salvar Alterações', 'Guardar Cambios', 'Save Changes')
+                      : tr('Criar Escala', 'Crear Escala', 'Create Schedule')}
                 </button>
                 <button
                   type="button"
@@ -1097,7 +1186,7 @@ export default function EscalasPage() {
                   disabled={salvando || carregandoModal}
                   className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-50"
                 >
-                  Cancelar
+                  {tr('Cancelar', 'Cancelar', 'Cancel')}
                 </button>
               </div>
             </form>

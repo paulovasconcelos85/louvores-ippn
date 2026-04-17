@@ -43,7 +43,7 @@ export default function Header() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || 'Erro ao carregar igrejas.');
+          throw new Error(data.error || t('header.loadChurchesError'));
         }
 
         if (!ativo) return;
@@ -77,7 +77,7 @@ export default function Header() {
     return () => {
       ativo = false;
     };
-  }, [user?.id]);
+  }, [t, user?.id]);
 
   const handleTrocarIgreja = (novoId: string) => {
     setIgrejaAtualId(novoId);

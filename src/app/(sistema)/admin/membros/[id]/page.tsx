@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
-import { CargoTipo, getCargoLabel, getCargoCor } from '@/lib/permissions';
+import { CargoTipo, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
@@ -12,6 +12,8 @@ import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
+import { getIntlLocale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
 import {
   ArrowLeft, Save, Phone, Mail, MapPin, Calendar, Heart,
   AlertCircle, MessageSquare, Plus, Edit2, Trash2, User,
@@ -77,6 +79,9 @@ type TipoNota = 'nota' | 'visita' | 'ligacao' | 'oracao' | 'aconselhamento' | 'u
 
 // ─── Mini Mapa ────────────────────────────────────────────────────────────────
 function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string }) {
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) =>
+    locale === 'es' ? es : locale === 'en' ? en : pt;
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY;
   if (!key) return (
     <a
@@ -85,7 +90,7 @@ function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string
       rel="noopener noreferrer"
       className="text-xs text-blue-600 hover:underline mt-1 block"
     >
-      Ver no Google Maps ↗
+      {tr('Ver no Google Maps', 'Ver en Google Maps', 'View on Google Maps')} ↗
     </a>
   );
   const src = `https://www.google.com/maps/embed/v1/place?key=${key}&q=${lat},${lng}&zoom=15`;
@@ -93,7 +98,7 @@ function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string
     <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       <div className="bg-slate-50 px-3 py-2 flex items-center justify-between border-b border-slate-200">
         <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-          <MapPin className="w-3.5 h-3.5 text-blue-500" /> Localização no Mapa
+          <MapPin className="w-3.5 h-3.5 text-blue-500" /> {tr('Localização no Mapa', 'Ubicación en el Mapa', 'Map Location')}
         </span>
         <a
           href={`https://maps.google.com/?q=${lat},${lng}`}
@@ -101,11 +106,11 @@ function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string
           rel="noopener noreferrer"
           className="text-xs text-blue-600 hover:underline font-medium"
         >
-          Abrir no Maps ↗
+          {tr('Abrir no Maps', 'Abrir en Maps', 'Open in Maps')} ↗
         </a>
       </div>
       <iframe
-        title={`Mapa - ${nome}`}
+        title={tr(`Mapa - ${nome}`, `Mapa - ${nome}`, `Map - ${nome}`)}
         src={src}
         width="100%"
         height="220"
@@ -165,8 +170,15 @@ export default function MembroDetalhesPage() {
   const router = useRouter();
   const params = useParams();
   const membroId = params?.id as string;
+  const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
   const { user } = useAuth();
   const { permissoes, usuarioPermitido } = usePermissions();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
 
   const [membro, setMembro] = useState<Membro | null>(null);
   const [notas, setNotas] = useState<NotaPastoral[]>([]);
@@ -227,15 +239,52 @@ export default function MembroDetalhesPage() {
   const [notaPrivada, setNotaPrivada] = useState(false);
 
   const podeAcessar = permissoes.podePastorearMembros;
+  const getCargoLabelLocalized = (cargo: CargoTipo) =>
+    ({
+      membro: tr('Membro', 'Miembro', 'Member'),
+      diacono: tr('Diácono', 'Diácono', 'Deacon'),
+      musico: tr('Músico', 'Músico', 'Musician'),
+      staff: tr('Staff', 'Staff', 'Staff'),
+      seminarista: tr('Seminarista', 'Seminarista', 'Seminarian'),
+      presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
+      pastor: tr('Pastor', 'Pastor', 'Pastor'),
+      admin: tr('Administrador', 'Administrador', 'Administrator'),
+      superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
+    } satisfies Record<CargoTipo, string>)[cargo];
+  const getStatusLabel = (status: string) =>
+    ({
+      ativo: tr('Ativo', 'Activo', 'Active'),
+      visitante: tr('Visitante', 'Visitante', 'Visitor'),
+      congregado: tr('Congregado', 'Congregante', 'Congregant'),
+      afastado: tr('Afastado', 'Alejado', 'Away'),
+      falecido: tr('Falecido', 'Fallecido', 'Deceased'),
+    }[status] || status);
+  const getMaritalStatusLabel = (value: string | null) =>
+    value
+      ? ({
+          solteiro: tr('Solteiro(a)', 'Soltero(a)', 'Single'),
+          casado: tr('Casado(a)', 'Casado(a)', 'Married'),
+          divorciado: tr('Divorciado(a)', 'Divorciado(a)', 'Divorced'),
+          viuvo: tr('Viúvo(a)', 'Viudo(a)', 'Widowed'),
+          uniao_estavel: tr('União Estável', 'Unión Estable', 'Civil Union'),
+        }[value] || value)
+      : null;
+  const getEducationLabel = (value: string | null) =>
+    value
+      ? ({
+          fundamental_incompleto: tr('Fund. Incompleto', 'Primaria Incompleta', 'Elementary Incomplete'),
+          fundamental_completo: tr('Fund. Completo', 'Primaria Completa', 'Elementary Complete'),
+          medio_incompleto: tr('Médio Incompleto', 'Secundaria Incompleta', 'High School Incomplete'),
+          medio_completo: tr('Médio Completo', 'Secundaria Completa', 'High School Complete'),
+          superior_incompleto: tr('Superior Incompleto', 'Universidad Incompleta', 'College Incomplete'),
+          superior_completo: tr('Superior Completo', 'Universidad Completa', 'College Complete'),
+          pos_graduacao: tr('Pós-Graduação', 'Posgrado', 'Postgraduate'),
+          mestrado: tr('Mestrado', 'Maestría', "Master's"),
+          doutorado: tr('Doutorado', 'Doctorado', 'Doctorate'),
+        }[value] || value)
+      : null;
 
-  useEffect(() => {
-    if (user && podeAcessar && membroId) {
-      carregarMembro();
-      carregarNotas();
-    }
-  }, [user, podeAcessar, membroId]);
-
-  const carregarMembro = async () => {
+  const carregarMembro = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -248,7 +297,14 @@ export default function MembroDetalhesPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || 'Erro ao carregar membro');
+        throw new Error(
+          payload.error ||
+            tr(
+              'Erro ao carregar membro',
+              'Error al cargar miembro',
+              'Error loading member'
+            )
+        );
       }
 
       const data = payload.data;
@@ -293,13 +349,19 @@ export default function MembroDetalhesPage() {
       setGrupoFamiliarLider(data.grupo_familiar_lider || '');
     } catch (error) {
       console.error('Erro ao carregar membro:', error);
-      setMensagem('Erro ao carregar dados do membro');
+      setMensagem(
+        tr(
+          'Erro ao carregar dados do membro',
+          'Error al cargar los datos del miembro',
+          'Error loading member data'
+        )
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [membroId, tr]);
 
-  const carregarNotas = async () => {
+  const carregarNotas = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('notas_pastorais')
@@ -317,7 +379,7 @@ export default function MembroDetalhesPage() {
           criado_em: nota.criado_em,
           atualizado_em: nota.atualizado_em,
           autor: {
-            nome: nota.autor?.nome || 'Desconhecido',
+            nome: nota.autor?.nome || tr('Desconhecido', 'Desconocido', 'Unknown'),
             cargo: nota.autor?.cargo || 'membro',
           },
         }))
@@ -325,7 +387,14 @@ export default function MembroDetalhesPage() {
     } catch (error) {
       console.error('Erro ao carregar notas:', error);
     }
-  };
+  }, [membroId, tr]);
+
+  useEffect(() => {
+    if (user && podeAcessar && membroId) {
+      carregarMembro();
+      carregarNotas();
+    }
+  }, [carregarMembro, carregarNotas, membroId, podeAcessar, user]);
 
   const salvarAlteracoes = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -380,13 +449,34 @@ export default function MembroDetalhesPage() {
         })
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Erro ao salvar alterações');
-      setMensagem('Alterações salvas com sucesso!');
+      if (!response.ok) {
+        throw new Error(
+          payload.error ||
+            tr(
+              'Erro ao salvar alterações',
+              'Error al guardar cambios',
+              'Error saving changes'
+            )
+        );
+      }
+      setMensagem(
+        tr(
+          'Alterações salvas com sucesso!',
+          '¡Cambios guardados con éxito!',
+          'Changes saved successfully!'
+        )
+      );
       setModoEdicao(false);
       carregarMembro();
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
-      setMensagem('Erro ao salvar alterações');
+      setMensagem(
+        tr(
+          'Erro ao salvar alterações',
+          'Error al guardar cambios',
+          'Error saving changes'
+        )
+      );
     } finally {
       setSalvando(false);
     }
@@ -407,7 +497,13 @@ export default function MembroDetalhesPage() {
         privado: notaPrivada,
       });
       if (error) throw error;
-      setMensagem('Nota adicionada com sucesso!');
+      setMensagem(
+        tr(
+          'Nota adicionada com sucesso!',
+          '¡Nota agregada con éxito!',
+          'Note added successfully!'
+        )
+      );
       setModalNotaAberto(false);
       setTituloNota('');
       setConteudoNota('');
@@ -415,22 +511,50 @@ export default function MembroDetalhesPage() {
       setNotaPrivada(false);
       carregarNotas();
     } catch {
-      setMensagem('Erro ao adicionar nota');
+      setMensagem(
+        tr(
+          'Erro ao adicionar nota',
+          'Error al agregar nota',
+          'Error adding note'
+        )
+      );
     }
   };
 
   const deletarNota = async (notaId: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta nota?')) return;
+    if (
+      !confirm(
+        tr(
+          'Tem certeza que deseja excluir esta nota?',
+          '¿Seguro que deseas eliminar esta nota?',
+          'Are you sure you want to delete this note?'
+        )
+      )
+    ) {
+      return;
+    }
     try {
       const { error } = await supabase
         .from('notas_pastorais')
         .delete()
         .eq('id', notaId);
       if (error) throw error;
-      setMensagem('Nota excluída com sucesso');
+      setMensagem(
+        tr(
+          'Nota excluída com sucesso',
+          'Nota eliminada con éxito',
+          'Note deleted successfully'
+        )
+      );
       carregarNotas();
     } catch {
-      setMensagem('Erro ao excluir nota');
+      setMensagem(
+        tr(
+          'Erro ao excluir nota',
+          'Error al eliminar nota',
+          'Error deleting note'
+        )
+      );
     }
   };
 
@@ -445,16 +569,25 @@ export default function MembroDetalhesPage() {
   };
 
   const formatarData = (data: string | null) =>
-    data ? new Date(data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+    data
+      ? new Date(`${data}T00:00:00`).toLocaleDateString(intlLocale)
+      : '-';
 
   const formatarDataHora = (data: string) =>
-    new Date(data).toLocaleString('pt-BR', {
+    new Date(data).toLocaleString(intlLocale, {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
 
   const getTipoNotaLabel = (tipo: string) =>
-    ({ nota: 'Nota', visita: 'Visita', ligacao: 'Ligação', oracao: 'Oração', aconselhamento: 'Aconselhamento', urgente: 'Urgente' }[tipo] || tipo);
+    ({
+      nota: tr('Nota', 'Nota', 'Note'),
+      visita: tr('Visita', 'Visita', 'Visit'),
+      ligacao: tr('Ligação', 'Llamada', 'Call'),
+      oracao: tr('Oração', 'Oración', 'Prayer'),
+      aconselhamento: tr('Aconselhamento', 'Consejería', 'Counseling'),
+      urgente: tr('Urgente', 'Urgente', 'Urgent'),
+    }[tipo] || tipo);
 
   const getTipoNotaCor = (tipo: string) =>
     ({
@@ -467,13 +600,36 @@ export default function MembroDetalhesPage() {
     }[tipo] || 'bg-slate-100 text-slate-800');
 
   const abrirWhatsApp = () => {
-    if (!membro?.telefone) { setMensagem('Membro não possui telefone cadastrado'); return; }
+    if (!membro?.telefone) {
+      setMensagem(
+        tr(
+          'Membro não possui telefone cadastrado',
+          'El miembro no tiene teléfono registrado',
+          'Member has no phone number on file'
+        )
+      );
+      return;
+    }
     const num = membro.telefone.replace(/\D/g, '');
-    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(`Olá ${membro.nome}! Que a paz do Senhor esteja contigo!`)}`, '_blank');
+    const msg = tr(
+      `Olá ${membro.nome}! Que a paz do Senhor esteja contigo!`,
+      `Hola ${membro.nome}. Que la paz del Senor esté contigo.`,
+      `Hello ${membro.nome}. May the Lord's peace be with you.`
+    );
+    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const ligarPara = () => {
-    if (!membro?.telefone) { setMensagem('Membro não possui telefone cadastrado'); return; }
+    if (!membro?.telefone) {
+      setMensagem(
+        tr(
+          'Membro não possui telefone cadastrado',
+          'El miembro no tiene teléfono registrado',
+          'Member has no phone number on file'
+        )
+      );
+      return;
+    }
     window.location.href = `tel:${membro.telefone}`;
   };
 
@@ -484,7 +640,9 @@ export default function MembroDetalhesPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto" />
-          <p className="mt-4 text-slate-600">Carregando dados...</p>
+          <p className="mt-4 text-slate-600">
+            {tr('Carregando dados...', 'Cargando datos...', 'Loading data...')}
+          </p>
         </div>
       </div>
     );
@@ -495,12 +653,14 @@ export default function MembroDetalhesPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-xl font-bold text-slate-900 mb-2">Membro não encontrado</p>
+          <p className="text-xl font-bold text-slate-900 mb-2">
+            {tr('Membro não encontrado', 'Miembro no encontrado', 'Member not found')}
+          </p>
           <button
             onClick={() => router.push('/admin/membros')}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
-            Voltar para lista
+            {tr('Voltar para lista', 'Volver a la lista', 'Back to list')}
           </button>
         </div>
       </div>
@@ -546,9 +706,15 @@ export default function MembroDetalhesPage() {
               <div>
                 <h1 className="text-3xl font-bold text-slate-900">{membro.nome}</h1>
                 <div className="flex items-center gap-2 mt-1 text-slate-500 text-sm">
-                  {membro.sexo && <span>{membro.sexo === 'M' ? '♂ Masculino' : '♀ Feminino'}</span>}
+                  {membro.sexo && (
+                    <span>
+                      {membro.sexo === 'M'
+                        ? `♂ ${tr('Masculino', 'Masculino', 'Male')}`
+                        : `♀ ${tr('Feminino', 'Femenino', 'Female')}`}
+                    </span>
+                  )}
                   {membro.profissao && <><span>·</span><span>{membro.profissao}</span></>}
-                  {idade && <><span>·</span><span>{idade} anos</span></>}
+                  {idade && <><span>·</span><span>{idade} {tr('anos', 'años', 'years')}</span></>}
                 </div>
               </div>
             </div>
@@ -558,7 +724,7 @@ export default function MembroDetalhesPage() {
               onClick={() => setModoEdicao(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
-              <Edit2 className="w-4 h-4" /> Editar
+              <Edit2 className="w-4 h-4" /> {tr('Editar', 'Editar', 'Edit')}
             </button>
           )}
         </div>
@@ -580,7 +746,9 @@ export default function MembroDetalhesPage() {
             {/* Ações Rápidas */}
             {!modoEdicao && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="font-semibold text-slate-900 mb-4">Ações Rápidas</h3>
+                <h3 className="font-semibold text-slate-900 mb-4">
+                  {tr('Ações Rápidas', 'Acciones Rápidas', 'Quick Actions')}
+                </h3>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <button
                     onClick={abrirWhatsApp}
@@ -597,13 +765,13 @@ export default function MembroDetalhesPage() {
                     disabled={!membro.telefone}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
-                    <Phone className="w-5 h-5" /> Ligar
+                    <Phone className="w-5 h-5" /> {tr('Ligar', 'Llamar', 'Call')}
                   </button>
                   <button
                     onClick={() => setModalNotaAberto(true)}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
                   >
-                    <Plus className="w-5 h-5" /> Nova Nota
+                    <Plus className="w-5 h-5" /> {tr('Nova Nota', 'Nueva Nota', 'New Note')}
                   </button>
                 </div>
               </div>
@@ -614,26 +782,31 @@ export default function MembroDetalhesPage() {
               <form onSubmit={salvarAlteracoes} className="space-y-6">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-xs text-blue-800">
-                    <strong>ℹ️ Nota:</strong> Para editar <strong>email, cargo ou habilidades</strong>, use a página <strong>/admin/usuarios</strong>
+                    <strong>ℹ️ {tr('Nota:', 'Nota:', 'Note:')}</strong>{' '}
+                    {tr(
+                      'Para editar email, cargo ou habilidades, use a página /admin/usuarios',
+                      'Para editar correo, cargo o habilidades, usa la página /admin/usuarios',
+                      'To edit email, role, or skills, use the /admin/usuarios page'
+                    )}
                   </p>
                 </div>
 
                 {/* Dados Básicos */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
-                    <User className="w-4 h-4" /> Dados Básicos
+                    <User className="w-4 h-4" /> {tr('Dados Básicos', 'Datos Básicos', 'Basic Information')}
                   </h3>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                      <Camera className="w-4 h-4" /> URL da Foto
+                      <Camera className="w-4 h-4" /> {tr('URL da Foto', 'URL de la Foto', 'Photo URL')}
                     </label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
                         <input
                           type="url"
                           value={fotoUrl}
                           onChange={(e) => { setFotoUrl(e.target.value); setFotoError(false); }}
-                          placeholder="https://exemplo.com/foto.jpg"
+                          placeholder="https://example.com/photo.jpg"
                           className={inputCls}
                         />
                       </div>
@@ -653,99 +826,99 @@ export default function MembroDetalhesPage() {
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo *</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nome Completo', 'Nombre Completo', 'Full Name')} *</label>
                       <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Telefone</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Telefone', 'Teléfono', 'Phone')}</label>
                       <input type="tel" value={telefone} onChange={(e) => setTelefone(formatPhoneNumber(e.target.value))} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Sexo</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Sexo', 'Sexo', 'Sex')}</label>
                       <select value={sexo} onChange={(e) => setSexo(e.target.value)} className={inputCls}>
-                        <option value="">Não informado</option>
-                        <option value="M">Masculino</option>
-                        <option value="F">Feminino</option>
+                        <option value="">{tr('Não informado', 'No informado', 'Not informed')}</option>
+                        <option value="M">{tr('Masculino', 'Masculino', 'Male')}</option>
+                        <option value="F">{tr('Feminino', 'Femenino', 'Female')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Status do Membro</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Status do Membro', 'Estado del Miembro', 'Member Status')}</label>
                       <select value={statusMembro} onChange={(e) => setStatusMembro(e.target.value)} className={inputCls}>
-                        <option value="ativo">Ativo</option>
-                        <option value="visitante">Visitante</option>
-                        <option value="congregado">Congregado</option>
-                        <option value="afastado">Afastado</option>
-                        <option value="falecido">Falecido</option>
+                        <option value="ativo">{tr('Ativo', 'Activo', 'Active')}</option>
+                        <option value="visitante">{tr('Visitante', 'Visitante', 'Visitor')}</option>
+                        <option value="congregado">{tr('Congregado', 'Congregante', 'Congregant')}</option>
+                        <option value="afastado">{tr('Afastado', 'Alejado', 'Away')}</option>
+                        <option value="falecido">{tr('Falecido', 'Fallecido', 'Deceased')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Nascimento</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Data de Nascimento', 'Fecha de Nacimiento', 'Birth Date')}</label>
                       <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Estado Civil</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Estado Civil', 'Estado Civil', 'Marital Status')}</label>
                       <select value={estadoCivil} onChange={(e) => setEstadoCivil(e.target.value)} className={inputCls}>
-                        <option value="">Não informado</option>
-                        <option value="solteiro">Solteiro(a)</option>
-                        <option value="casado">Casado(a)</option>
-                        <option value="divorciado">Divorciado(a)</option>
-                        <option value="viuvo">Viúvo(a)</option>
-                        <option value="uniao_estavel">União Estável</option>
+                        <option value="">{tr('Não informado', 'No informado', 'Not informed')}</option>
+                        <option value="solteiro">{tr('Solteiro(a)', 'Soltero(a)', 'Single')}</option>
+                        <option value="casado">{tr('Casado(a)', 'Casado(a)', 'Married')}</option>
+                        <option value="divorciado">{tr('Divorciado(a)', 'Divorciado(a)', 'Divorced')}</option>
+                        <option value="viuvo">{tr('Viúvo(a)', 'Viudo(a)', 'Widowed')}</option>
+                        <option value="uniao_estavel">{tr('União Estável', 'Unión Estable', 'Civil Union')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Casamento</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Data de Casamento', 'Fecha de Matrimonio', 'Marriage Date')}</label>
                       <input type="date" value={dataCasamento} onChange={(e) => setDataCasamento(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Cônjuge</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nome do Cônjuge', 'Nombre del Cónyuge', "Spouse's Name")}</label>
                       <input type="text" value={conjugeNome} onChange={(e) => setConjugeNome(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Religião do Cônjuge</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Religião do Cônjuge', 'Religión del Cónyuge', "Spouse's Religion")}</label>
                       <input type="text" value={conjugeReligiao} onChange={(e) => setConjugeReligiao(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Pai</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nome do Pai', 'Nombre del Padre', "Father's Name")}</label>
                       <input type="text" value={nomePai} onChange={(e) => setNomePai(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Mãe</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nome da Mãe', 'Nombre de la Madre', "Mother's Name")}</label>
                       <input type="text" value={nomeMae} onChange={(e) => setNomeMae(e.target.value)} className={inputCls} />
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Naturalidade (Cidade)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Naturalidade (Cidade)', 'Origen (Ciudad)', 'Origin (City)')}</label>
                       <input type="text" value={naturalidadeCidade} onChange={(e) => setNaturalidadeCidade(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">UF Naturalidade</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('UF Naturalidade', 'Estado de Origen', 'Origin State')}</label>
                       <input type="text" maxLength={2} value={naturalidadeUf} onChange={(e) => setNaturalidadeUf(e.target.value.toUpperCase())} className={inputCls} placeholder="AM" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Nacionalidade</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nacionalidade', 'Nacionalidad', 'Nationality')}</label>
                       <input type="text" value={nacionalidade} onChange={(e) => setNacionalidade(e.target.value)} className={inputCls} />
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Profissão</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Profissão', 'Profesión', 'Profession')}</label>
                       <input type="text" value={profissao} onChange={(e) => setProfissao(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Escolaridade</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Escolaridade', 'Escolaridad', 'Education')}</label>
                       <select value={escolaridade} onChange={(e) => setEscolaridade(e.target.value)} className={inputCls}>
-                        <option value="">Não informada</option>
-                        <option value="fundamental_incompleto">Fund. Incompleto</option>
-                        <option value="fundamental_completo">Fund. Completo</option>
-                        <option value="medio_incompleto">Médio Incompleto</option>
-                        <option value="medio_completo">Médio Completo</option>
-                        <option value="superior_incompleto">Superior Incompleto</option>
-                        <option value="superior_completo">Superior Completo</option>
-                        <option value="pos_graduacao">Pós-Graduação</option>
-                        <option value="mestrado">Mestrado</option>
-                        <option value="doutorado">Doutorado</option>
+                        <option value="">{tr('Não informada', 'No informada', 'Not informed')}</option>
+                        <option value="fundamental_incompleto">{tr('Fund. Incompleto', 'Primaria Incompleta', 'Elementary Incomplete')}</option>
+                        <option value="fundamental_completo">{tr('Fund. Completo', 'Primaria Completa', 'Elementary Complete')}</option>
+                        <option value="medio_incompleto">{tr('Médio Incompleto', 'Secundaria Incompleta', 'High School Incomplete')}</option>
+                        <option value="medio_completo">{tr('Médio Completo', 'Secundaria Completa', 'High School Complete')}</option>
+                        <option value="superior_incompleto">{tr('Superior Incompleto', 'Universidad Incompleta', 'College Incomplete')}</option>
+                        <option value="superior_completo">{tr('Superior Completo', 'Universidad Completa', 'College Complete')}</option>
+                        <option value="pos_graduacao">{tr('Pós-Graduação', 'Posgrado', 'Postgraduate')}</option>
+                        <option value="mestrado">{tr('Mestrado', 'Maestría', "Master's")}</option>
+                        <option value="doutorado">{tr('Doutorado', 'Doctorado', 'Doctorate')}</option>
                       </select>
                     </div>
                   </div>
@@ -754,15 +927,19 @@ export default function MembroDetalhesPage() {
                 {/* Endereço */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" /> Endereço
+                    <MapPin className="w-4 h-4" /> {tr('Endereço', 'Dirección', 'Address')}
                   </h3>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Buscar endereço
+                      {tr('Buscar endereço', 'Buscar dirección', 'Search address')}
                     </label>
                     <p className="text-xs text-slate-400 mb-2">
-                      Pesquise e selecione na lista para atualizar o endereço automaticamente.
+                      {tr(
+                        'Pesquise e selecione na lista para atualizar o endereço automaticamente.',
+                        'Busca y selecciona en la lista para actualizar la dirección automáticamente.',
+                        'Search and select from the list to update the address automatically.'
+                      )}
                     </p>
                     <EnderecoAutocomplete
                       onSelect={(e: EnderecoGoogle) => {
@@ -782,10 +959,12 @@ export default function MembroDetalhesPage() {
                   {/* Endereço atual */}
                   {(logradouro || bairro) && (
                     <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-                      <p className="text-xs text-slate-500 mb-1">Endereço atual</p>
+                      <p className="text-xs text-slate-500 mb-1">
+                        {tr('Endereço atual', 'Dirección actual', 'Current address')}
+                      </p>
                       <p className="text-sm font-medium text-slate-900">
                         {logradouro}{bairro && `, ${bairro}`}
-                        {cep && ` — CEP ${cep}`}
+                        {cep && ` — ${tr('CEP', 'CP', 'ZIP')} ${cep}`}
                       </p>
                       <p className="text-sm text-slate-600">{cidade}{uf && ` / ${uf}`}</p>
                     </div>
@@ -794,7 +973,9 @@ export default function MembroDetalhesPage() {
                   {/* Complemento — só aparece quando há endereço selecionado */}
                   {(logradouro || bairro) && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Complemento</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        {tr('Complemento', 'Complemento', 'Additional info')}
+                      </label>
                       <input
                         type="text"
                         value={complemento}
@@ -803,7 +984,7 @@ export default function MembroDetalhesPage() {
                           const base = logradouro + (bairro ? `, ${bairro}` : '');
                           setEnderecoCompletoEdit(e.target.value ? `${base}, ${e.target.value}` : base);
                         }}
-                        placeholder="Apto, bloco, casa, referência..."
+                        placeholder={tr('Apto, bloco, casa, referência...', 'Depto, bloque, casa, referencia...', 'Apt, block, house, reference...')}
                         className={inputCls}
                       />
                     </div>
@@ -813,58 +994,58 @@ export default function MembroDetalhesPage() {
                 {/* Vida Eclesiástica */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
-                    <Church className="w-4 h-4" /> Vida Eclesiástica
+                    <Church className="w-4 h-4" /> {tr('Vida Eclesiástica', 'Vida Eclesiástica', 'Church Life')}
                   </h3>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Batismo</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Data de Batismo', 'Fecha de Bautismo', 'Baptism Date')}</label>
                       <input type="date" value={dataBatismo} onChange={(e) => setDataBatismo(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Data de Profissão de Fé</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Data de Profissão de Fé', 'Fecha de Profesión de Fe', 'Profession of Faith Date')}</label>
                       <input type="date" value={dataProfissaoFe} onChange={(e) => setDataProfissaoFe(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Familiar</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Grupo Familiar', 'Grupo Familiar', 'Family Group')}</label>
                       <input type="text" value={grupoFamiliarNome} onChange={(e) => setGrupoFamiliarNome(e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Líder do Grupo Familiar</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Líder do Grupo Familiar', 'Líder del Grupo Familiar', 'Family Group Leader')}</label>
                       <input type="text" value={grupoFamiliarLider} onChange={(e) => setGrupoFamiliarLider(e.target.value)} className={inputCls} />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Cursos de Discipulado (separados por vírgula)</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Cursos de Discipulado (separados por vírgula)', 'Cursos de Discipulado (separados por coma)', 'Discipleship Courses (comma-separated)')}</label>
                     <input type="text" value={cursosDiscipulado} onChange={(e) => setCursosDiscipulado(e.target.value)} className={inputCls} placeholder="apostila_01, apostila_02, apostila_03" />
                   </div>
                   <div className="flex flex-wrap gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={batizado} onChange={(e) => setBatizado(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                      <span className="text-sm text-slate-700 font-medium">Batizado</span>
+                      <span className="text-sm text-slate-700 font-medium">{tr('Batizado', 'Bautizado', 'Baptized')}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={transferidoIpb} onChange={(e) => setTransferidoIpb(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                      <span className="text-sm text-slate-700 font-medium">Transferido IPB</span>
+                      <span className="text-sm text-slate-700 font-medium">{tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>
                     </label>
                   </div>
                   {!transferidoIpb && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Transferido de outra denominação</label>
-                      <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder="Nome da denominação anterior" />
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferido de outra denominação', 'Transferido de otra denominación', 'Transferred from another denomination')}</label>
+                      <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação anterior', 'Nombre de la denominación anterior', 'Previous denomination name')} />
                     </div>
                   )}
                 </div>
 
                 {/* Saúde e Observações */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
-                  <h3 className="font-semibold text-slate-900 border-b pb-3">Saúde & Observações</h3>
+                  <h3 className="font-semibold text-slate-900 border-b pb-3">{tr('Saúde & Observações', 'Salud y Observaciones', 'Health & Notes')}</h3>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Situação de Saúde</label>
-                    <textarea value={situacaoSaude} onChange={(e) => setSituacaoSaude(e.target.value)} rows={3} className={inputCls} placeholder="Informações relevantes sobre saúde..." />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Situação de Saúde', 'Situación de Salud', 'Health Status')}</label>
+                    <textarea value={situacaoSaude} onChange={(e) => setSituacaoSaude(e.target.value)} rows={3} className={inputCls} placeholder={tr('Informações relevantes sobre saúde...', 'Información relevante sobre salud...', 'Relevant health information...')} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Observações Gerais</label>
-                    <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} className={inputCls} placeholder="Informações importantes sobre o membro..." />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Observações Gerais', 'Observaciones Generales', 'General Notes')}</label>
+                    <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} className={inputCls} placeholder={tr('Informações importantes sobre o membro...', 'Información importante sobre el miembro...', 'Important information about the member...')} />
                   </div>
                 </div>
 
@@ -875,14 +1056,14 @@ export default function MembroDetalhesPage() {
                     className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
                   >
                     <Save className="w-4 h-4" />
-                    {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                    {salvando ? tr('Salvando...', 'Guardando...', 'Saving...') : tr('Salvar Alterações', 'Guardar Cambios', 'Save Changes')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setModoEdicao(false); carregarMembro(); }}
                     className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
                   >
-                    Cancelar
+                    {tr('Cancelar', 'Cancelar', 'Cancel')}
                   </button>
                 </div>
               </form>
@@ -890,33 +1071,29 @@ export default function MembroDetalhesPage() {
             ) : (
               /* ══ MODO VISUALIZAÇÃO ══ */
               <>
-                <SecaoColapsavel titulo="Dados Pessoais" icone={<User className="w-5 h-5 text-slate-600" />}>
+                <SecaoColapsavel titulo={tr('Dados Pessoais', 'Datos Personales', 'Personal Data')} icone={<User className="w-5 h-5 text-slate-600" />}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <CampoInfo icone={<Mail className="w-5 h-5" />} label="Email" valor={membro.email} />
-                    <CampoInfo icone={<Phone className="w-5 h-5" />} label="Telefone" valor={membro.telefone ? formatPhoneNumber(membro.telefone) : null} />
-                    <CampoInfo icone={<User className="w-5 h-5" />} label="Sexo" valor={membro.sexo === 'M' ? 'Masculino' : membro.sexo === 'F' ? 'Feminino' : null} />
-                    <CampoInfo icone={<Cake className="w-5 h-5" />} label="Nascimento" valor={membro.data_nascimento ? `${formatarData(membro.data_nascimento)} (${idade} anos)` : null} />
+                    <CampoInfo icone={<Phone className="w-5 h-5" />} label={tr('Telefone', 'Teléfono', 'Phone')} valor={membro.telefone ? formatPhoneNumber(membro.telefone) : null} />
+                    <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Sexo', 'Sexo', 'Sex')} valor={membro.sexo === 'M' ? tr('Masculino', 'Masculino', 'Male') : membro.sexo === 'F' ? tr('Feminino', 'Femenino', 'Female') : null} />
+                    <CampoInfo icone={<Cake className="w-5 h-5" />} label={tr('Nascimento', 'Nacimiento', 'Birth')} valor={membro.data_nascimento ? `${formatarData(membro.data_nascimento)} (${idade} ${tr('anos', 'años', 'years')})` : null} />
                     <CampoInfo
                       icone={<Heart className="w-5 h-5" />}
-                      label="Estado Civil"
-                      valor={membro.estado_civil
-                        ? ({ solteiro: 'Solteiro(a)', casado: 'Casado(a)', divorciado: 'Divorciado(a)', viuvo: 'Viúvo(a)', uniao_estavel: 'União Estável' }[membro.estado_civil] || membro.estado_civil)
-                        : null}
+                      label={tr('Estado Civil', 'Estado Civil', 'Marital Status')}
+                      valor={getMaritalStatusLabel(membro.estado_civil)}
                     />
-                    <CampoInfo icone={<Heart className="w-5 h-5" />} label="Casamento" valor={formatarData(membro.data_casamento)} />
-                    <CampoInfo icone={<Users className="w-5 h-5" />} label="Cônjuge" valor={membro.conjuge_nome} />
-                    <CampoInfo icone={<Globe className="w-5 h-5" />} label="Religião do Cônjuge" valor={membro.conjuge_religiao} />
-                    <CampoInfo icone={<User className="w-5 h-5" />} label="Pai" valor={membro.nome_pai} />
-                    <CampoInfo icone={<User className="w-5 h-5" />} label="Mãe" valor={membro.nome_mae} />
-                    <CampoInfo icone={<Flag className="w-5 h-5" />} label="Naturalidade" valor={[membro.naturalidade_cidade, membro.naturalidade_uf].filter(Boolean).join(' - ') || null} />
-                    <CampoInfo icone={<Globe className="w-5 h-5" />} label="Nacionalidade" valor={membro.nacionalidade} />
-                    <CampoInfo icone={<Briefcase className="w-5 h-5" />} label="Profissão" valor={membro.profissao} />
+                    <CampoInfo icone={<Heart className="w-5 h-5" />} label={tr('Casamento', 'Matrimonio', 'Marriage')} valor={formatarData(membro.data_casamento)} />
+                    <CampoInfo icone={<Users className="w-5 h-5" />} label={tr('Cônjuge', 'Cónyuge', 'Spouse')} valor={membro.conjuge_nome} />
+                    <CampoInfo icone={<Globe className="w-5 h-5" />} label={tr('Religião do Cônjuge', 'Religión del Cónyuge', "Spouse's Religion")} valor={membro.conjuge_religiao} />
+                    <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Pai', 'Padre', 'Father')} valor={membro.nome_pai} />
+                    <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Mãe', 'Madre', 'Mother')} valor={membro.nome_mae} />
+                    <CampoInfo icone={<Flag className="w-5 h-5" />} label={tr('Naturalidade', 'Origen', 'Origin')} valor={[membro.naturalidade_cidade, membro.naturalidade_uf].filter(Boolean).join(' - ') || null} />
+                    <CampoInfo icone={<Globe className="w-5 h-5" />} label={tr('Nacionalidade', 'Nacionalidad', 'Nationality')} valor={membro.nacionalidade} />
+                    <CampoInfo icone={<Briefcase className="w-5 h-5" />} label={tr('Profissão', 'Profesión', 'Profession')} valor={membro.profissao} />
                     <CampoInfo
                       icone={<GraduationCap className="w-5 h-5" />}
-                      label="Escolaridade"
-                      valor={membro.escolaridade
-                        ? ({ fundamental_incompleto: 'Fund. Incompleto', fundamental_completo: 'Fund. Completo', medio_incompleto: 'Médio Incompleto', medio_completo: 'Médio Completo', superior_incompleto: 'Superior Incompleto', superior_completo: 'Superior Completo', pos_graduacao: 'Pós-Graduação', mestrado: 'Mestrado', doutorado: 'Doutorado' }[membro.escolaridade] || membro.escolaridade)
-                        : null}
+                      label={tr('Escolaridade', 'Escolaridad', 'Education')}
+                      valor={getEducationLabel(membro.escolaridade)}
                     />
                   </div>
 
@@ -925,10 +1102,10 @@ export default function MembroDetalhesPage() {
                     <div className="mt-4 flex items-start gap-3">
                       <MapPin className="w-5 h-5 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-xs text-slate-500 mb-0.5">Endereço</p>
+                        <p className="text-xs text-slate-500 mb-0.5">{tr('Endereço', 'Dirección', 'Address')}</p>
                         <p className="text-sm text-slate-900 font-medium">
                           {membro.logradouro}{membro.bairro && `, ${membro.bairro}`}
-                          {membro.cep && ` — CEP ${membro.cep}`}<br />
+                          {membro.cep && ` — ${tr('CEP', 'CP', 'ZIP')} ${membro.cep}`}<br />
                           {membro.cidade}{membro.uf && ` / ${membro.uf}`}
                         </p>
                         {membro.latitude && membro.longitude && (
@@ -943,26 +1120,26 @@ export default function MembroDetalhesPage() {
                   )}
                 </SecaoColapsavel>
 
-                <SecaoColapsavel titulo="Vida Eclesiástica" icone={<Church className="w-5 h-5 text-slate-600" />}>
+                <SecaoColapsavel titulo={tr('Vida Eclesiástica', 'Vida Eclesiástica', 'Church Life')} icone={<Church className="w-5 h-5 text-slate-600" />}>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <CampoInfo icone={<Church className="w-5 h-5" />} label="Batismo" valor={formatarData(membro.data_batismo)} />
-                    <CampoInfo icone={<Calendar className="w-5 h-5" />} label="Profissão de Fé" valor={formatarData(membro.data_profissao_fe)} />
-                    <CampoInfo icone={<Users className="w-5 h-5" />} label="Grupo Familiar" valor={membro.grupo_familiar_nome} />
-                    <CampoInfo icone={<User className="w-5 h-5" />} label="Líder do Grupo" valor={membro.grupo_familiar_lider} />
+                    <CampoInfo icone={<Church className="w-5 h-5" />} label={tr('Batismo', 'Bautismo', 'Baptism')} valor={formatarData(membro.data_batismo)} />
+                    <CampoInfo icone={<Calendar className="w-5 h-5" />} label={tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')} valor={formatarData(membro.data_profissao_fe)} />
+                    <CampoInfo icone={<Users className="w-5 h-5" />} label={tr('Grupo Familiar', 'Grupo Familiar', 'Family Group')} valor={membro.grupo_familiar_nome} />
+                    <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Líder do Grupo', 'Líder del Grupo', 'Group Leader')} valor={membro.grupo_familiar_lider} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
-                    {membro.batizado && <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ Batizado</span>}
-                    {membro.transferido_ipb && <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ Transferido IPB</span>}
+                    {membro.batizado && <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ {tr('Batizado', 'Bautizado', 'Baptized')}</span>}
+                    {membro.transferido_ipb && <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ {tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>}
                     {membro.transferido_outra_denominacao && (
                       <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
-                        Transferido de: {membro.transferido_outra_denominacao}
+                        {tr('Transferido de:', 'Transferido de:', 'Transferred from:')} {membro.transferido_outra_denominacao}
                       </span>
                     )}
                   </div>
                   {membro.cursos_discipulado && membro.cursos_discipulado.length > 0 && (
                     <div className="mt-4">
                       <p className="text-xs text-slate-500 mb-2 flex items-center gap-1">
-                        <BookOpen className="w-4 h-4" /> Cursos de Discipulado
+                        <BookOpen className="w-4 h-4" /> {tr('Cursos de Discipulado', 'Cursos de Discipulado', 'Discipleship Courses')}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {membro.cursos_discipulado.map((curso) => (
@@ -974,13 +1151,13 @@ export default function MembroDetalhesPage() {
                 </SecaoColapsavel>
 
                 {(membro.situacao_saude || membro.observacoes) && (
-                  <SecaoColapsavel titulo="Saúde & Observações" icone={<AlertCircle className="w-5 h-5 text-slate-600" />}>
+                  <SecaoColapsavel titulo={tr('Saúde & Observações', 'Salud y Observaciones', 'Health & Notes')} icone={<AlertCircle className="w-5 h-5 text-slate-600" />}>
                     {membro.situacao_saude && (
                       <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-3">
                         <div className="flex items-start gap-2">
                           <Heart className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                           <div>
-                            <p className="text-sm font-semibold text-red-900 mb-1">Situação de Saúde</p>
+                            <p className="text-sm font-semibold text-red-900 mb-1">{tr('Situação de Saúde', 'Situación de Salud', 'Health Status')}</p>
                             <p className="text-sm text-red-800">{membro.situacao_saude}</p>
                           </div>
                         </div>
@@ -991,7 +1168,7 @@ export default function MembroDetalhesPage() {
                         <div className="flex items-start gap-2">
                           <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                           <div>
-                            <p className="text-sm font-semibold text-amber-900 mb-1">Observações</p>
+                            <p className="text-sm font-semibold text-amber-900 mb-1">{tr('Observações', 'Observaciones', 'Notes')}</p>
                             <p className="text-sm text-amber-800 whitespace-pre-line">{membro.observacoes}</p>
                           </div>
                         </div>
@@ -1006,19 +1183,19 @@ export default function MembroDetalhesPage() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-slate-600" /> Histórico de Acompanhamento
+                  <MessageSquare className="w-5 h-5 text-slate-600" /> {tr('Histórico de Acompanhamento', 'Historial de Seguimiento', 'Follow-up History')}
                 </h3>
                 <button
                   onClick={() => setModalNotaAberto(true)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                 >
-                  <Plus className="w-4 h-4" /> Nova Nota
+                  <Plus className="w-4 h-4" /> {tr('Nova Nota', 'Nueva Nota', 'New Note')}
                 </button>
               </div>
               {notas.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
                   <MessageSquare className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm">Nenhuma nota de acompanhamento ainda</p>
+                  <p className="text-sm">{tr('Nenhuma nota de acompanhamento ainda', 'Todavía no hay notas de seguimiento', 'No follow-up notes yet')}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1027,7 +1204,7 @@ export default function MembroDetalhesPage() {
                       <div className="flex items-start justify-between gap-4 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`px-2 py-1 rounded text-xs font-semibold ${getTipoNotaCor(nota.tipo)}`}>{getTipoNotaLabel(nota.tipo)}</span>
-                          {nota.privado && <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-800">Privado</span>}
+                          {nota.privado && <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-800">{tr('Privado', 'Privado', 'Private')}</span>}
                           {nota.titulo && <span className="text-sm font-semibold text-slate-900">{nota.titulo}</span>}
                         </div>
                         {(permissoes.isSuperAdmin || ['admin', 'pastor'].includes(usuarioPermitido?.cargo || '')) && (
@@ -1051,14 +1228,14 @@ export default function MembroDetalhesPage() {
           {/* ── Sidebar ── */}
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">Status</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{tr('Status', 'Estado', 'Status')}</h3>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Tipo</p>
-                  <span className={`px-3 py-1 rounded text-sm font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>{getCargoLabel(membro.cargo as CargoTipo)}</span>
+                  <p className="text-xs text-slate-500 mb-1">{tr('Tipo', 'Tipo', 'Type')}</p>
+                  <span className={`px-3 py-1 rounded text-sm font-semibold ${getCargoCor(membro.cargo as CargoTipo)}`}>{getCargoLabelLocalized(membro.cargo as CargoTipo)}</span>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Situação</p>
+                  <p className="text-xs text-slate-500 mb-1">{tr('Situação', 'Situación', 'Status')}</p>
                   <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${
                     membro.status_membro === 'ativo' ? 'bg-green-100 text-green-800 border-green-300' :
                     membro.status_membro === 'visitante' ? 'bg-blue-100 text-blue-800 border-blue-300' :
@@ -1066,13 +1243,13 @@ export default function MembroDetalhesPage() {
                     membro.status_membro === 'afastado' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
                     'bg-gray-100 text-gray-800 border-gray-300'
                   }`}>
-                    {{ ativo: 'Ativo', visitante: 'Visitante', congregado: 'Congregado', afastado: 'Afastado', falecido: 'Falecido' }[membro.status_membro]}
+                    {getStatusLabel(membro.status_membro)}
                   </span>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Cadastro</p>
+                  <p className="text-xs text-slate-500 mb-1">{tr('Cadastro', 'Registro', 'Record')}</p>
                   <span className={`px-3 py-1 rounded text-sm font-semibold ${membro.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {membro.ativo ? 'Ativo' : 'Inativo'}
+                    {membro.ativo ? tr('Ativo', 'Activo', 'Active') : tr('Inativo', 'Inactivo', 'Inactive')}
                   </span>
                 </div>
               </div>
@@ -1081,17 +1258,17 @@ export default function MembroDetalhesPage() {
             {(membro.grupo_familiar_nome || membro.grupo_familiar_lider) && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                  <Home className="w-5 h-5 text-slate-600" /> Grupo Familiar
+                  <Home className="w-5 h-5 text-slate-600" /> {tr('Grupo Familiar', 'Grupo Familiar', 'Family Group')}
                 </h3>
                 {membro.grupo_familiar_nome && (
                   <div className="mb-2">
-                    <p className="text-xs text-slate-500">Nome do Grupo</p>
+                    <p className="text-xs text-slate-500">{tr('Nome do Grupo', 'Nombre del Grupo', 'Group Name')}</p>
                     <p className="text-sm font-semibold text-slate-900">{membro.grupo_familiar_nome}</p>
                   </div>
                 )}
                 {membro.grupo_familiar_lider && (
                   <div>
-                    <p className="text-xs text-slate-500">Líder</p>
+                    <p className="text-xs text-slate-500">{tr('Líder', 'Líder', 'Leader')}</p>
                     <p className="text-sm font-semibold text-slate-900">{membro.grupo_familiar_lider}</p>
                   </div>
                 )}
@@ -1099,13 +1276,13 @@ export default function MembroDetalhesPage() {
             )}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">Estatísticas</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{tr('Estatísticas', 'Estadísticas', 'Statistics')}</h3>
               <div className="space-y-3">
                 {[
-                  { label: 'Total de Notas', val: notas.length, cor: 'text-slate-900' },
-                  { label: 'Visitas', val: notas.filter((n) => n.tipo === 'visita').length, cor: 'text-blue-600' },
-                  { label: 'Ligações', val: notas.filter((n) => n.tipo === 'ligacao').length, cor: 'text-green-600' },
-                  { label: 'Urgentes', val: notas.filter((n) => n.tipo === 'urgente').length, cor: 'text-red-600' },
+                  { label: tr('Total de Notas', 'Total de Notas', 'Total Notes'), val: notas.length, cor: 'text-slate-900' },
+                  { label: tr('Visitas', 'Visitas', 'Visits'), val: notas.filter((n) => n.tipo === 'visita').length, cor: 'text-blue-600' },
+                  { label: tr('Ligações', 'Llamadas', 'Calls'), val: notas.filter((n) => n.tipo === 'ligacao').length, cor: 'text-green-600' },
+                  { label: tr('Urgentes', 'Urgentes', 'Urgent'), val: notas.filter((n) => n.tipo === 'urgente').length, cor: 'text-red-600' },
                 ].map((stat) => (
                   <div key={stat.label} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">{stat.label}</span>
@@ -1131,7 +1308,7 @@ export default function MembroDetalhesPage() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">Nova Nota de Acompanhamento</h3>
+              <h3 className="text-xl font-bold text-slate-900">{tr('Nova Nota de Acompanhamento', 'Nueva Nota de Seguimiento', 'New Follow-up Note')}</h3>
               <button
                 onClick={() => { setModalNotaAberto(false); setTituloNota(''); setConteudoNota(''); setTipoNota('nota'); setNotaPrivada(false); }}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
@@ -1142,40 +1319,40 @@ export default function MembroDetalhesPage() {
             <form onSubmit={adicionarNota} className="p-6 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de Nota *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Tipo de Nota', 'Tipo de Nota', 'Note Type')} *</label>
                   <select
                     value={tipoNota}
                     onChange={(e) => setTipoNota(e.target.value as TipoNota)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
-                    <option value="nota">Nota Geral</option>
-                    <option value="visita">Visita Domiciliar</option>
-                    <option value="ligacao">Ligação Telefônica</option>
-                    <option value="oracao">Pedido de Oração</option>
-                    <option value="aconselhamento">Aconselhamento</option>
-                    <option value="urgente">Urgente</option>
+                    <option value="nota">{tr('Nota Geral', 'Nota General', 'General Note')}</option>
+                    <option value="visita">{tr('Visita Domiciliar', 'Visita Domiciliaria', 'Home Visit')}</option>
+                    <option value="ligacao">{tr('Ligação Telefônica', 'Llamada Telefónica', 'Phone Call')}</option>
+                    <option value="oracao">{tr('Pedido de Oração', 'Pedido de Oración', 'Prayer Request')}</option>
+                    <option value="aconselhamento">{tr('Aconselhamento', 'Consejería', 'Counseling')}</option>
+                    <option value="urgente">{tr('Urgente', 'Urgente', 'Urgent')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Título (opcional)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Título (opcional)', 'Título (opcional)', 'Title (optional)')}</label>
                   <input
                     type="text"
                     value={tituloNota}
                     onChange={(e) => setTituloNota(e.target.value)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="Ex: Visita de acompanhamento"
+                    placeholder={tr('Ex: Visita de acompanhamento', 'Ej.: Visita de seguimiento', 'Ex: Follow-up visit')}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Conteúdo da Nota *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Conteúdo da Nota', 'Contenido de la Nota', 'Note Content')} *</label>
                 <textarea
                   value={conteudoNota}
                   onChange={(e) => setConteudoNota(e.target.value)}
                   required
                   rows={6}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Descreva o acompanhamento, observações, pedidos de oração..."
+                  placeholder={tr('Descreva o acompanhamento, observações, pedidos de oração...', 'Describe el seguimiento, observaciones y pedidos de oración...', 'Describe the follow-up, notes, and prayer requests...')}
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1185,18 +1362,18 @@ export default function MembroDetalhesPage() {
                   onChange={(e) => setNotaPrivada(e.target.checked)}
                   className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
                 />
-                <span className="text-sm text-slate-700">Nota privada (apenas pastor e liderança)</span>
+                <span className="text-sm text-slate-700">{tr('Nota privada (apenas pastor e liderança)', 'Nota privada (solo pastor y liderazgo)', 'Private note (pastor and leadership only)')}</span>
               </label>
               <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
                 <button type="submit" className="flex-1 bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-all font-medium">
-                  Salvar Nota
+                  {tr('Salvar Nota', 'Guardar Nota', 'Save Note')}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setModalNotaAberto(false); setTituloNota(''); setConteudoNota(''); setTipoNota('nota'); setNotaPrivada(false); }}
                   className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
                 >
-                  Cancelar
+                  {tr('Cancelar', 'Cancelar', 'Cancel')}
                 </button>
               </div>
             </form>
