@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,23 +27,25 @@ async function ensurePastoralAccess(request: NextRequest, preferredIgrejaId?: st
   const contexto = await getUserPermissionContext(preferredIgrejaId, request);
 
   if (!contexto?.user?.id) {
-    return { error: NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 }) };
+    return { error: apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.') };
   }
 
   if (!podeGerirPedidosPastorais(contexto.cargo, contexto.isSuperAdmin)) {
     return {
-      error: NextResponse.json(
-        { error: 'Sem permissão para acessar os pedidos pastorais.' },
-        { status: 403 }
+      error: apiError(
+        'PASTORAL_ACCESS_REQUIRED',
+        403,
+        'Sem permissão para acessar os pedidos pastorais.'
       ),
     };
   }
 
   if (!contexto.igrejaId) {
     return {
-      error: NextResponse.json(
-        { error: 'Nenhuma igreja ativa foi identificada para este usuário.' },
-        { status: 400 }
+      error: apiError(
+        'ACTIVE_CHURCH_REQUIRED',
+        400,
+        'Nenhuma igreja ativa foi identificada para este usuário.'
       ),
     };
   }
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status');
 
   if (status && !STATUS_VALIDOS.has(status)) {
-    return NextResponse.json({ error: 'Status inválido.' }, { status: 400 });
+    return apiError('PASTORAL_STATUS_INVALID', 400, 'Status inválido.');
   }
 
   const auth = await ensurePastoralAccess(request, igrejaId);
@@ -127,7 +130,7 @@ export async function GET(request: NextRequest) {
     if (pedidosError) throw pedidosError;
     if (igrejaError) throw igrejaError;
 
-    return NextResponse.json({
+    return apiSuccess({
       igrejaAtualId,
       igreja,
       pedidos: pedidos || [],
@@ -140,9 +143,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro ao listar pedidos pastorais:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao carregar pedidos pastorais.' },
-      { status: 500 }
+    return apiError(
+      'LOAD_PASTORAL_REQUESTS_FAILED',
+      500,
+      error.message || 'Erro ao carregar pedidos pastorais.'
     );
   }
 }
@@ -154,7 +158,11 @@ export async function PATCH(request: NextRequest) {
   const igrejaId = typeof body?.igreja_id === 'string' ? body.igreja_id : null;
 
   if (!id || !status || !STATUS_VALIDOS.has(status)) {
-    return NextResponse.json({ error: 'Pedido e status válidos são obrigatórios.' }, { status: 400 });
+    return apiError(
+      'PASTORAL_REQUEST_AND_STATUS_REQUIRED',
+      400,
+      'Pedido e status válidos são obrigatórios.'
+    );
   }
 
   const auth = await ensurePastoralAccess(request, igrejaId);
@@ -170,11 +178,15 @@ export async function PATCH(request: NextRequest) {
     if (pedidoError) throw pedidoError;
 
     if (!pedidoAtual) {
-      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+      return apiError('PASTORAL_REQUEST_NOT_FOUND', 404, 'Pedido não encontrado.');
     }
 
     if (pedidoAtual.igreja_id !== auth.contexto.igrejaId) {
-      return NextResponse.json({ error: 'Este pedido não pertence à igreja ativa.' }, { status: 403 });
+      return apiError(
+        'PASTORAL_REQUEST_WRONG_CHURCH',
+        403,
+        'Este pedido não pertence à igreja ativa.'
+      );
     }
 
     const { data: pedido, error: updateError } = await supabaseAdmin
@@ -203,12 +215,19 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) throw updateError;
 
-    return NextResponse.json({ success: true, pedido });
+    return apiSuccess(
+      { pedido },
+      {
+        message: 'Status do pedido atualizado.',
+        messageCode: 'PASTORAL_REQUEST_UPDATED',
+      }
+    );
   } catch (error: any) {
     console.error('Erro ao atualizar pedido pastoral:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao atualizar pedido pastoral.' },
-      { status: 500 }
+    return apiError(
+      'UPDATE_PASTORAL_REQUEST_FAILED',
+      500,
+      error.message || 'Erro ao atualizar pedido pastoral.'
     );
   }
 }

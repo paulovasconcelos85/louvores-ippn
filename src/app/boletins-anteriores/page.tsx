@@ -162,7 +162,7 @@ export default function BoletinsAnterioresPage() {
       try {
         setLoading(true);
         setErro(null);
-        const params = new URLSearchParams({ igreja_id: igrejaAtualId });
+        const params = new URLSearchParams({ igreja_id: igrejaAtualId, locale });
         const response = await fetch(`/api/boletins-anteriores?${params.toString()}`, {
           headers: await buildAuthenticatedHeaders(),
         });
@@ -192,7 +192,7 @@ export default function BoletinsAnterioresPage() {
     return () => {
       active = false;
     };
-  }, [igrejaAtualId, t]);
+  }, [igrejaAtualId, t, locale]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbf9_0%,#f4f4f1_45%,#fbfbf9_100%)]">

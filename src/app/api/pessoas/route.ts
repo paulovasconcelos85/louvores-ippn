@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 // Cliente Supabase Admin
 const supabaseAdmin = createClient(
@@ -13,6 +14,8 @@ const supabaseAdmin = createClient(
     }
   }
 );
+
+const peopleCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
 
 type AcessoPessoa = {
   id: string;
@@ -94,11 +97,11 @@ export async function GET(request: NextRequest) {
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
-      return NextResponse.json({ error: 'Sem permissão para listar pessoas.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para listar pessoas.');
     }
 
     const { searchParams } = new URL(request.url);
@@ -112,7 +115,13 @@ export async function GET(request: NextRequest) {
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaParam, request);
 
     if (!igrejaId) {
-      return NextResponse.json({ pessoas: [], warning: 'Nenhuma igreja selecionada.' });
+      return apiSuccess({
+        pessoas: [],
+        data: [],
+        count: 0,
+        warning: 'Nenhuma igreja selecionada.',
+        warningCode: 'CHURCH_REQUIRED',
+      });
     }
 
     let query = supabaseAdmin
@@ -226,21 +235,19 @@ export async function GET(request: NextRequest) {
     const pessoasFormatadas = todasPessoasFormatadas
       .filter((pessoa) => matchesPessoaFilters(pessoa, { ativo, cargo, busca }))
       .filter((pessoa) => tem_acesso === null || pessoa.tem_acesso === (tem_acesso === 'true'))
-      .sort((a, b) =>
-      a.nome.localeCompare(b.nome, 'pt-BR')
-      );
+      .sort((a, b) => peopleCollator.compare(a.nome, b.nome));
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       data: pessoasFormatadas,
-      count: pessoasFormatadas?.length || 0
+      count: pessoasFormatadas?.length || 0,
     });
 
   } catch (error: any) {
     console.error('Erro ao listar pessoas:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao listar pessoas' },
-      { status: 500 }
+    return apiError(
+      'LOAD_PEOPLE_FAILED',
+      500,
+      error.message || 'Erro ao listar pessoas'
     );
   }
 }
@@ -254,11 +261,11 @@ export async function POST(request: NextRequest) {
     const permissionContext = await getUserPermissionContext(body.igreja_id || null, request);
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers) {
-      return NextResponse.json({ error: 'Sem permissão para criar pessoas.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para criar pessoas.');
     }
 
     const {
@@ -277,17 +284,11 @@ export async function POST(request: NextRequest) {
 
     // Validações
     if (!nome || !cargo) {
-      return NextResponse.json(
-        { error: 'Nome e cargo são obrigatórios' },
-        { status: 400 }
-      );
+      return apiError('PERSON_NAME_AND_ROLE_REQUIRED', 400, 'Nome e cargo são obrigatórios');
     }
 
     if (!igrejaId) {
-      return NextResponse.json(
-        { error: 'Nenhuma igreja selecionada.' },
-        { status: 400 }
-      );
+      return apiError('CHURCH_REQUIRED', 400, 'Nenhuma igreja selecionada.');
     }
 
     // Se tiver email, verificar se a pessoa ja existe para aproveitar o cadastro no modelo multi-igreja
@@ -313,12 +314,11 @@ export async function POST(request: NextRequest) {
         if (vinculoExistenteError) throw vinculoExistenteError;
 
         if (vinculoExistente) {
-          return NextResponse.json(
-            {
-              error: `Já existe uma pessoa com este email nesta igreja: ${pessoaExistente.nome}`,
-              pessoa_existente: pessoaExistente
-            },
-            { status: 409 }
+          return apiError(
+            'PERSON_DUPLICATE_EMAIL_IN_CHURCH',
+            409,
+            `Já existe uma pessoa com este email nesta igreja: ${pessoaExistente.nome}`,
+            { nome: pessoaExistente.nome }
           );
         }
 
@@ -361,17 +361,23 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        return NextResponse.json({
-          success: true,
-          message: `${pessoaExistente.nome} já existia e foi vinculada a esta igreja.`,
-          data: {
-            ...pessoaExistente,
-            igreja_id: igrejaId,
-            cargo,
-            status_membro,
-            ativo,
+        return apiSuccess(
+          {
+            data: {
+              ...pessoaExistente,
+              igreja_id: igrejaId,
+              cargo,
+              status_membro,
+              ativo,
+            },
+          },
+          {
+            status: 201,
+            message: `${pessoaExistente.nome} já existia e foi vinculada a esta igreja.`,
+            messageCode: 'PERSON_LINKED_TO_CHURCH',
+            messageParams: { nome: pessoaExistente.nome },
           }
-        }, { status: 201 });
+        );
       }
 
     }
@@ -411,32 +417,36 @@ export async function POST(request: NextRequest) {
       throw vinculoError;
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${nome} cadastrado${email ? '' : ' (sem acesso - fantasma)'}`,
-      data: {
-        ...pessoa,
-        tem_acesso: false,
-        igreja_id: igrejaId,
-        cargo,
-        status_membro,
-        ativo,
+    return apiSuccess(
+      {
+        data: {
+          ...pessoa,
+          tem_acesso: false,
+          igreja_id: igrejaId,
+          cargo,
+          status_membro,
+          ativo,
+        },
+      },
+      {
+        status: 201,
+        message: `${nome} cadastrado${email ? '' : ' (sem acesso - fantasma)'}`,
+        messageCode: 'PERSON_CREATED',
+        messageParams: { nome },
       }
-    }, { status: 201 });
+    );
 
   } catch (error: any) {
     console.error('Erro ao criar pessoa:', error);
     
     if (error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Já existe uma pessoa com este email' },
-        { status: 409 }
-      );
+      return apiError('PERSON_DUPLICATE_EMAIL', 409, 'Já existe uma pessoa com este email');
     }
 
-    return NextResponse.json(
-      { error: error.message || 'Erro ao criar pessoa' },
-      { status: 500 }
+    return apiError(
+      'SAVE_PERSON_FAILED',
+      500,
+      error.message || 'Erro ao criar pessoa'
     );
   }
 }

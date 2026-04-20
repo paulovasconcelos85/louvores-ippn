@@ -21,6 +21,7 @@ import type { Locale } from '@/i18n/config';
 import { formatCountryByLocale, formatDateByLocale } from '@/i18n/format';
 import { useLocale, useTranslations } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveLocalizedText } from '@/lib/church-i18n';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 
@@ -95,6 +96,8 @@ interface IgrejaDetalhes {
   timezone_boletim: string | null;
   apresentacao_titulo: string | null;
   apresentacao_texto: string | null;
+  apresentacao_titulo_i18n?: Partial<Record<Locale, string>> | null;
+  apresentacao_texto_i18n?: Partial<Record<Locale, string>> | null;
   apresentacao_imagem_url: string | null;
   apresentacao_youtube_url: string | null;
   apresentacao_galeria: string[] | null;
@@ -417,8 +420,24 @@ export default function Home() {
     );
   }, [boletimSecoes]);
 
-  const apresentacaoTitulo = igrejaDetalhes?.apresentacao_titulo?.trim() || '';
-  const apresentacaoTexto = igrejaDetalhes?.apresentacao_texto?.trim() || '';
+  const apresentacaoTitulo = useMemo(
+    () =>
+      resolveLocalizedText(
+        igrejaDetalhes?.apresentacao_titulo_i18n,
+        locale,
+        igrejaDetalhes?.apresentacao_titulo
+      ),
+    [igrejaDetalhes?.apresentacao_titulo_i18n, igrejaDetalhes?.apresentacao_titulo, locale]
+  );
+  const apresentacaoTexto = useMemo(
+    () =>
+      resolveLocalizedText(
+        igrejaDetalhes?.apresentacao_texto_i18n,
+        locale,
+        igrejaDetalhes?.apresentacao_texto
+      ),
+    [igrejaDetalhes?.apresentacao_texto_i18n, igrejaDetalhes?.apresentacao_texto, locale]
+  );
   const temApresentacaoIgreja = Boolean(apresentacaoTitulo || apresentacaoTexto);
 
   const galeriaApresentacao = useMemo(() => {
@@ -644,7 +663,7 @@ export default function Home() {
       try {
         setLoadingBoletim(true);
 
-        const params = new URLSearchParams({ igreja_id: igrejaAtualId });
+        const params = new URLSearchParams({ igreja_id: igrejaAtualId, locale });
         const response = await fetch(`/api/boletins-home?${params.toString()}`, {
           headers: await buildAuthenticatedHeaders(),
         });
@@ -679,7 +698,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [igrejaAtualId, authLoading]);
+  }, [igrejaAtualId, authLoading, locale]);
 
   useEffect(() => {
     if (!canticoAbertoRef) {

@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
+import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 
@@ -150,12 +151,15 @@ export default function AdminPedidosPastoraisPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
+          resolveApiErrorMessage(
+            locale,
+            data,
             tr(
               'Erro ao carregar pedidos.',
               'Error al cargar pedidos.',
               'Error loading requests.'
             )
+          )
         );
       }
 
@@ -180,7 +184,7 @@ export default function AdminPedidosPastoraisPage() {
     } finally {
       setLoadingPedidos(false);
     }
-  }, [user, podeAcessarPedidos, igrejaId, statusFiltro, tr]);
+  }, [user, podeAcessarPedidos, igrejaId, statusFiltro, tr, locale]);
 
   useEffect(() => {
     if (!loading && user && podeAcessarPedidos) {
@@ -234,20 +238,27 @@ export default function AdminPedidosPastoraisPage() {
       const data = await response.json();
       if (!response.ok) {
         throw new Error(
-          data.error ||
+          resolveApiErrorMessage(
+            locale,
+            data,
             tr(
               'Erro ao atualizar pedido.',
               'Error al actualizar el pedido.',
               'Error updating request.'
             )
+          )
         );
       }
 
       setMensagem(
-        tr(
-          'Status do pedido atualizado.',
-          'Estado del pedido actualizado.',
-          'Request status updated.'
+        resolveApiSuccessMessage(
+          locale,
+          data,
+          tr(
+            'Status do pedido atualizado.',
+            'Estado del pedido actualizado.',
+            'Request status updated.'
+          )
         )
       );
       await carregarPedidos();

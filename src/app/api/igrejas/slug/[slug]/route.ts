@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeIgreja } from '@/lib/church-utils';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,22 +31,37 @@ export async function GET(
 
     if (error) throw error;
 
-    if (!data) {
-      return NextResponse.json({ error: 'Igreja não encontrada.' }, { status: 404 });
+    if (!data || data.visivel_publico === false) {
+      return apiError('CHURCH_NOT_FOUND', 404, 'Igreja não encontrada.');
     }
 
     const igreja = normalizeIgreja(data);
 
     if (!igreja) {
-      return NextResponse.json({ error: 'Igreja inválida.' }, { status: 404 });
+      return apiError('CHURCH_NOT_FOUND', 404, 'Igreja inválida.');
     }
 
-    return NextResponse.json({ igreja });
+    return apiSuccess({
+      igreja: {
+        ...igreja,
+        apresentacao_titulo: typeof data.apresentacao_titulo === 'string' ? data.apresentacao_titulo : null,
+        apresentacao_texto: typeof data.apresentacao_texto === 'string' ? data.apresentacao_texto : null,
+        apresentacao_titulo_i18n:
+          data.apresentacao_titulo_i18n && typeof data.apresentacao_titulo_i18n === 'object'
+            ? data.apresentacao_titulo_i18n
+            : null,
+        apresentacao_texto_i18n:
+          data.apresentacao_texto_i18n && typeof data.apresentacao_texto_i18n === 'object'
+            ? data.apresentacao_texto_i18n
+            : null,
+      },
+    });
   } catch (error: any) {
     console.error('Erro ao buscar igreja por slug:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao buscar igreja.' },
-      { status: 500 }
+    return apiError(
+      'LOAD_CHURCH_DETAILS_FAILED',
+      500,
+      error.message || 'Erro ao buscar igreja.'
     );
   }
 }

@@ -19,8 +19,16 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import {
+  compactLocalizedTextMap,
+  createEmptyLocalizedTextMap,
+  normalizeLocalizedTextMap,
+  type LocalizedTextMapForm,
+} from '@/lib/church-i18n';
+import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 
 type IgrejaResumo = {
   id: string;
@@ -56,7 +64,9 @@ type ModeloLiturgia = {
   ordem: number;
   tipo: string;
   conteudo_publico_padrao: string;
+  conteudo_publico_padrao_i18n: LocalizedTextMapForm;
   descricao_interna_padrao: string;
+  descricao_interna_padrao_i18n: LocalizedTextMapForm;
   descricao_padrao: string;
   tem_cantico: boolean;
 };
@@ -83,8 +93,8 @@ type IgrejaForm = {
   site: string;
   instagram: string;
   youtube: string;
-  apresentacao_titulo: string;
-  apresentacao_texto: string;
+  apresentacao_titulo_i18n: LocalizedTextMapForm;
+  apresentacao_texto_i18n: LocalizedTextMapForm;
   apresentacao_imagem_url: string;
   apresentacao_youtube_url: string;
   apresentacao_galeria: string;
@@ -137,6 +147,12 @@ const TIPOS_LITURGICOS_SUGERIDOS = [
   'Lembretes',
 ];
 
+const PRESENTATION_LOCALES: Array<{ value: Locale; label: string }> = [
+  { value: 'pt', label: 'Português' },
+  { value: 'es', label: 'Español' },
+  { value: 'en', label: 'English' },
+];
+
 function criarFormularioVazio(): IgrejaForm {
   return {
     nome: '',
@@ -160,8 +176,8 @@ function criarFormularioVazio(): IgrejaForm {
     site: '',
     instagram: '',
     youtube: '',
-    apresentacao_titulo: '',
-    apresentacao_texto: '',
+    apresentacao_titulo_i18n: createEmptyLocalizedTextMap(),
+    apresentacao_texto_i18n: createEmptyLocalizedTextMap(),
     apresentacao_imagem_url: '',
     apresentacao_youtube_url: '',
     apresentacao_galeria: '',
@@ -239,10 +255,18 @@ function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgia[] {
           : typeof row.conteudo_publico === 'string'
             ? row.conteudo_publico
             : '';
+      const conteudo_publico_padrao_i18n = normalizeLocalizedTextMap(
+        row.conteudo_publico_padrao_i18n,
+        conteudo_publico_padrao
+      );
       const descricao_interna_padrao =
         typeof row.descricao_interna_padrao === 'string'
           ? row.descricao_interna_padrao
           : descricao_padrao;
+      const descricao_interna_padrao_i18n = normalizeLocalizedTextMap(
+        row.descricao_interna_padrao_i18n,
+        descricao_interna_padrao
+      );
 
       if (!bloco && !tipo && !descricao_padrao && !conteudo_publico_padrao) return null;
 
@@ -250,8 +274,10 @@ function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgia[] {
         bloco,
         ordem: typeof row.ordem === 'number' ? row.ordem : index + 1,
         tipo,
-        conteudo_publico_padrao,
-        descricao_interna_padrao,
+        conteudo_publico_padrao: conteudo_publico_padrao_i18n.pt || conteudo_publico_padrao,
+        conteudo_publico_padrao_i18n,
+        descricao_interna_padrao: descricao_interna_padrao_i18n.pt || descricao_interna_padrao,
+        descricao_interna_padrao_i18n,
         descricao_padrao,
         tem_cantico: row.tem_cantico === true,
       };
@@ -266,11 +292,29 @@ function buildModelosFromTipos(tipos: string[]): ModeloLiturgia[] {
       ordem: index + 1,
       tipo,
       conteudo_publico_padrao: '',
+      conteudo_publico_padrao_i18n: createEmptyLocalizedTextMap(),
       descricao_interna_padrao: '',
+      descricao_interna_padrao_i18n: createEmptyLocalizedTextMap(),
       descricao_padrao: '',
       tem_cantico: /cantico|cântico|adora|louvor/i.test(tipo),
     }))
     .filter((item) => item.tipo.trim());
+}
+
+function mergeLocalizedModelValue(
+  primaryValue: unknown,
+  secondaryValue: unknown,
+  primaryFallback?: string,
+  secondaryFallback?: string
+) {
+  const primary = normalizeLocalizedTextMap(primaryValue, primaryFallback);
+  const secondary = normalizeLocalizedTextMap(secondaryValue, secondaryFallback);
+
+  return {
+    pt: primary.pt || secondary.pt,
+    es: primary.es || secondary.es,
+    en: primary.en || secondary.en,
+  };
 }
 
 function normalizeModelosLiturgia(modelos: ModeloLiturgia[]) {
@@ -300,10 +344,39 @@ function mergeModelosLiturgia(modelosTabela: ModeloLiturgia[], modelosFallback: 
       ...fallback,
       ...item,
       ordem: item.ordem || fallback?.ordem || index + 1,
+      conteudo_publico_padrao_i18n: mergeLocalizedModelValue(
+        item.conteudo_publico_padrao_i18n,
+        fallback?.conteudo_publico_padrao_i18n,
+        item.conteudo_publico_padrao,
+        fallback?.conteudo_publico_padrao
+      ),
       conteudo_publico_padrao:
-        item.conteudo_publico_padrao || fallback?.conteudo_publico_padrao || '',
+        item.conteudo_publico_padrao ||
+        fallback?.conteudo_publico_padrao ||
+        mergeLocalizedModelValue(
+          item.conteudo_publico_padrao_i18n,
+          fallback?.conteudo_publico_padrao_i18n,
+          item.conteudo_publico_padrao,
+          fallback?.conteudo_publico_padrao
+        ).pt ||
+        '',
+      descricao_interna_padrao_i18n: mergeLocalizedModelValue(
+        item.descricao_interna_padrao_i18n,
+        fallback?.descricao_interna_padrao_i18n,
+        item.descricao_interna_padrao || item.descricao_padrao,
+        fallback?.descricao_interna_padrao || fallback?.descricao_padrao
+      ),
       descricao_interna_padrao:
-        item.descricao_interna_padrao || fallback?.descricao_interna_padrao || item.descricao_padrao || '',
+        item.descricao_interna_padrao ||
+        fallback?.descricao_interna_padrao ||
+        item.descricao_padrao ||
+        mergeLocalizedModelValue(
+          item.descricao_interna_padrao_i18n,
+          fallback?.descricao_interna_padrao_i18n,
+          item.descricao_interna_padrao || item.descricao_padrao,
+          fallback?.descricao_interna_padrao || fallback?.descricao_padrao
+        ).pt ||
+        '',
       descricao_padrao:
         item.descricao_padrao || fallback?.descricao_padrao || item.descricao_interna_padrao || '',
       tem_cantico: item.tem_cantico ?? fallback?.tem_cantico ?? false,
@@ -320,7 +393,15 @@ function mapDetailToForm(payload: any): IgrejaForm {
     ordem: item.ordem ?? index + 1,
     tipo: item.tipo || '',
     conteudo_publico_padrao: item.conteudo_publico_padrao || item.conteudo_publico || '',
+    conteudo_publico_padrao_i18n: normalizeLocalizedTextMap(
+      item.conteudo_publico_padrao_i18n,
+      item.conteudo_publico_padrao || item.conteudo_publico
+    ),
     descricao_interna_padrao: item.descricao_interna_padrao || item.descricao_padrao || '',
+    descricao_interna_padrao_i18n: normalizeLocalizedTextMap(
+      item.descricao_interna_padrao_i18n,
+      item.descricao_interna_padrao || item.descricao_padrao
+    ),
     descricao_padrao: item.descricao_padrao || item.descricao_interna_padrao || '',
     tem_cantico: item.tem_cantico ?? false,
   }));
@@ -350,8 +431,14 @@ function mapDetailToForm(payload: any): IgrejaForm {
     site: igreja.site || '',
     instagram: igreja.instagram || '',
     youtube: igreja.youtube || '',
-    apresentacao_titulo: igreja.apresentacao_titulo || '',
-    apresentacao_texto: igreja.apresentacao_texto || '',
+    apresentacao_titulo_i18n: normalizeLocalizedTextMap(
+      igreja.apresentacao_titulo_i18n,
+      igreja.apresentacao_titulo
+    ),
+    apresentacao_texto_i18n: normalizeLocalizedTextMap(
+      igreja.apresentacao_texto_i18n,
+      igreja.apresentacao_texto
+    ),
     apresentacao_imagem_url: igreja.apresentacao_imagem_url || '',
     apresentacao_youtube_url: igreja.apresentacao_youtube_url || '',
     apresentacao_galeria: Array.isArray(igreja.apresentacao_galeria)
@@ -532,7 +619,13 @@ export default function AdminIgrejasPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || tr('Erro ao carregar igrejas.', 'Error al cargar iglesias.', 'Error loading churches.'));
+        throw new Error(
+          resolveApiErrorMessage(
+            locale,
+            payload,
+            tr('Erro ao carregar igrejas.', 'Error al cargar iglesias.', 'Error loading churches.')
+          )
+        );
       }
 
       setIgrejas(payload.igrejas || []);
@@ -542,7 +635,7 @@ export default function AdminIgrejasPage() {
     } finally {
       setLoadingList(false);
     }
-  }, [tr]);
+  }, [tr, locale]);
 
   useEffect(() => {
     if (!loading && user && isSuperAdmin) {
@@ -570,7 +663,13 @@ export default function AdminIgrejasPage() {
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload.error || tr('Erro ao carregar detalhes da igreja.', 'Error al cargar los detalles de la iglesia.', 'Error loading church details.'));
+          throw new Error(
+            resolveApiErrorMessage(
+              locale,
+              payload,
+              tr('Erro ao carregar detalhes da igreja.', 'Error al cargar los detalles de la iglesia.', 'Error loading church details.')
+            )
+          );
         }
 
         if (!ativo) return;
@@ -590,7 +689,7 @@ export default function AdminIgrejasPage() {
     return () => {
       ativo = false;
     };
-  }, [igrejaSelecionadaId, tr]);
+  }, [igrejaSelecionadaId, tr, locale]);
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaSelecionadaId) || null,
@@ -671,6 +770,10 @@ export default function AdminIgrejasPage() {
     () => getHorarioParts(form.horario_publicacao_boletim),
     [form.horario_publicacao_boletim]
   );
+  const activeLocaleLabel = useMemo(
+    () => PRESENTATION_LOCALES.find((item) => item.value === locale)?.label || 'Português',
+    [locale]
+  );
 
   function updateForm<K extends keyof IgrejaForm>(field: K, value: IgrejaForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -678,6 +781,20 @@ export default function AdminIgrejasPage() {
 
   function updateModelosLiturgia(nextModelos: ModeloLiturgia[]) {
     updateForm('modelosLiturgia', normalizeModelosLiturgia(nextModelos));
+  }
+
+  function updateLocalizedField(
+    field: 'apresentacao_titulo_i18n' | 'apresentacao_texto_i18n',
+    targetLocale: Locale,
+    value: string
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: {
+        ...current[field],
+        [targetLocale]: value,
+      },
+    }));
   }
 
   function addTipoLiturgico(tipoInicial: string) {
@@ -709,7 +826,9 @@ export default function AdminIgrejasPage() {
         ordem: form.modelosLiturgia.length + 1,
         tipo: tipoInicial,
         conteudo_publico_padrao: '',
+        conteudo_publico_padrao_i18n: createEmptyLocalizedTextMap(),
         descricao_interna_padrao: '',
+        descricao_interna_padrao_i18n: createEmptyLocalizedTextMap(),
         descricao_padrao: '',
         tem_cantico: /cantico|cântico|adora|louvor/i.test(tipoInicial),
       },
@@ -734,6 +853,45 @@ export default function AdminIgrejasPage() {
         };
       })
     );
+  }
+
+  function patchModeloLiturgiaLocalized(
+    index: number,
+    field: 'conteudo_publico_padrao_i18n' | 'descricao_interna_padrao_i18n',
+    targetLocale: Locale,
+    value: string
+  ) {
+    setForm((current) => ({
+      ...current,
+      modelosLiturgia: normalizeModelosLiturgia(
+        current.modelosLiturgia.map((item, itemIndex) => {
+          if (itemIndex !== index) return item;
+
+          const nextLocalized = {
+            ...item[field],
+            [targetLocale]: value,
+          };
+
+          if (field === 'conteudo_publico_padrao_i18n') {
+            return {
+              ...item,
+              conteudo_publico_padrao_i18n: nextLocalized,
+              conteudo_publico_padrao:
+                targetLocale === 'pt' ? value : nextLocalized.pt || item.conteudo_publico_padrao,
+            };
+          }
+
+          return {
+            ...item,
+            descricao_interna_padrao_i18n: nextLocalized,
+            descricao_interna_padrao:
+              targetLocale === 'pt' ? value : nextLocalized.pt || item.descricao_interna_padrao,
+            descricao_padrao:
+              targetLocale === 'pt' ? value : nextLocalized.pt || item.descricao_padrao,
+          };
+        })
+      ),
+    }));
   }
 
   function moveModeloLiturgia(index: number, direction: -1 | 1) {
@@ -767,12 +925,30 @@ export default function AdminIgrejasPage() {
         ...item,
         bloco: safeTrim(item.bloco),
         tipo: safeTrim(item.tipo),
-        conteudo_publico_padrao: safeTrim(item.conteudo_publico_padrao),
-        descricao_interna_padrao: safeTrim(item.descricao_interna_padrao),
-        descricao_padrao: safeTrim(item.descricao_interna_padrao),
+        conteudo_publico_padrao_i18n: compactLocalizedTextMap(item.conteudo_publico_padrao_i18n),
+        descricao_interna_padrao_i18n: compactLocalizedTextMap(item.descricao_interna_padrao_i18n),
+        conteudo_publico_padrao: safeTrim(
+          item.conteudo_publico_padrao_i18n.pt || item.conteudo_publico_padrao
+        ),
+        descricao_interna_padrao: safeTrim(
+          item.descricao_interna_padrao_i18n.pt || item.descricao_interna_padrao
+        ),
+        descricao_padrao: safeTrim(
+          item.descricao_interna_padrao_i18n.pt ||
+            item.descricao_interna_padrao ||
+            item.descricao_padrao
+        ),
         ordem: item.ordem || index + 1,
       }))
-      .filter((item) => item.bloco || item.tipo || item.conteudo_publico_padrao || item.descricao_interna_padrao)
+      .filter(
+        (item) =>
+          item.bloco ||
+          item.tipo ||
+          item.conteudo_publico_padrao ||
+          item.descricao_interna_padrao ||
+          item.conteudo_publico_padrao_i18n ||
+          item.descricao_interna_padrao_i18n
+      )
       .sort((a, b) => a.ordem - b.ordem);
 
     return {
@@ -797,8 +973,10 @@ export default function AdminIgrejasPage() {
       site: form.site,
       instagram: form.instagram,
       youtube: form.youtube,
-      apresentacao_titulo: form.apresentacao_titulo,
-      apresentacao_texto: form.apresentacao_texto,
+      apresentacao_titulo: form.apresentacao_titulo_i18n.pt,
+      apresentacao_texto: form.apresentacao_texto_i18n.pt,
+      apresentacao_titulo_i18n: compactLocalizedTextMap(form.apresentacao_titulo_i18n),
+      apresentacao_texto_i18n: compactLocalizedTextMap(form.apresentacao_texto_i18n),
       apresentacao_imagem_url: form.apresentacao_imagem_url,
       apresentacao_youtube_url: form.apresentacao_youtube_url,
       apresentacao_galeria: parseListaUrls(form.apresentacao_galeria),
@@ -836,7 +1014,13 @@ export default function AdminIgrejasPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || tr('Erro ao salvar igreja.', 'Error al guardar la iglesia.', 'Error saving church.'));
+        throw new Error(
+          resolveApiErrorMessage(
+            locale,
+            data,
+            tr('Erro ao salvar igreja.', 'Error al guardar la iglesia.', 'Error saving church.')
+          )
+        );
       }
 
       await carregarIgrejas();
@@ -847,9 +1031,13 @@ export default function AdminIgrejasPage() {
       }
 
       setMensagem(
-        isNew
-          ? tr('Igreja criada com sucesso.', 'Iglesia creada con éxito.', 'Church created successfully.')
-          : tr('Igreja atualizada com sucesso.', 'Iglesia actualizada con éxito.', 'Church updated successfully.')
+        resolveApiSuccessMessage(
+          locale,
+          data,
+          isNew
+            ? tr('Igreja criada com sucesso.', 'Iglesia creada con éxito.', 'Church created successfully.')
+            : tr('Igreja atualizada com sucesso.', 'Iglesia actualizada con éxito.', 'Church updated successfully.')
+        )
       );
     } catch (error: any) {
       setErro(error.message || tr('Erro ao salvar igreja.', 'Error al guardar la iglesia.', 'Error saving church.'));
@@ -1118,27 +1306,57 @@ export default function AdminIgrejasPage() {
                       {tr('O link só aparece no público quando houver ', 'El enlace solo aparece al público cuando exista ', 'The link only appears publicly when there is ')}<strong>{tr('título', 'título', 'title')}</strong>{tr(' ou ', ' o ', ' or ')}<strong>{tr('texto', 'texto', 'text')}</strong>{tr('. As mídias são opcionais e entram como apoio visual da apresentação.', '. Los medios son opcionales y sirven como apoyo visual de la presentación.', '. Media is optional and works as visual support for the presentation.')}
                     </p>
                   </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">
+                          {tr('Título e texto por idioma', 'Título y texto por idioma', 'Title and text by language')}
+                        </h4>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {tr('Português também alimenta o fallback legado atual.', 'Portugués también alimenta el fallback legado actual.', 'Portuguese also feeds the current legacy fallback.')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-5 xl:grid-cols-3">
+                      {PRESENTATION_LOCALES.map((item) => (
+                        <div key={item.value} className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h5 className="text-sm font-semibold text-slate-900">{item.label}</h5>
+                            {item.value === 'pt' && (
+                              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-800">
+                                {tr('Fallback', 'Fallback', 'Fallback')}
+                              </span>
+                            )}
+                          </div>
+                          <Input
+                            label={tr('Título da apresentação', 'Título de la presentación', 'Presentation title')}
+                            value={form.apresentacao_titulo_i18n[item.value]}
+                            onChange={(value) => updateLocalizedField('apresentacao_titulo_i18n', item.value, value)}
+                            placeholder={
+                              item.value === 'pt'
+                                ? 'Ex.: Uma comunidade para adorar, servir e acolher'
+                                : item.value === 'es'
+                                  ? 'Ej.: Una comunidad para adorar, servir y acoger'
+                                  : 'Ex.: A community to worship, serve, and welcome'
+                            }
+                          />
+                          <Textarea
+                            label={tr('Texto institucional', 'Texto institucional', 'Institutional text')}
+                            value={form.apresentacao_texto_i18n[item.value]}
+                            onChange={(value) => updateLocalizedField('apresentacao_texto_i18n', item.value, value)}
+                            rows={6}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <div className="grid gap-5 xl:grid-cols-2">
-                    <Input
-                      label={tr('Título da apresentação', 'Título de la presentación', 'Presentation title')}
-                      value={form.apresentacao_titulo}
-                      onChange={(value) => updateForm('apresentacao_titulo', value)}
-                      placeholder={tr('Ex.: Uma comunidade para adorar, servir e acolher', 'Ej.: Una comunidad para adorar, servir y acoger', 'Ex.: A community to worship, serve, and welcome')}
-                    />
                     <Input
                       label={tr('Imagem principal', 'Imagen principal', 'Main image')}
                       value={form.apresentacao_imagem_url}
                       onChange={(value) => updateForm('apresentacao_imagem_url', value)}
                       placeholder="https://..."
                     />
-                  </div>
-                  <Textarea
-                    label={tr('Texto institucional', 'Texto institucional', 'Institutional text')}
-                    value={form.apresentacao_texto}
-                    onChange={(value) => updateForm('apresentacao_texto', value)}
-                    rows={6}
-                  />
-                  <div className="grid gap-5 xl:grid-cols-2">
                     <Input
                       label={tr('Vídeo do YouTube', 'Video de YouTube', 'YouTube video')}
                       value={form.apresentacao_youtube_url}
@@ -1749,20 +1967,36 @@ export default function AdminIgrejasPage() {
 
                             <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
                               <div className="grid min-w-0 gap-4">
+                                <p className="text-xs font-medium text-slate-500">
+                                  {tr(
+                                    `Editando os textos padrão em ${activeLocaleLabel}. O português continua como fallback principal.`,
+                                    `Editando los textos estándar en ${activeLocaleLabel}. El portugués sigue como fallback principal.`,
+                                    `Editing the default texts in ${activeLocaleLabel}. Portuguese remains the main fallback.`
+                                  )}
+                                </p>
                                 <Textarea
                                   label={tr('Texto público', 'Texto público', 'Public text')}
-                                  value={modelo.conteudo_publico_padrao}
-                                  onChange={(value) => patchModeloLiturgia(index, { conteudo_publico_padrao: value })}
+                                  value={modelo.conteudo_publico_padrao_i18n[locale]}
+                                  onChange={(value) =>
+                                    patchModeloLiturgiaLocalized(
+                                      index,
+                                      'conteudo_publico_padrao_i18n',
+                                      locale,
+                                      value
+                                    )
+                                  }
                                   rows={2}
                                 />
                                 <Textarea
                                   label={tr('Texto interno', 'Texto interno', 'Internal text')}
-                                  value={modelo.descricao_interna_padrao}
+                                  value={modelo.descricao_interna_padrao_i18n[locale]}
                                   onChange={(value) =>
-                                    patchModeloLiturgia(index, {
-                                      descricao_interna_padrao: value,
-                                      descricao_padrao: value,
-                                    })
+                                    patchModeloLiturgiaLocalized(
+                                      index,
+                                      'descricao_interna_padrao_i18n',
+                                      locale,
+                                      value
+                                    )
                                   }
                                   rows={2}
                                 />

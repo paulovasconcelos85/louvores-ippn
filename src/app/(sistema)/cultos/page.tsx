@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { usePermissions } from '@/hooks/usePermissions';
+import type { Locale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
+import {
+  compactLocalizedTextMap,
+  createEmptyLocalizedTextMap,
+  normalizeLocalizedTextMap,
+  resolveLocalizedText,
+  type LocalizedTextMapForm,
+} from '@/lib/church-i18n';
 import { jsPDF } from 'jspdf';
 import { getStoredChurchId } from '@/lib/church-utils';
 
@@ -181,6 +190,7 @@ interface LouvorItem {
   tipo: string;
   ordem: number;
   conteudo_publico: string | null;
+  conteudo_publico_i18n: LocalizedTextMapForm;
   descricao: string | null;
   horario: string | null;
   canticos_lista: CanticoNoItem[];
@@ -189,6 +199,7 @@ interface LouvorItem {
 interface BoletimItemRascunho {
   id: string;
   conteudo: string;
+  conteudo_i18n: LocalizedTextMapForm;
   destaque: boolean;
 }
 
@@ -198,6 +209,7 @@ interface AgendaItemRascunho {
   hora: string;
   descricao: string;
   temHora: boolean;
+  conteudo_i18n: LocalizedTextMapForm;
 }
 
 interface AvisoItemRascunho {
@@ -205,12 +217,14 @@ interface AvisoItemRascunho {
   titulo: string;
   corpo: string;
   destaque: boolean;
+  conteudo_i18n: LocalizedTextMapForm;
 }
 
 interface BoletimSecaoRascunho {
   id: string;
   tipo: string;
   titulo: string;
+  titulo_i18n: LocalizedTextMapForm;
   icone: string | null;
   visivel: boolean;
   ordem: number;
@@ -222,7 +236,9 @@ interface ModeloLiturgiaConfig {
   ordem: number;
   tipo: string;
   conteudo_publico_padrao: string;
+  conteudo_publico_padrao_i18n: LocalizedTextMapForm;
   descricao_interna_padrao: string;
+  descricao_interna_padrao_i18n: LocalizedTextMapForm;
   descricao_padrao: string;
   tem_cantico: boolean;
 }
@@ -240,6 +256,7 @@ interface Culto {
   Dia: string;
   imagem_url?: string | null;
   palavra_pastoral?: string | null;
+  palavra_pastoral_i18n?: unknown;
   palavra_pastoral_autor?: string | null;
   nome_liturgia?: string | null;
 }
@@ -252,6 +269,7 @@ interface LouvorItemRow {
   tom: string | null;
   cantico_id: string | null;
   conteudo_publico: string | null;
+  conteudo_publico_i18n?: unknown;
   descricao: string | null;
   horario: string | null;
 }
@@ -267,11 +285,33 @@ interface CultoLookupRow {
 
 interface BoletimFallbackMeta {
   secaoTitulo: string;
+  secaoTituloI18n?: Partial<Record<Locale, string>> | null;
   secaoIcone: string | null;
   secaoVisivel: boolean;
   secaoOrdem: number;
   itemDestaque: boolean;
   itemOrdem: number;
+}
+
+interface StructuredBoletimSecaoRow {
+  id: string;
+  igreja_id: string | null;
+  culto_id: number | null;
+  tipo: string;
+  titulo: string;
+  titulo_i18n?: unknown;
+  icone: string | null;
+  ordem: number | null;
+  visivel: boolean | null;
+}
+
+interface StructuredBoletimItemRow {
+  id: string;
+  secao_id: string | null;
+  conteudo: string;
+  conteudo_i18n?: unknown;
+  destaque: boolean | null;
+  ordem: number | null;
 }
 
 type ItemAgrupado = {
@@ -349,7 +389,23 @@ function filtrarCanticosPorConfiguracao(
   return lista;
 }
 
-function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgiaConfig[] {
+function mergeLocalizedModelValue(
+  primaryValue: unknown,
+  secondaryValue: unknown,
+  primaryFallback?: string,
+  secondaryFallback?: string
+) {
+  const primary = normalizeLocalizedTextMap(primaryValue, primaryFallback);
+  const secondary = normalizeLocalizedTextMap(secondaryValue, secondaryFallback);
+
+  return {
+    pt: primary.pt || secondary.pt,
+    es: primary.es || secondary.es,
+    en: primary.en || secondary.en,
+  };
+}
+
+function extractModeloLiturgicoPadrao(value: unknown, locale: Locale): ModeloLiturgiaConfig[] {
   if (!Array.isArray(value)) return [];
 
   return value
@@ -370,10 +426,18 @@ function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgiaConfig[] {
           : typeof row.conteudo_publico === 'string'
             ? row.conteudo_publico
             : '';
+      const conteudo_publico_padrao_i18n = normalizeLocalizedTextMap(
+        row.conteudo_publico_padrao_i18n,
+        conteudo_publico_padrao
+      );
       const descricao_interna_padrao =
         typeof row.descricao_interna_padrao === 'string'
           ? row.descricao_interna_padrao
           : descricao_padrao;
+      const descricao_interna_padrao_i18n = normalizeLocalizedTextMap(
+        row.descricao_interna_padrao_i18n,
+        descricao_interna_padrao
+      );
 
       if (!bloco && !tipo && !descricao_padrao && !conteudo_publico_padrao) return null;
 
@@ -381,8 +445,18 @@ function extractModeloLiturgicoPadrao(value: unknown): ModeloLiturgiaConfig[] {
         bloco,
         ordem: typeof row.ordem === 'number' ? row.ordem : index + 1,
         tipo,
-        conteudo_publico_padrao,
-        descricao_interna_padrao,
+        conteudo_publico_padrao: resolveLocalizedText(
+          conteudo_publico_padrao_i18n,
+          locale,
+          conteudo_publico_padrao
+        ),
+        conteudo_publico_padrao_i18n,
+        descricao_interna_padrao: resolveLocalizedText(
+          descricao_interna_padrao_i18n,
+          locale,
+          descricao_interna_padrao
+        ),
+        descricao_interna_padrao_i18n,
         descricao_padrao,
         tem_cantico: row.tem_cantico === true,
       };
@@ -412,8 +486,20 @@ function mergeModelosLiturgia(
       ...fallback,
       ...item,
       ordem: item.ordem || fallback?.ordem || index + 1,
+      conteudo_publico_padrao_i18n: mergeLocalizedModelValue(
+        item.conteudo_publico_padrao_i18n,
+        fallback?.conteudo_publico_padrao_i18n,
+        item.conteudo_publico_padrao,
+        fallback?.conteudo_publico_padrao
+      ),
       conteudo_publico_padrao:
         item.conteudo_publico_padrao || fallback?.conteudo_publico_padrao || '',
+      descricao_interna_padrao_i18n: mergeLocalizedModelValue(
+        item.descricao_interna_padrao_i18n,
+        fallback?.descricao_interna_padrao_i18n,
+        item.descricao_interna_padrao || item.descricao_padrao,
+        fallback?.descricao_interna_padrao || fallback?.descricao_padrao
+      ),
       descricao_interna_padrao:
         item.descricao_interna_padrao || fallback?.descricao_interna_padrao || item.descricao_padrao || '',
       descricao_padrao:
@@ -457,6 +543,7 @@ function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null): Louvo
       tipo,
       ordem: index + 1,
       conteudo_publico: item.conteudo_publico_padrao || null,
+      conteudo_publico_i18n: item.conteudo_publico_padrao_i18n || createEmptyLocalizedTextMap(),
       descricao: item.descricao_interna_padrao || item.descricao_padrao || null,
       horario: null,
       canticos_lista: item.tem_cantico ? [{ cantico_id: null, tom: null }] : [],
@@ -472,24 +559,24 @@ function modeloPadrao(dia: string, config?: LiturgiaChurchConfig | null): Louvor
   const primeiroDomingo = isPrimeirosDomingo(data);
 
   const itens: LouvorItem[] = [
-    { tipo: 'Prelúdio', ordem: 1, conteudo_publico: null, descricao: null, horario: '9h-9h05', canticos_lista: [] },
-    { tipo: 'Saudação e Acolhida à Igreja', ordem: 2, conteudo_publico: null, descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)', horario: '9h05-9h10', canticos_lista: [] },
-    { tipo: 'Cânticos Congregacionais', ordem: 3, conteudo_publico: null, descricao: null, horario: '9h10-9h25', canticos_lista: [{ cantico_id: null, tom: null }, { cantico_id: null, tom: null }, { cantico_id: null, tom: null }] },
-    { tipo: 'Confissão de Pecados', ordem: 4, conteudo_publico: null, descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.', horario: '9h25-9h30', canticos_lista: [] },
-    { tipo: 'Dízimos e Ofertas', ordem: 5, conteudo_publico: null, descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.', horario: '9h30-9h35', canticos_lista: [] },
-    { tipo: 'Cântico para as Ofertas e Dízimos', ordem: 6, conteudo_publico: null, descricao: 'Oração pelas ofertas e dízimo.', horario: '9h35-9h40', canticos_lista: [{ cantico_id: null, tom: null }] },
-    { tipo: 'Oração pelas Crianças', ordem: 7, conteudo_publico: null, descricao: 'Chamar irmão (_______)', horario: '9h40-9h45', canticos_lista: [] },
-    { tipo: 'Pregação da Palavra', ordem: 8, conteudo_publico: null, descricao: null, horario: '9h45-10h25', canticos_lista: [] },
+    { tipo: 'Prelúdio', ordem: 1, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h-9h05', canticos_lista: [] },
+    { tipo: 'Saudação e Acolhida à Igreja', ordem: 2, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)', horario: '9h05-9h10', canticos_lista: [] },
+    { tipo: 'Cânticos Congregacionais', ordem: 3, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h10-9h25', canticos_lista: [{ cantico_id: null, tom: null }, { cantico_id: null, tom: null }, { cantico_id: null, tom: null }] },
+    { tipo: 'Confissão de Pecados', ordem: 4, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.', horario: '9h25-9h30', canticos_lista: [] },
+    { tipo: 'Dízimos e Ofertas', ordem: 5, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.', horario: '9h30-9h35', canticos_lista: [] },
+    { tipo: 'Cântico para as Ofertas e Dízimos', ordem: 6, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Oração pelas ofertas e dízimo.', horario: '9h35-9h40', canticos_lista: [{ cantico_id: null, tom: null }] },
+    { tipo: 'Oração pelas Crianças', ordem: 7, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Chamar irmão (_______)', horario: '9h40-9h45', canticos_lista: [] },
+    { tipo: 'Pregação da Palavra', ordem: 8, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h45-10h25', canticos_lista: [] },
   ];
 
   if (primeiroDomingo) {
-    itens.push({ tipo: 'Santa Ceia', ordem: 9, conteudo_publico: null, descricao: null, horario: '10h25', canticos_lista: [] });
+    itens.push({ tipo: 'Santa Ceia', ordem: 9, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '10h25', canticos_lista: [] });
   }
 
   itens.push(
-    { tipo: 'Cântico Final', ordem: itens.length + 1, conteudo_publico: null, descricao: 'Poslúdio', horario: '10h25', canticos_lista: [{ cantico_id: null, tom: null }] },
-    { tipo: 'Oração Final e Bênção Apostólica', ordem: itens.length + 2, conteudo_publico: null, descricao: 'Amém tríplice', horario: '10h30', canticos_lista: [] },
-    { tipo: 'Lembretes', ordem: itens.length + 3, conteudo_publico: null, descricao: 'Apresentação dos convidados\nAniversariantes / Casamento', horario: '10h35', canticos_lista: [] },
+    { tipo: 'Cântico Final', ordem: itens.length + 1, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Poslúdio', horario: '10h25', canticos_lista: [{ cantico_id: null, tom: null }] },
+    { tipo: 'Oração Final e Bênção Apostólica', ordem: itens.length + 2, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Amém tríplice', horario: '10h30', canticos_lista: [] },
+    { tipo: 'Lembretes', ordem: itens.length + 3, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Apresentação dos convidados\nAniversariantes / Casamento', horario: '10h35', canticos_lista: [] },
   );
 
   return itens.map((it, i) => ({ ...it, ordem: i + 1 }));
@@ -577,6 +664,7 @@ function createEmptyBoletimItem(): BoletimItemRascunho {
   return {
     id: createDraftId('boletim-item'),
     conteudo: '',
+    conteudo_i18n: createEmptyLocalizedTextMap(),
     destaque: false,
   };
 }
@@ -593,6 +681,7 @@ function createEmptyAgendaItem(): AgendaItemRascunho {
     hora: '09:00',
     descricao: '',
     temHora: true,
+    conteudo_i18n: createEmptyLocalizedTextMap(),
   };
 }
 
@@ -602,6 +691,19 @@ function createEmptyAvisoItem(): AvisoItemRascunho {
     titulo: '',
     corpo: '',
     destaque: false,
+    conteudo_i18n: createEmptyLocalizedTextMap(),
+  };
+}
+
+function updateLocalizedDraftValue(
+  current: LocalizedTextMapForm | null | undefined,
+  locale: Locale,
+  value: string
+) {
+  return {
+    ...createEmptyLocalizedTextMap(),
+    ...(current || {}),
+    [locale]: value,
   };
 }
 
@@ -638,6 +740,7 @@ function parseAgendaConteudo(conteudo: string): AgendaItemRascunho {
     hora,
     descricao: descricao || conteudo.trim(),
     temHora: horaRaw !== '00:00',
+    conteudo_i18n: createEmptyLocalizedTextMap(),
   };
 }
 
@@ -658,13 +761,14 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
     const titulo = texto.slice(0, separadorDuplo).trim();
     const corpo = texto.slice(separadorDuplo + 2).trim();
 
-    return {
-      id: createDraftId('aviso-item'),
-      titulo,
-      corpo,
-      destaque: false,
-    };
-  }
+  return {
+    id: createDraftId('aviso-item'),
+    titulo,
+    corpo,
+    destaque: false,
+    conteudo_i18n: createEmptyLocalizedTextMap(),
+  };
+}
 
   const [titulo, ...restante] = texto.split('\n');
 
@@ -692,6 +796,12 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
 
     return {
       secaoTitulo: parsed.secaoTitulo,
+      secaoTituloI18n:
+        parsed.secaoTituloI18n &&
+        typeof parsed.secaoTituloI18n === 'object' &&
+        !Array.isArray(parsed.secaoTituloI18n)
+          ? (parsed.secaoTituloI18n as Partial<Record<Locale, string>>)
+          : null,
       secaoIcone: typeof parsed.secaoIcone === 'string' ? parsed.secaoIcone : null,
       secaoVisivel: parsed.secaoVisivel !== false,
       secaoOrdem: parsed.secaoOrdem,
@@ -703,25 +813,32 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
   }
 }
 
-function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[]) {
+function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[], locale: Locale) {
   const sections = new Map<string, BoletimSecaoRascunho>();
   const itemOrders = new Map<string, number>();
 
   rows.forEach((row) => {
     const tipo = extrairTipoBoletimFallback(row.tipo);
     const meta = parseBoletimFallbackMeta(row.descricao);
-    const conteudo = row.conteudo_publico?.trim() || '';
+    const conteudoI18n = normalizeLocalizedTextMap(
+      row.conteudo_publico_i18n,
+      row.conteudo_publico || ''
+    );
+    const conteudo = resolveLocalizedText(conteudoI18n, locale, row.conteudo_publico || '');
 
     if (!tipo || !meta || !conteudo) return;
 
     const config = getBoletimTipoConfig(tipo);
-    const key = `${meta.secaoOrdem}:${tipo}:${meta.secaoTitulo}`;
+    const tituloI18n = normalizeLocalizedTextMap(meta.secaoTituloI18n, meta.secaoTitulo || config.titulo);
+    const titulo = resolveLocalizedText(tituloI18n, locale, meta.secaoTitulo || config.titulo);
+    const key = `${meta.secaoOrdem}:${tipo}:${titulo}`;
 
     if (!sections.has(key)) {
       sections.set(key, {
         id: key,
         tipo,
-        titulo: meta.secaoTitulo || config.titulo,
+        titulo,
+        titulo_i18n: tituloI18n,
         icone: meta.secaoIcone || config.icone,
         visivel: meta.secaoVisivel,
         ordem: meta.secaoOrdem,
@@ -732,6 +849,7 @@ function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[]) {
     sections.get(key)?.itens.push({
       id: row.id,
       conteudo,
+      conteudo_i18n: conteudoI18n,
       destaque: meta.itemDestaque,
     });
     itemOrders.set(row.id, meta.itemOrdem);
@@ -747,10 +865,128 @@ function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[]) {
     .sort((a, b) => a.ordem - b.ordem);
 }
 
+function buildBoletimSecoesEstruturadasPorCulto(
+  secoesRaw: StructuredBoletimSecaoRow[],
+  itensRaw: StructuredBoletimItemRow[],
+  locale: Locale
+) {
+  const itensPorSecao = new Map<string, StructuredBoletimItemRow[]>();
+
+  itensRaw.forEach((item) => {
+    if (!item.secao_id) return;
+    const atuais = itensPorSecao.get(item.secao_id) || [];
+    atuais.push(item);
+    itensPorSecao.set(item.secao_id, atuais);
+  });
+
+  const secoesPorCulto = new Map<number, BoletimSecaoRascunho[]>();
+
+  [...secoesRaw]
+    .sort((a, b) => {
+      if ((a.culto_id || 0) !== (b.culto_id || 0)) {
+        return (a.culto_id || 0) - (b.culto_id || 0);
+      }
+
+      return (a.ordem || 0) - (b.ordem || 0);
+    })
+    .forEach((secao) => {
+      if (typeof secao.culto_id !== 'number') return;
+
+      const config = getBoletimTipoConfig(secao.tipo);
+      const tituloI18n = normalizeLocalizedTextMap(
+        secao.titulo_i18n,
+        secao.titulo || config.titulo
+      );
+      const titulo = resolveLocalizedText(
+        tituloI18n,
+        locale,
+        secao.titulo || config.titulo
+      );
+      const itens = (itensPorSecao.get(secao.id) || [])
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+        .map((item) => {
+          const conteudoI18n = normalizeLocalizedTextMap(
+            item.conteudo_i18n,
+            item.conteudo || ''
+          );
+
+          return {
+            id: item.id,
+            conteudo: resolveLocalizedText(conteudoI18n, locale, item.conteudo || ''),
+            conteudo_i18n: conteudoI18n,
+            destaque: item.destaque === true,
+          };
+        });
+
+      const atuais = secoesPorCulto.get(secao.culto_id) || [];
+      atuais.push({
+        id: secao.id,
+        tipo: secao.tipo,
+        titulo,
+        titulo_i18n: tituloI18n,
+        icone: secao.icone || config.icone,
+        visivel: secao.visivel !== false,
+        ordem: secao.ordem || atuais.length,
+        itens,
+      });
+      secoesPorCulto.set(secao.culto_id, atuais);
+    });
+
+  for (const [cultoId, secoes] of secoesPorCulto.entries()) {
+    secoesPorCulto.set(cultoId, normalizarSecoesBoletim(secoes));
+  }
+
+  return secoesPorCulto;
+}
+
+async function carregarBoletimSecoesEstruturadasPorCulto(
+  igrejaId: string,
+  cultoIds: number[],
+  locale: Locale
+) {
+  if (cultoIds.length === 0) {
+    return new Map<number, BoletimSecaoRascunho[]>();
+  }
+
+  const { data: secoesRaw, error: secoesError } = await supabase
+    .from('boletim_secoes')
+    .select('id, igreja_id, culto_id, tipo, titulo, titulo_i18n, icone, ordem, visivel')
+    .eq('igreja_id', igrejaId)
+    .in('culto_id', cultoIds)
+    .order('culto_id', { ascending: true })
+    .order('ordem', { ascending: true });
+
+  if (secoesError) throw secoesError;
+
+  const secoes = (secoesRaw || []) as StructuredBoletimSecaoRow[];
+  const secaoIds = secoes
+    .map((secao) => secao.id)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  if (secaoIds.length === 0) {
+    return new Map<number, BoletimSecaoRascunho[]>();
+  }
+
+  const { data: itensRaw, error: itensError } = await supabase
+    .from('boletim_itens')
+    .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem')
+    .in('secao_id', secaoIds)
+    .order('ordem', { ascending: true });
+
+  if (itensError) throw itensError;
+
+  return buildBoletimSecoesEstruturadasPorCulto(
+    secoes,
+    (itensRaw || []) as StructuredBoletimItemRow[],
+    locale
+  );
+}
+
 async function carregarUltimasSecoesBoletimPorTipo(
   igrejaId: string,
   diaAtual: string,
-  tipoDesejado: string
+  tipoDesejado: string,
+  locale: Locale
 ): Promise<{ secoes: BoletimSecaoRascunho[]; origemDia: string | null }> {
   const { data: cultosAnterioresRaw, error: cultosError } = await supabase
     .from('Louvores IPPN')
@@ -775,9 +1011,44 @@ async function carregarUltimasSecoesBoletimPorTipo(
     return { secoes: [], origemDia: null };
   }
 
+  const cultosAgrupadosPorDia = new Map<string, number[]>();
+  cultosAnteriores.forEach((culto) => {
+    const dia = getCultoDateKey(culto.Dia);
+    const atuais = cultosAgrupadosPorDia.get(dia) || [];
+    atuais.push(culto['Culto nr.']);
+    cultosAgrupadosPorDia.set(dia, atuais);
+  });
+
+  const secoesEstruturadasPorCulto = await carregarBoletimSecoesEstruturadasPorCulto(
+    igrejaId,
+    cultoIds,
+    locale
+  );
+
+  if (secoesEstruturadasPorCulto.size > 0) {
+    for (const [dia, idsDoDia] of cultosAgrupadosPorDia.entries()) {
+      const secoesDoDia =
+        idsDoDia
+          .map((cultoId) => secoesEstruturadasPorCulto.get(cultoId) || [])
+          .find((secoes) => secoes.length > 0)
+          ?.filter(
+            (secao) =>
+              secao.tipo === tipoDesejado &&
+              secao.itens.some((item) => item.conteudo.trim().length > 0)
+          ) || [];
+
+      if (secoesDoDia.length > 0) {
+        return {
+          secoes: clonarSecoesBoletimRascunho(secoesDoDia),
+          origemDia: dia,
+        };
+      }
+    }
+  }
+
   const { data: fallbackRowsRaw, error: fallbackError } = await supabase
     .from('louvor_itens')
-    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
     .in('culto_id', cultoIds)
     .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`)
     .order('ordem', { ascending: true });
@@ -796,17 +1067,9 @@ async function carregarUltimasSecoesBoletimPorTipo(
     rowsPorCulto.set(row.culto_id, atuais);
   });
 
-  const cultosAgrupadosPorDia = new Map<string, number[]>();
-  cultosAnteriores.forEach((culto) => {
-    const dia = getCultoDateKey(culto.Dia);
-    const atuais = cultosAgrupadosPorDia.get(dia) || [];
-    atuais.push(culto['Culto nr.']);
-    cultosAgrupadosPorDia.set(dia, atuais);
-  });
-
   for (const [dia, idsDoDia] of cultosAgrupadosPorDia.entries()) {
     const rowsDoDia = idsDoDia.flatMap((cultoId) => rowsPorCulto.get(cultoId) || []);
-    const secoesDoDia = buildBoletimSecoesFromFallbackRows(rowsDoDia).filter(
+    const secoesDoDia = buildBoletimSecoesFromFallbackRows(rowsDoDia, locale).filter(
       (secao) => secao.tipo === tipoDesejado && secao.itens.some((item) => item.conteudo.trim().length > 0)
     );
 
@@ -873,7 +1136,7 @@ async function carregarLouvorItensComCanticos(
 ): Promise<LouvorItemRowComCantico[]> {
   const { data: itens, error: itensError } = await supabase
     .from('louvor_itens')
-    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
     .eq('culto_id', cultoId)
     .order('ordem');
 
@@ -962,6 +1225,7 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
     ordem: number;
     tipo: string;
     conteudo_publico: string | null;
+    conteudo_publico_i18n: ReturnType<typeof compactLocalizedTextMap>;
     descricao: string | null;
     horario: string | null;
     cantico_id: null;
@@ -980,8 +1244,11 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
       }))
       .filter(({ item }) => item.conteudo.trim().length > 0)
       .forEach(({ item, index }) => {
+        const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
+        const conteudoI18n = compactLocalizedTextMap(item.conteudo_i18n);
         const meta: BoletimFallbackMeta = {
-          secaoTitulo: secao.titulo.trim() || config.titulo,
+          secaoTitulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
+          secaoTituloI18n: tituloI18n,
           secaoIcone: secao.icone || config.icone,
           secaoVisivel: secao.visivel,
           secaoOrdem: secao.ordem,
@@ -992,7 +1259,8 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
         rows.push({
           ordem: ordem++,
           tipo: `${BOLETIM_FALLBACK_TIPO_PREFIX}${secao.tipo}`,
-          conteudo_publico: item.conteudo.trim(),
+          conteudo_publico: item.conteudo_i18n.pt || item.conteudo.trim(),
+          conteudo_publico_i18n: conteudoI18n,
           descricao: JSON.stringify(meta),
           horario: null,
           cantico_id: null,
@@ -1004,14 +1272,15 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
   return rows;
 }
 
-function buildLiturgiaMetaRow(nomeLiturgia: string) {
+function buildLiturgiaMetaRow(nomeLiturgia: string, nomeLiturgiaI18n: LocalizedTextMapForm) {
   const nome = nomeLiturgia.trim();
   if (!nome) return null;
 
   return {
     ordem: 0,
     tipo: LITURGIA_META_TIPO,
-    conteudo_publico: nome,
+    conteudo_publico: nomeLiturgiaI18n.pt || nome,
+    conteudo_publico_i18n: compactLocalizedTextMap(nomeLiturgiaI18n),
     descricao: null,
     horario: null,
     cantico_id: null,
@@ -1447,6 +1716,7 @@ function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreat
 
 // --- ITEM DA LITURGIA (linha) ---
 function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onMove, isLideranca, podVerTom, canEditarMusica }: any) {
+  const locale = useLocale();
   const [expandido, setExpandido] = useState(true);
   const tiposDisponiveis = item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO;
   const tipoInputId = `tipo-liturgico-${index}`;
@@ -1559,7 +1829,17 @@ function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onM
               </p>
             <PublicCanticoTextarea
               value={item.conteudo_publico || ''}
-              onChange={(conteudo) => onUpdate({ ...item, conteudo_publico: conteudo })}
+              onChange={(conteudo) =>
+                onUpdate({
+                  ...item,
+                  conteudo_publico: conteudo,
+                  conteudo_publico_i18n: updateLocalizedDraftValue(
+                    item.conteudo_publico_i18n,
+                    locale,
+                    conteudo
+                  ),
+                })
+              }
               canticos={canticos}
               disabled={!isLideranca}
               placeholder={textosRepertorio.placeholderPublico}
@@ -1691,7 +1971,9 @@ function EditorSecaoBoletimModal({
   onFechar: () => void;
   onSalvar: (secao: BoletimSecaoRascunho) => void;
 }) {
+  const locale = useLocale();
   const [titulo, setTitulo] = useState('');
+  const [tituloI18n, setTituloI18n] = useState<LocalizedTextMapForm>(createEmptyLocalizedTextMap());
   const [visivel, setVisivel] = useState(true);
   const [itens, setItens] = useState<BoletimItemRascunho[]>([]);
   const [agendaItens, setAgendaItens] = useState<AgendaItemRascunho[]>([]);
@@ -1703,11 +1985,20 @@ function EditorSecaoBoletimModal({
     const config = getBoletimTipoConfig(tipo);
     const itensExistentes = [...(secaoExistente?.itens || [])];
 
-    setTitulo(secaoExistente?.titulo || config.titulo);
+    const tituloAtualI18n = normalizeLocalizedTextMap(secaoExistente?.titulo_i18n, secaoExistente?.titulo || config.titulo);
+    setTitulo(resolveLocalizedText(tituloAtualI18n, locale, secaoExistente?.titulo || config.titulo));
+    setTituloI18n(tituloAtualI18n);
     setVisivel(secaoExistente?.visivel ?? true);
 
     if (tipo === 'agenda') {
-      const agenda = itensExistentes.map((item) => parseAgendaConteudo(item.conteudo));
+      const agenda = itensExistentes.map((item) => {
+        const conteudoI18n = normalizeLocalizedTextMap(item.conteudo_i18n, item.conteudo);
+        return {
+          ...parseAgendaConteudo(resolveLocalizedText(conteudoI18n, locale, item.conteudo)),
+          id: item.id || createDraftId('agenda-item'),
+          conteudo_i18n: conteudoI18n,
+        };
+      });
       setAgendaItens([...agenda, createEmptyAgendaItem()]);
       setItens([]);
       setAvisoItens([]);
@@ -1716,11 +2007,13 @@ function EditorSecaoBoletimModal({
 
     if (tipo === 'avisos') {
       const avisos = itensExistentes.map((item) => {
-        const aviso = parseAvisoConteudo(item.conteudo);
+        const conteudoI18n = normalizeLocalizedTextMap(item.conteudo_i18n, item.conteudo);
+        const aviso = parseAvisoConteudo(resolveLocalizedText(conteudoI18n, locale, item.conteudo));
         return {
           ...aviso,
           id: item.id || aviso.id,
           destaque: item.destaque,
+          conteudo_i18n: conteudoI18n,
         };
       });
       setAvisoItens([...avisos, createEmptyAvisoItem()]);
@@ -1732,14 +2025,15 @@ function EditorSecaoBoletimModal({
     setItens([
       ...itensExistentes.map((item) => ({
         id: item.id || createDraftId('boletim-item'),
-        conteudo: item.conteudo,
+        conteudo: resolveLocalizedText(item.conteudo_i18n, locale, item.conteudo),
+        conteudo_i18n: normalizeLocalizedTextMap(item.conteudo_i18n, item.conteudo),
         destaque: item.destaque,
       })),
       createEmptyBoletimItem(),
     ]);
     setAgendaItens([]);
     setAvisoItens([]);
-  }, [aberto, tipo, secaoExistente]);
+  }, [aberto, tipo, secaoExistente, locale]);
 
   if (!aberto || !tipo) return null;
 
@@ -1765,36 +2059,57 @@ function EditorSecaoBoletimModal({
   };
 
   const salvarSecao = () => {
+    const tituloLocalized = updateLocalizedDraftValue(
+      tituloI18n,
+      locale,
+      titulo.trim() || config.titulo
+    );
     const base: BoletimSecaoRascunho = {
       id: secaoExistente?.id || createDraftId('secao-boletim'),
       tipo,
-      titulo: titulo.trim() || config.titulo,
+      titulo: tituloLocalized.pt || titulo.trim() || config.titulo,
+      titulo_i18n: tituloLocalized,
       icone: config.icone,
       visivel,
       ordem: secaoExistente?.ordem || 0,
       itens: isAgenda
         ? agendaItens
             .filter((item) => item.descricao.trim().length > 0)
-            .map((item) => ({
-              id: item.id,
-              conteudo: serializeAgendaConteudo(item),
-              destaque: false,
-            }))
+            .map((item) => {
+              const conteudo = serializeAgendaConteudo(item);
+              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              return {
+                id: item.id,
+                conteudo: conteudoI18n.pt || conteudo,
+                conteudo_i18n: conteudoI18n,
+                destaque: false,
+              };
+            })
         : isAvisos
           ? avisoItens
               .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
-              .map((item) => ({
-                id: item.id,
-                conteudo: serializeAvisoConteudo(item),
-                destaque: item.destaque,
-              }))
+              .map((item) => {
+                const conteudo = serializeAvisoConteudo(item);
+                const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+                return {
+                  id: item.id,
+                  conteudo: conteudoI18n.pt || conteudo,
+                  conteudo_i18n: conteudoI18n,
+                  destaque: item.destaque,
+                };
+              })
         : itens
             .filter((item) => item.conteudo.trim().length > 0)
-            .map((item) => ({
-              id: item.id,
-              conteudo: item.conteudo.trim(),
-              destaque: item.destaque,
-            })),
+            .map((item) => {
+              const conteudo = item.conteudo.trim();
+              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              return {
+                id: item.id,
+                conteudo: conteudoI18n.pt || conteudo,
+                conteudo_i18n: conteudoI18n,
+                destaque: item.destaque,
+              };
+            }),
     };
 
     onSalvar(base);
@@ -1822,9 +2137,17 @@ function EditorSecaoBoletimModal({
         <div className="space-y-5 px-6 py-6">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">Título</label>
+            <p className="mt-2 text-sm text-slate-500">
+              Editando o título público em {locale.toUpperCase()}.
+            </p>
             <input
               value={titulo}
-              onChange={(event) => setTitulo(event.target.value)}
+              onChange={(event) => {
+                setTitulo(event.target.value);
+                setTituloI18n((current) =>
+                  updateLocalizedDraftValue(current, locale, event.target.value)
+                );
+              }}
               placeholder={config.titulo}
               className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-800 outline-none transition-colors focus:border-emerald-400"
             />
@@ -2021,7 +2344,17 @@ function EditorSecaoBoletimModal({
                       value={item.conteudo}
                       onChange={(event) => {
                         const atualizados = itens.map((entry, entryIndex) =>
-                          entryIndex === index ? { ...entry, conteudo: event.target.value } : entry
+                          entryIndex === index
+                            ? {
+                                ...entry,
+                                conteudo: event.target.value,
+                                conteudo_i18n: updateLocalizedDraftValue(
+                                  entry.conteudo_i18n,
+                                  locale,
+                                  event.target.value
+                                ),
+                              }
+                            : entry
                         );
                         setItens(garantirCampoTextoExtra(atualizados));
                       }}
@@ -2106,7 +2439,11 @@ function EditorBoletimDoDiaModal({
   onSalvo: () => void;
   inline?: boolean;
 }) {
+  const locale = useLocale();
   const [palavraPastoral, setPalavraPastoral] = useState('');
+  const [palavraPastoralI18n, setPalavraPastoralI18n] = useState<LocalizedTextMapForm>(
+    createEmptyLocalizedTextMap()
+  );
   const [palavraPastoralAutor, setPalavraPastoralAutor] = useState('');
   const [imagemUpload, setImagemUpload] = useState<File | null>(null);
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
@@ -2128,7 +2465,14 @@ function EditorBoletimDoDiaModal({
   useEffect(() => {
     if (!aberto) return;
 
-    setPalavraPastoral(referencia?.palavra_pastoral || '');
+    const palavraPastoralAtualI18n = normalizeLocalizedTextMap(
+      referencia?.palavra_pastoral_i18n,
+      referencia?.palavra_pastoral || ''
+    );
+    setPalavraPastoral(
+      resolveLocalizedText(palavraPastoralAtualI18n, locale, referencia?.palavra_pastoral || '')
+    );
+    setPalavraPastoralI18n(palavraPastoralAtualI18n);
     setPalavraPastoralAutor(referencia?.palavra_pastoral_autor || '');
     setImagemPreview(referencia?.imagem_url || null);
     setImagemUpload(null);
@@ -2143,23 +2487,43 @@ function EditorBoletimDoDiaModal({
 
       setLoadingBoletim(true);
       try {
-        const { data, error } = await supabase
-          .from('louvor_itens')
-          .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
-          .in('culto_id', cultoIds)
-          .order('ordem', { ascending: true });
-
-        if (error) throw error;
-
-        const rows = (data || []) as LouvorItemRow[];
         let secoes: BoletimSecaoRascunho[] = [];
 
-        for (const cultoId of cultoIds) {
-          const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
-          const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto);
-          if (secoesDoCulto.length > 0) {
-            secoes = secoesDoCulto;
-            break;
+        const igrejaId = getStoredChurchId();
+        if (igrejaId) {
+          const secoesEstruturadasPorCulto = await carregarBoletimSecoesEstruturadasPorCulto(
+            igrejaId,
+            cultoIds,
+            locale
+          );
+
+          for (const cultoId of cultoIds) {
+            const secoesDoCulto = secoesEstruturadasPorCulto.get(cultoId) || [];
+            if (secoesDoCulto.length > 0) {
+              secoes = secoesDoCulto;
+              break;
+            }
+          }
+        }
+
+        if (secoes.length === 0) {
+          const { data, error } = await supabase
+            .from('louvor_itens')
+            .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+            .in('culto_id', cultoIds)
+            .order('ordem', { ascending: true });
+
+          if (error) throw error;
+
+          const rows = (data || []) as LouvorItemRow[];
+
+          for (const cultoId of cultoIds) {
+            const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
+            const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto, locale);
+            if (secoesDoCulto.length > 0) {
+              secoes = secoesDoCulto;
+              break;
+            }
           }
         }
 
@@ -2173,7 +2537,6 @@ function EditorBoletimDoDiaModal({
           return;
         }
 
-        const igrejaId = getStoredChurchId();
         if (!igrejaId) {
           setBoletimSecoes(secoesAtuais);
           return;
@@ -2182,7 +2545,8 @@ function EditorBoletimDoDiaModal({
         const { secoes: secoesReaproveitadas, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
           igrejaId,
           dia,
-          'oracao'
+          'oracao',
+          locale
         );
 
         if (secoesReaproveitadas.length === 0 || !origemDia) {
@@ -2202,7 +2566,7 @@ function EditorBoletimDoDiaModal({
     };
 
     carregar();
-  }, [aberto, referencia, cultoIds, dia]);
+  }, [aberto, referencia, cultoIds, dia, locale]);
 
   if (!aberto) return null;
 
@@ -2286,7 +2650,10 @@ function EditorBoletimDoDiaModal({
       const { error: syncBoletimError } = await supabase
         .from('Louvores IPPN')
         .update({
-          palavra_pastoral: palavraPastoral || null,
+          palavra_pastoral: palavraPastoralI18n.pt || palavraPastoral || null,
+          palavra_pastoral_i18n: compactLocalizedTextMap(
+            updateLocalizedDraftValue(palavraPastoralI18n, locale, palavraPastoral)
+          ),
           palavra_pastoral_autor: palavraPastoralAutor || null,
           imagem_url: imagemUrlFinal,
         })
@@ -2294,6 +2661,106 @@ function EditorBoletimDoDiaModal({
         .eq('igreja_id', igrejaId);
 
       if (syncBoletimError) throw syncBoletimError;
+
+      const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
+        .from('boletim_secoes')
+        .select('id')
+        .eq('igreja_id', igrejaId)
+        .in('culto_id', cultoIds);
+
+      if (secoesExistentesError) throw secoesExistentesError;
+
+      const secaoIdsExistentes = (secoesExistentesRaw || [])
+        .map((item) => item.id)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+      if (secaoIdsExistentes.length > 0) {
+        const { error: deleteItensEstruturadosError } = await supabase
+          .from('boletim_itens')
+          .delete()
+          .in('secao_id', secaoIdsExistentes);
+
+        if (deleteItensEstruturadosError) throw deleteItensEstruturadosError;
+      }
+
+      const { error: deleteSecoesEstruturadasError } = await supabase
+        .from('boletim_secoes')
+        .delete()
+        .eq('igreja_id', igrejaId)
+        .in('culto_id', cultoIds);
+
+      if (deleteSecoesEstruturadasError) throw deleteSecoesEstruturadasError;
+
+      const secoesNormalizadas = normalizarSecoesBoletim(boletimSecoes);
+      const secoesEstruturadasPayload: Array<{
+        id: string;
+        igreja_id: string;
+        culto_id: number;
+        tipo: string;
+        titulo: string;
+        titulo_i18n: ReturnType<typeof compactLocalizedTextMap>;
+        icone: string | null;
+        ordem: number;
+        visivel: boolean;
+      }> = [];
+      const itensEstruturadosPayload: Array<{
+        id: string;
+        secao_id: string;
+        conteudo: string;
+        conteudo_i18n: ReturnType<typeof compactLocalizedTextMap>;
+        destaque: boolean;
+        ordem: number;
+      }> = [];
+
+      for (const cultoId of cultoIds) {
+        secoesNormalizadas.forEach((secao, secaoIndex) => {
+          const config = getBoletimTipoConfig(secao.tipo);
+          const secaoId = crypto.randomUUID();
+          const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
+
+          secoesEstruturadasPayload.push({
+            id: secaoId,
+            igreja_id: igrejaId,
+            culto_id: cultoId,
+            tipo: secao.tipo,
+            titulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
+            titulo_i18n: tituloI18n,
+            icone: secao.icone || config.icone,
+            ordem: secaoIndex,
+            visivel: secao.visivel,
+          });
+
+          secao.itens
+            .map((item, itemIndex) => ({ item, itemIndex }))
+            .filter(({ item }) => item.conteudo.trim().length > 0)
+            .forEach(({ item, itemIndex }) => {
+              itensEstruturadosPayload.push({
+                id: crypto.randomUUID(),
+                secao_id: secaoId,
+                conteudo: item.conteudo_i18n.pt || item.conteudo.trim(),
+                conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
+                destaque: item.destaque,
+                ordem: itemIndex,
+              });
+            });
+        });
+      }
+
+      if (secoesEstruturadasPayload.length > 0) {
+        const { error: insertSecoesEstruturadasError } = await supabase
+          .from('boletim_secoes')
+          .insert(secoesEstruturadasPayload);
+
+        if (insertSecoesEstruturadasError) throw insertSecoesEstruturadasError;
+      }
+
+      if (itensEstruturadosPayload.length > 0) {
+        const { error: insertItensEstruturadosError } = await supabase
+          .from('boletim_itens')
+          .insert(itensEstruturadosPayload);
+
+        if (insertItensEstruturadosError) throw insertItensEstruturadosError;
+      }
 
       const { error: deleteFallbackError } = await supabase
         .from('louvor_itens')
@@ -2358,7 +2825,12 @@ function EditorBoletimDoDiaModal({
             </p>
             <AutoResizeTextarea
               value={palavraPastoral}
-              onChange={e => setPalavraPastoral(e.target.value)}
+              onChange={e => {
+                setPalavraPastoral(e.target.value);
+                setPalavraPastoralI18n((current) =>
+                  updateLocalizedDraftValue(current, locale, e.target.value)
+                );
+              }}
               placeholder="Escreva aqui a palavra pastoral do boletim..."
               className="mt-4 w-full rounded-[24px] border border-emerald-200 bg-white px-5 py-4 text-[17px] leading-8 text-slate-700 outline-none transition-colors focus:border-emerald-400 resize-none placeholder:text-slate-300"
             />
@@ -2625,10 +3097,17 @@ function EditorLiturgia({
   podeEditarLouvor,
   configuracaoIgreja,
 }: any) {
+  const locale = useLocale();
   const [dia, setDia] = useState<string>(culto?.Dia || diaInicial || '');
   const [nomeLiturgia, setNomeLiturgia] = useState<string>(culto?.nome_liturgia || '');
+  const [nomeLiturgiaI18n, setNomeLiturgiaI18n] = useState<LocalizedTextMapForm>(
+    createEmptyLocalizedTextMap()
+  );
   const [itens, setItens] = useState<LouvorItem[]>([]);
   const [palavraPastoral, setPalavraPastoral] = useState(culto?.palavra_pastoral || '');
+  const [palavraPastoralI18n, setPalavraPastoralI18n] = useState<LocalizedTextMapForm>(
+    normalizeLocalizedTextMap(culto?.palavra_pastoral_i18n, culto?.palavra_pastoral || '')
+  );
   const [palavraPastoralAutor, setPalavraPastoralAutor] = useState(
     culto?.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
   );
@@ -2663,10 +3142,15 @@ function EditorLiturgia({
   const outrosCultosDoMesmoDia = cultosDoMesmoDiaAtual.filter(
     (item: Culto) => !culto || item['Culto nr.'] !== culto['Culto nr.']
   );
+  const cultoAtualId = culto?.['Culto nr.'] || null;
+  const cultoAtualNomeLiturgia = culto?.nome_liturgia || '';
 
   useEffect(() => {
-    setNomeLiturgia(culto?.nome_liturgia || '');
-  }, [culto?.['Culto nr.'], culto?.nome_liturgia]);
+    setNomeLiturgia(cultoAtualNomeLiturgia);
+    setNomeLiturgiaI18n((current) =>
+      updateLocalizedDraftValue(current, locale, cultoAtualNomeLiturgia)
+    );
+  }, [cultoAtualId, cultoAtualNomeLiturgia, locale]);
 
   useEffect(() => {
     if (culto) {
@@ -2688,7 +3172,7 @@ function EditorLiturgia({
     }
 
     setBoletimSecoes([]);
-  }, [culto, dia, todosCultos]);
+  }, [culto, dia, todosCultos, locale]);
 
   useEffect(() => {
     if (culto?.palavra_pastoral_autor) return;
@@ -2705,16 +3189,30 @@ function EditorLiturgia({
     const referencia = getCultoBoletimReferencia(cultosDoMesmoDiaAtual);
     if (!referencia) return;
 
-    setPalavraPastoral(referencia.palavra_pastoral || '');
+    const palavraAtualI18n = normalizeLocalizedTextMap(
+      referencia.palavra_pastoral_i18n,
+      referencia.palavra_pastoral || ''
+    );
+    setPalavraPastoral(
+      resolveLocalizedText(palavraAtualI18n, locale, referencia.palavra_pastoral || '')
+    );
+    setPalavraPastoralI18n(palavraAtualI18n);
     setPalavraPastoralAutor(
       referencia.palavra_pastoral_autor || configuracaoIgreja?.pastorPadrao || ''
     );
     setImagemPreview(referencia.imagem_url || null);
     setImagemUpload(null);
-  }, [dia, cultosDoMesmoDiaAtual, configuracaoIgreja?.pastorPadrao]);
+  }, [dia, cultosDoMesmoDiaAtual, configuracaoIgreja?.pastorPadrao, locale]);
 
   const carregarItens = async (cultoNr: number) => {
     const data = await carregarLouvorItensComCanticos(cultoNr, canticos, getStoredChurchId());
+    const metaNome = data.find((linha) => isLiturgiaMetaTipo(linha.tipo));
+    const nomeI18n = normalizeLocalizedTextMap(
+      metaNome?.conteudo_publico_i18n,
+      metaNome?.conteudo_publico || ''
+    );
+    setNomeLiturgia(resolveLocalizedText(nomeI18n, locale, metaNome?.conteudo_publico || ''));
+    setNomeLiturgiaI18n(nomeI18n);
     const itensLiturgia = data.filter(
       (linha) => !isBoletimFallbackTipo(linha.tipo) && !isLiturgiaMetaTipo(linha.tipo)
     );
@@ -2724,11 +3222,20 @@ function EditorLiturgia({
     // Agrupar linhas do mesmo item
     const agrupados: LouvorItem[] = [];
     itensLiturgia.forEach((linha: any) => {
+      const conteudoPublicoI18n = normalizeLocalizedTextMap(
+        linha.conteudo_publico_i18n,
+        linha.conteudo_publico
+      );
+      const conteudoPublicoAtual = resolveLocalizedText(
+        conteudoPublicoI18n,
+        locale,
+        linha.conteudo_publico
+      );
       const ultimo = agrupados[agrupados.length - 1];
       if (
         ultimo &&
         ultimo.tipo === linha.tipo &&
-        ultimo.conteudo_publico === linha.conteudo_publico &&
+        ultimo.conteudo_publico === conteudoPublicoAtual &&
         ultimo.descricao === linha.descricao &&
         ultimo.horario === linha.horario
       ) {
@@ -2738,7 +3245,8 @@ function EditorLiturgia({
           id: linha.id,
           tipo: linha.tipo,
           ordem: linha.ordem,
-          conteudo_publico: linha.conteudo_publico,
+          conteudo_publico: conteudoPublicoAtual,
+          conteudo_publico_i18n: conteudoPublicoI18n,
           descricao: linha.descricao,
           horario: linha.horario,
           canticos_lista: linha.cantico_id ? [{ cantico_id: linha.cantico_id, tom: linha.tom }] : [],
@@ -2756,24 +3264,45 @@ function EditorLiturgia({
     }
 
     try {
-      const { data: itensRaw, error: itensError } = await supabase
-        .from('louvor_itens')
-        .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
-        .in('culto_id', cultoIds)
-        .order('ordem', { ascending: true });
-
-      if (itensError) throw itensError;
-
-      const rows = (itensRaw || []) as LouvorItemRow[];
       let secoesRascunho: BoletimSecaoRascunho[] = [];
 
-      for (const cultoId of cultoIds) {
-        const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
-        const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto);
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) {
+        const secoesEstruturadasPorCulto = await carregarBoletimSecoesEstruturadasPorCulto(
+          igrejaId,
+          cultoIds,
+          locale
+        );
 
-        if (secoesDoCulto.length > 0) {
-          secoesRascunho = secoesDoCulto;
-          break;
+        for (const cultoId of cultoIds) {
+          const secoesDoCulto = secoesEstruturadasPorCulto.get(cultoId) || [];
+
+          if (secoesDoCulto.length > 0) {
+            secoesRascunho = secoesDoCulto;
+            break;
+          }
+        }
+      }
+
+      if (secoesRascunho.length === 0) {
+        const { data: itensRaw, error: itensError } = await supabase
+          .from('louvor_itens')
+          .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+          .in('culto_id', cultoIds)
+          .order('ordem', { ascending: true });
+
+        if (itensError) throw itensError;
+
+        const rows = (itensRaw || []) as LouvorItemRow[];
+
+        for (const cultoId of cultoIds) {
+          const rowsDoCulto = rows.filter((row) => row.culto_id === cultoId);
+          const secoesDoCulto = buildBoletimSecoesFromFallbackRows(rowsDoCulto, locale);
+
+          if (secoesDoCulto.length > 0) {
+            secoesRascunho = secoesDoCulto;
+            break;
+          }
         }
       }
 
@@ -2789,6 +3318,7 @@ function EditorLiturgia({
       tipo: tiposLiturgicos[0] || TIPOS_LITURGICOS_PADRAO[0],
       ordem: posicao + 1,
       conteudo_publico: null,
+      conteudo_publico_i18n: createEmptyLocalizedTextMap(),
       descricao: null,
       horario: null,
       canticos_lista: [],
@@ -2819,7 +3349,10 @@ function EditorLiturgia({
           .insert({
             Dia: dia,
             igreja_id: igrejaId,
-            palavra_pastoral: palavraPastoral || null,
+            palavra_pastoral: palavraPastoralI18n.pt || palavraPastoral || null,
+            palavra_pastoral_i18n: compactLocalizedTextMap(
+              updateLocalizedDraftValue(palavraPastoralI18n, locale, palavraPastoral)
+            ),
             palavra_pastoral_autor: palavraPastoralAutor || null,
           })
           .select().single();
@@ -2829,7 +3362,10 @@ function EditorLiturgia({
         await supabase.from('Louvores IPPN').update({
           Dia: dia,
           igreja_id: igrejaId,
-          palavra_pastoral: palavraPastoral || null,
+          palavra_pastoral: palavraPastoralI18n.pt || palavraPastoral || null,
+          palavra_pastoral_i18n: compactLocalizedTextMap(
+            updateLocalizedDraftValue(palavraPastoralI18n, locale, palavraPastoral)
+          ),
           palavra_pastoral_autor: palavraPastoralAutor || null,
         }).eq('"Culto nr."', cId).eq('igreja_id', igrejaId);
       }
@@ -2854,7 +3390,10 @@ function EditorLiturgia({
         const { error: syncBoletimError } = await supabase
           .from('Louvores IPPN')
           .update({
-            palavra_pastoral: palavraPastoral || null,
+            palavra_pastoral: palavraPastoralI18n.pt || palavraPastoral || null,
+            palavra_pastoral_i18n: compactLocalizedTextMap(
+              updateLocalizedDraftValue(palavraPastoralI18n, locale, palavraPastoral)
+            ),
             palavra_pastoral_autor: palavraPastoralAutor || null,
             imagem_url: imagemUrlFinal,
           })
@@ -2867,7 +3406,10 @@ function EditorLiturgia({
       await supabase.from('louvor_itens').delete().eq('culto_id', cId);
 
       const rows: any[] = [];
-      const metaNomeLiturgia = buildLiturgiaMetaRow(nomeLiturgia);
+      const metaNomeLiturgia = buildLiturgiaMetaRow(
+        nomeLiturgia,
+        updateLocalizedDraftValue(nomeLiturgiaI18n, locale, nomeLiturgia)
+      );
 
       if (metaNomeLiturgia) {
         rows.push({
@@ -2883,6 +3425,7 @@ function EditorLiturgia({
             rows.push({
               culto_id: cId, ordem: ord++, tipo: it.tipo,
               conteudo_publico: it.conteudo_publico || null,
+              conteudo_publico_i18n: compactLocalizedTextMap(it.conteudo_publico_i18n),
               descricao: it.descricao || null,
               horario: it.horario || null,
               cantico_id: m.cantico_id || null,
@@ -2893,6 +3436,7 @@ function EditorLiturgia({
           rows.push({
             culto_id: cId, ordem: ord++, tipo: it.tipo,
             conteudo_publico: it.conteudo_publico || null,
+            conteudo_publico_i18n: compactLocalizedTextMap(it.conteudo_publico_i18n),
             descricao: it.descricao || null,
             horario: it.horario || null,
             cantico_id: null, tom: null,
@@ -3064,7 +3608,12 @@ function EditorLiturgia({
                 <input
                   type="text"
                   value={nomeLiturgia}
-                  onChange={(e) => setNomeLiturgia(e.target.value)}
+                  onChange={(e) => {
+                    setNomeLiturgia(e.target.value);
+                    setNomeLiturgiaI18n((current) =>
+                      updateLocalizedDraftValue(current, locale, e.target.value)
+                    );
+                  }}
                   disabled={!isLideranca}
                   placeholder="Ex.: Culto Manhã"
                   className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xl font-bold text-slate-800 outline-none transition-colors focus:border-emerald-400 disabled:bg-slate-100"
@@ -3298,6 +3847,7 @@ function CultoCard({
 // --- PÁGINA PRINCIPAL ---
 export default function CultosPage() {
   const router = useRouter();
+  const locale = useLocale();
   const { loading: permLoading, permissoes } = usePermissions();
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<Culto[]>([]);
@@ -3317,13 +3867,7 @@ export default function CultosPage() {
     }
   }, [permLoading, permissoes.podeGerenciarCultos, router]);
 
-  useEffect(() => {
-    if (!permLoading && permissoes.podeGerenciarCultos) {
-      carregarTudo();
-    }
-  }, [permLoading, permissoes.podeGerenciarCultos]);
-
-  const carregarTudo = async () => {
+  const carregarTudo = useCallback(async () => {
     setLoading(true);
     try {
       const igrejaId = getStoredChurchId();
@@ -3363,7 +3907,9 @@ export default function CultosPage() {
           .maybeSingle(),
         supabase
           .from('modelos_liturgia')
-          .select('bloco, ordem, tipo, descricao_padrao, tem_cantico')
+          .select(
+            'bloco, ordem, tipo, descricao_padrao, tem_cantico, conteudo_publico_padrao_i18n, descricao_interna_padrao_i18n'
+          )
           .eq('igreja_id', igrejaId)
           .order('ordem', { ascending: true }),
       ]);
@@ -3385,7 +3931,7 @@ export default function CultosPage() {
         }>
       ).map(mapHinarioNovoCanticoToCantico);
       const todosCanticos = [...canticosBaseNormalizados, ...hinarioNovoCanticos].sort((a, b) =>
-        a.nome.localeCompare(b.nome, 'pt-BR')
+        a.nome.localeCompare(b.nome, locale)
       );
 
       setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
@@ -3398,7 +3944,7 @@ export default function CultosPage() {
         try {
           const { data: nomesLiturgiaRows, error: nomesLiturgiaError } = await supabase
             .from('louvor_itens')
-            .select('culto_id, conteudo_publico, ordem')
+            .select('culto_id, conteudo_publico, conteudo_publico_i18n, ordem')
             .in('culto_id', cultoIds)
             .eq('tipo', LITURGIA_META_TIPO)
             .order('ordem', { ascending: true });
@@ -3410,7 +3956,11 @@ export default function CultosPage() {
 
             (nomesLiturgiaRows || []).forEach((row: any) => {
               const cultoId = typeof row.culto_id === 'number' ? row.culto_id : Number(row.culto_id);
-              const nome = typeof row.conteudo_publico === 'string' ? row.conteudo_publico.trim() : '';
+              const nome = resolveLocalizedText(
+                row.conteudo_publico_i18n,
+                locale,
+                typeof row.conteudo_publico === 'string' ? row.conteudo_publico.trim() : ''
+              );
 
               if (Number.isFinite(cultoId) && nome && !nomesPorCulto.has(cultoId)) {
                 nomesPorCulto.set(cultoId, nome);
@@ -3428,7 +3978,10 @@ export default function CultosPage() {
       }
 
       setCultos(cultosComNome);
-      const modelosFallback = extractModeloLiturgicoPadrao(igrejaRaw?.modelo_liturgico_padrao);
+      const modelosFallback = extractModeloLiturgicoPadrao(
+        igrejaRaw?.modelo_liturgico_padrao,
+        locale
+      );
       const fallbackPorChave = new Map(
         modelosFallback.map((item) => [`${item.ordem}-${item.tipo}-${item.bloco}`, item] as const)
       );
@@ -3437,14 +3990,43 @@ export default function CultosPage() {
         ordem: typeof item.ordem === 'number' ? item.ordem : 0,
         tipo: typeof item.tipo === 'string' ? item.tipo : '',
         descricao_padrao: typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '',
-        conteudo_publico_padrao:
+        conteudo_publico_padrao_i18n: mergeLocalizedModelValue(
+          item.conteudo_publico_padrao_i18n,
           fallbackPorChave.get(
             `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
-          )?.conteudo_publico_padrao || '',
-        descricao_interna_padrao:
+          )?.conteudo_publico_padrao_i18n,
+          undefined,
           fallbackPorChave.get(
             `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
-          )?.descricao_interna_padrao || (typeof item.descricao_padrao === 'string' ? item.descricao_padrao : ''),
+          )?.conteudo_publico_padrao
+        ),
+        conteudo_publico_padrao: resolveLocalizedText(
+          item.conteudo_publico_padrao_i18n,
+          locale,
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.conteudo_publico_padrao || ''
+        ),
+        descricao_interna_padrao_i18n: mergeLocalizedModelValue(
+          item.descricao_interna_padrao_i18n,
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.descricao_interna_padrao_i18n,
+          typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '',
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.descricao_interna_padrao ||
+            fallbackPorChave.get(
+              `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+            )?.descricao_padrao
+        ),
+        descricao_interna_padrao: resolveLocalizedText(
+          item.descricao_interna_padrao_i18n,
+          locale,
+          fallbackPorChave.get(
+            `${typeof item.ordem === 'number' ? item.ordem : 0}-${typeof item.tipo === 'string' ? item.tipo : ''}-${typeof item.bloco === 'string' ? item.bloco : ''}`
+          )?.descricao_interna_padrao || (typeof item.descricao_padrao === 'string' ? item.descricao_padrao : '')
+        ),
         tem_cantico: item.tem_cantico === true,
       }));
       const tiposDaIgreja = extractTiposLiturgicos(igrejaRaw?.tipos_liturgicos);
@@ -3505,7 +4087,13 @@ export default function CultosPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [locale]);
+
+  useEffect(() => {
+    if (!permLoading && permissoes.podeGerenciarCultos) {
+      carregarTudo();
+    }
+  }, [carregarTudo, permLoading, permissoes.podeGerenciarCultos]);
 
   const shareWhatsApp = async (culto: Culto) => {
     const igrejaId = getStoredChurchId();

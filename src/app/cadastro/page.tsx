@@ -2,7 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
+import { resolveLocalizedText } from '@/lib/church-i18n';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 // Remove o componente EnderecoAutocomplete que está dentro do arquivo
 // Adiciona no topo:
@@ -21,6 +23,10 @@ type IgrejaCadastro = {
   slug?: string | null;
   cidade?: string | null;
   uf?: string | null;
+  apresentacao_titulo?: string | null;
+  apresentacao_texto?: string | null;
+  apresentacao_titulo_i18n?: Partial<Record<Locale, string>> | null;
+  apresentacao_texto_i18n?: Partial<Record<Locale, string>> | null;
 };
 
 type StatusMembro = 'ativo' | 'congregado' | 'visitante';
@@ -142,6 +148,29 @@ function CadastroPublicoContent() {
       igrejaSlugParam,
       tr('Igreja Presbiteriana', 'Iglesia Presbiteriana', 'Presbyterian Church')
     );
+  const apresentacaoTitulo = useMemo(
+    () =>
+      resolveLocalizedText(
+        igrejaSelecionada?.apresentacao_titulo_i18n,
+        locale,
+        igrejaSelecionada?.apresentacao_titulo
+      ),
+    [igrejaSelecionada?.apresentacao_titulo_i18n, igrejaSelecionada?.apresentacao_titulo, locale]
+  );
+  const apresentacaoTexto = useMemo(
+    () =>
+      resolveLocalizedText(
+        igrejaSelecionada?.apresentacao_texto_i18n,
+        locale,
+        igrejaSelecionada?.apresentacao_texto
+      ),
+    [igrejaSelecionada?.apresentacao_texto_i18n, igrejaSelecionada?.apresentacao_texto, locale]
+  );
+  const temApresentacaoIgreja = Boolean(apresentacaoTitulo || apresentacaoTexto);
+  const paragrafosApresentacao = useMemo(
+    () => apresentacaoTexto.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean),
+    [apresentacaoTexto]
+  );
 
   const statusOptions = useMemo(
     () => [
@@ -437,6 +466,26 @@ function CadastroPublicoContent() {
               )}
             </p>
           </div>
+        )}
+
+        {!loadingIgreja && igrejaSelecionada && temApresentacaoIgreja && (
+          <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-[linear-gradient(135deg,#f5fbf7_0%,#edf7f1_100%)] shadow-sm">
+            <div className="border-b border-emerald-100 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                {tr('Conheça a igreja', 'Conoce la iglesia', 'Meet the church')}
+              </p>
+              <h2 className="mt-2 text-lg font-bold text-slate-900">
+                {apresentacaoTitulo || nomeIgreja}
+              </h2>
+            </div>
+            {paragrafosApresentacao.length > 0 && (
+              <div className="space-y-3 px-4 py-4 text-sm leading-relaxed text-slate-700">
+                {paragrafosApresentacao.map((paragrafo, index) => (
+                  <p key={`${index}-${paragrafo.slice(0, 24)}`}>{paragrafo}</p>
+                ))}
+              </div>
+            )}
+          </section>
         )}
 
         {etapa === 1 && (

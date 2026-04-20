@@ -3,6 +3,8 @@
 import { useCallback, useState } from 'react';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { CargoTipo } from '@/lib/permissions';
+import { useLocale } from '@/i18n/provider';
+import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 
 export interface HubUsuarioVinculo {
   igreja_id: string;
@@ -49,6 +51,7 @@ type HubIgreja = {
 };
 
 export function useHubUsuarios() {
+  const locale = useLocale();
   const [usuarios, setUsuarios] = useState<HubUsuario[]>([]);
   const [igrejas, setIgrejas] = useState<HubIgreja[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,7 +84,7 @@ export function useHubUsuarios() {
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Erro ao carregar hub de usuários.');
+          throw new Error(resolveApiErrorMessage(locale, payload, 'Erro ao carregar hub de usuários.'));
         }
 
         setUsuarios((payload.usuarios || []) as HubUsuario[]);
@@ -105,7 +108,7 @@ export function useHubUsuarios() {
         setLoading(false);
       }
     },
-    []
+    [locale]
   );
 
   const salvarUsuario = useCallback(async (payload: HubUsuarioPayload) => {
@@ -124,12 +127,12 @@ export function useHubUsuarios() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao salvar usuário no hub.');
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao salvar usuário no hub.'));
       }
 
       return {
         success: true,
-        message: data.message as string,
+        message: resolveApiSuccessMessage(locale, data, data.message),
       };
     } catch (err: any) {
       const message = err.message || 'Erro ao salvar usuário no hub.';
@@ -141,7 +144,7 @@ export function useHubUsuarios() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   return {
     usuarios,

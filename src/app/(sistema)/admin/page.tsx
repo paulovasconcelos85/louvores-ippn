@@ -20,11 +20,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useLocale } from '@/i18n/provider';
 import { getCargoLabel, getCargoCor } from '@/lib/permissions';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, getStoredChurchId } from '@/lib/church-utils';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -39,6 +41,7 @@ interface MinhaProximaEscala {
 
 export default function AdminPage() {
   const router = useRouter();
+  const locale = useLocale();
   const { user, loading: authLoading } = useAuth();
   const { usuarioPermitido, loading: permLoading, permissoes } = usePermissions();
   
@@ -132,7 +135,9 @@ export default function AdminPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao carregar notificações.');
+        throw new Error(
+          resolveApiErrorMessage(locale, data, 'Erro ao carregar notificações.')
+        );
       }
 
       setUnreadNotifications(data.unread || { total: 0, pastoral: 0, escalas: 0 });
@@ -140,7 +145,7 @@ export default function AdminPage() {
       console.error('Erro ao carregar resumo de notificações:', error);
       setUnreadNotifications({ total: 0, pastoral: 0, escalas: 0 });
     }
-  }, [user, igrejaAtual?.id]);
+  }, [user, igrejaAtual?.id, locale]);
 
   const getTipoCultoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
@@ -182,7 +187,9 @@ export default function AdminPage() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || 'Erro ao carregar igrejas.');
+          throw new Error(
+            resolveApiErrorMessage(locale, data, 'Erro ao carregar igrejas.')
+          );
         }
 
         if (!ativo) return;
@@ -220,7 +227,7 @@ export default function AdminPage() {
     return () => {
       ativo = false;
     };
-  }, []);
+  }, [locale]);
 
   if (loading) {
     return (

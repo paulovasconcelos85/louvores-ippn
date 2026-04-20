@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import https from 'node:https';
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
+import { resolveLocalizedText } from '@/lib/church-i18n';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 
@@ -107,6 +109,7 @@ interface BoletimSecaoRow {
   culto_id: number | null;
   tipo: string;
   titulo: string;
+  titulo_i18n?: unknown;
   icone: string | null;
   ordem: number | null;
   visivel: boolean | null;
@@ -117,6 +120,7 @@ interface BoletimItemRow {
   id: string;
   secao_id: string | null;
   conteudo: string;
+  conteudo_i18n?: unknown;
   destaque: boolean | null;
   ordem: number | null;
   criado_em: string | null;
@@ -135,6 +139,7 @@ interface LegacyLouvorItemRow {
   tom: string | null;
   cantico_id: string | null;
   conteudo_publico: string | null;
+  conteudo_publico_i18n?: unknown;
   descricao: string | null;
   horario?: string | null;
 }
@@ -144,6 +149,7 @@ interface LegacyCultoRow {
   Dia: string;
   imagem_url: string | null;
   palavra_pastoral: string | null;
+  palavra_pastoral_i18n?: unknown;
   palavra_pastoral_autor: string | null;
 }
 
@@ -162,6 +168,7 @@ interface LegacyBoletimSecao {
 
 interface BoletimFallbackMeta {
   secaoTitulo: string;
+  secaoTituloI18n?: Partial<Record<Locale, string>> | null;
   secaoIcone: string | null;
   secaoVisivel: boolean;
   secaoOrdem: number;
@@ -171,6 +178,11 @@ interface BoletimFallbackMeta {
 
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 const LITURGIA_META_TIPO = '__liturgia__:nome';
+
+function getRequestedLocale(request: NextRequest): Locale {
+  const locale = request.nextUrl.searchParams.get('locale');
+  return SUPPORTED_LOCALES.includes(locale as Locale) ? (locale as Locale) : DEFAULT_LOCALE;
+}
 
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
@@ -198,6 +210,12 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
 
     return {
       secaoTitulo: parsed.secaoTitulo,
+      secaoTituloI18n:
+        parsed.secaoTituloI18n &&
+        typeof parsed.secaoTituloI18n === 'object' &&
+        !Array.isArray(parsed.secaoTituloI18n)
+          ? (parsed.secaoTituloI18n as Partial<Record<Locale, string>>)
+          : null,
       secaoIcone: typeof parsed.secaoIcone === 'string' ? parsed.secaoIcone : null,
       secaoVisivel: parsed.secaoVisivel !== false,
       secaoOrdem: parsed.secaoOrdem,
@@ -211,7 +229,8 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
 
 function buildExtraSectionsFromFallbackRows(
   rows: LegacyLouvorItemRow[],
-  cultoId: number
+  cultoId: number,
+  locale: Locale
 ): LegacyBoletimSecao[] {
   const secoes = new Map<string, LegacyBoletimSecao>();
   const itemOrders = new Map<string, number>();
@@ -219,11 +238,20 @@ function buildExtraSectionsFromFallbackRows(
   rows.forEach((row) => {
     const tipo = extrairTipoBoletimFallback(row.tipo);
     const meta = parseBoletimFallbackMeta(row.descricao);
-    const conteudo = row.conteudo_publico?.trim() || '';
+    const conteudo = resolveLocalizedText(
+      row.conteudo_publico_i18n,
+      locale,
+      row.conteudo_publico || ''
+    );
 
     if (!tipo || !meta || !conteudo || meta.secaoVisivel === false) return;
 
-    const key = `${meta.secaoOrdem}:${tipo}:${meta.secaoTitulo}`;
+    const titulo = resolveLocalizedText(
+      meta.secaoTituloI18n,
+      locale,
+      meta.secaoTitulo
+    );
+    const key = `${meta.secaoOrdem}:${tipo}:${titulo}`;
 
     if (!secoes.has(key)) {
       secoes.set(key, {
@@ -231,7 +259,7 @@ function buildExtraSectionsFromFallbackRows(
         igreja_id: null,
         culto_id: cultoId,
         tipo,
-        titulo: meta.secaoTitulo,
+        titulo,
         icone: meta.secaoIcone,
         ordem: meta.secaoOrdem + 10,
         visivel: meta.secaoVisivel,
@@ -350,7 +378,8 @@ function buildLiturgiaBoletimItems(
   itensLiturgia: LegacyLouvorItemRow[],
   canticosPorId: Map<string, { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null }>,
   includeInternal: boolean,
-  secaoId: string
+  secaoId: string,
+  locale: Locale
 ) {
   const itensBoletim: BoletimItemRow[] = [];
   let grupoAtual: {
@@ -396,7 +425,11 @@ function buildLiturgiaBoletimItems(
     if (item.tipo === LITURGIA_META_TIPO) {
       finalizarGrupoAtual();
 
-      const nomeLiturgia = item.conteudo_publico?.trim() || '';
+      const nomeLiturgia = resolveLocalizedText(
+        item.conteudo_publico_i18n,
+        locale,
+        item.conteudo_publico || ''
+      );
       itensBoletim.push({
         id: item.id,
         secao_id: secaoId,
@@ -410,7 +443,11 @@ function buildLiturgiaBoletimItems(
     }
 
     const tipo = item.tipo?.trim() || `Item ${(item.ordem || itensBoletim.length) + 1}`;
-    const conteudoPublico = item.conteudo_publico?.trim() || '';
+    const conteudoPublico = resolveLocalizedText(
+      item.conteudo_publico_i18n,
+      locale,
+      item.conteudo_publico || ''
+    );
     const conteudoInterno = item.descricao?.trim() || '';
     const horario = item.horario?.trim() || null;
     const cantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
@@ -470,8 +507,26 @@ function mergeLiturgiaSecao(
   return [...semLiturgia, secaoMesclada].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 }
 
+function filtrarSecoesEstruturadasAtuais(
+  secoes: BoletimSecaoRow[],
+  cultoIdAtual: number | null
+) {
+  if (cultoIdAtual === null) {
+    return secoes;
+  }
+
+  const secoesDoCultoAtual = secoes.filter((secao) => secao.culto_id === cultoIdAtual);
+  if (secoesDoCultoAtual.length > 0) {
+    return secoesDoCultoAtual;
+  }
+
+  const secoesGlobais = secoes.filter((secao) => secao.culto_id === null);
+  return secoesGlobais.length > 0 ? secoesGlobais : [];
+}
+
 async function buildLatestLiturgiaSection(
   igrejaId: string,
+  locale: Locale,
   includeInternal = false
 ): Promise<LegacyBoletimSecao | null> {
   const { data: cultoRaw, error: cultoError } = await supabaseAdmin
@@ -489,7 +544,7 @@ async function buildLatestLiturgiaSection(
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
@@ -516,15 +571,20 @@ async function buildLatestLiturgiaSection(
       itensLiturgia,
       canticosPorId,
       includeInternal,
-      `legacy-liturgia-${culto['Culto nr.']}`
+      `legacy-liturgia-${culto['Culto nr.']}`,
+      locale
     ),
   };
 }
 
-async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = false) {
+async function buildLegacyBoletimFallback(
+  igrejaId: string,
+  locale: Locale,
+  includeInternal = false
+) {
   const { data: cultoRaw, error: cultoError } = await supabaseAdmin
     .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_autor, igreja_id')
+    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor, igreja_id')
     .eq('igreja_id', igrejaId)
     .order('Dia', { ascending: false })
     .limit(1)
@@ -542,7 +602,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
     .eq('culto_id', culto['Culto nr.'])
     .order('ordem', { ascending: true });
 
@@ -579,6 +639,11 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
   }
 
   if (culto.palavra_pastoral?.trim()) {
+    const palavraPastoral = resolveLocalizedText(
+      culto.palavra_pastoral_i18n,
+      locale,
+      culto.palavra_pastoral || ''
+    );
     secoes.push({
       id: `legacy-pastoral-${culto['Culto nr.']}`,
       igreja_id: null,
@@ -593,7 +658,7 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
         {
           id: `legacy-pastoral-conteudo-${culto['Culto nr.']}`,
           secao_id: `legacy-pastoral-${culto['Culto nr.']}`,
-          conteudo: `${culto.palavra_pastoral.trim()}${
+          conteudo: `${palavraPastoral.trim()}${
             culto.palavra_pastoral_autor?.trim()
               ? `\n\n${culto.palavra_pastoral_autor.trim()}`
               : ''
@@ -621,12 +686,13 @@ async function buildLegacyBoletimFallback(igrejaId: string, includeInternal = fa
         itensLiturgia,
         canticosPorId,
         includeInternal,
-        `legacy-liturgia-${culto['Culto nr.']}`
+        `legacy-liturgia-${culto['Culto nr.']}`,
+        locale
       ),
     });
   }
 
-  secoes.push(...buildExtraSectionsFromFallbackRows(itens, culto['Culto nr.']));
+  secoes.push(...buildExtraSectionsFromFallbackRows(itens, culto['Culto nr.'], locale));
 
   return {
     boletimSecoes: secoes,
@@ -640,6 +706,7 @@ export async function GET(request: NextRequest) {
     etapa = 'auth';
     const user = await getAuthenticatedUserFromServerCookies(request);
     const includeInternal = Boolean(user?.id);
+    const locale = getRequestedLocale(request);
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
 
     if (!igrejaId) {
@@ -667,6 +734,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    etapa = 'buscar-culto-atual';
+    const { data: cultoAtualRaw, error: cultoAtualError } = await supabaseAdmin
+      .from('Louvores IPPN')
+      .select('"Culto nr."')
+      .eq('igreja_id', igrejaId)
+      .order('Dia', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cultoAtualError) throw cultoAtualError;
+
+    const cultoAtualId =
+      typeof cultoAtualRaw?.['Culto nr.'] === 'number' ? cultoAtualRaw['Culto nr.'] : null;
+
     etapa = 'buscar-secoes';
     const { data: secoesRaw, error: secoesError } = await supabaseAdmin
       .from('boletim_secoes')
@@ -678,7 +759,10 @@ export async function GET(request: NextRequest) {
 
     if (secoesError) throw secoesError;
 
-    const secoes = (secoesRaw || []) as BoletimSecaoRow[];
+    const secoes = filtrarSecoesEstruturadasAtuais(
+      (secoesRaw || []) as BoletimSecaoRow[],
+      cultoAtualId
+    );
     const secaoIds = secoes.map((secao) => secao.id);
 
     etapa = 'buscar-detalhes-relacionados';
@@ -712,7 +796,7 @@ export async function GET(request: NextRequest) {
       supabaseAdmin
         .from('igrejas')
         .select(
-          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim, apresentacao_titulo, apresentacao_texto, apresentacao_imagem_url, apresentacao_youtube_url, apresentacao_galeria'
+          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, apresentacao_imagem_url, apresentacao_youtube_url, apresentacao_galeria'
         )
         .eq('id', igrejaId)
         .maybeSingle(),
@@ -734,9 +818,13 @@ export async function GET(request: NextRequest) {
 
     let boletimSecoes = secoes.map((secao) => ({
       ...secao,
+      titulo: resolveLocalizedText(secao.titulo_i18n, locale, secao.titulo),
       itens: (itensPorSecao.get(secao.id) || []).sort(
         (a, b) => (a.ordem || 0) - (b.ordem || 0)
-      ),
+      ).map((item) => ({
+        ...item,
+        conteudo: resolveLocalizedText(item.conteudo_i18n, locale, item.conteudo),
+      })),
     }));
 
     let message: string | null = null;
@@ -744,13 +832,13 @@ export async function GET(request: NextRequest) {
 
     if (boletimSecoes.length === 0 || secoesComConteudo.length === 0) {
       etapa = 'fallback-legado';
-      const fallback = await buildLegacyBoletimFallback(igrejaId, false);
+      const fallback = await buildLegacyBoletimFallback(igrejaId, locale, false);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
     }
 
     etapa = 'sincronizar-liturgia';
-    const liturgiaSecaoAtual = await buildLatestLiturgiaSection(igrejaId, includeInternal);
+    const liturgiaSecaoAtual = await buildLatestLiturgiaSection(igrejaId, locale, includeInternal);
     boletimSecoes = mergeLiturgiaSecao(boletimSecoes, liturgiaSecaoAtual);
 
     if (includeInternal && boletimSecoes.some((secao) => secao.id.startsWith('legacy-'))) {
@@ -768,7 +856,7 @@ export async function GET(request: NextRequest) {
       if (cultoId) {
         const { data: itensRaw, error: itensError } = await supabaseAdmin
           .from('louvor_itens')
-          .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao, horario')
+          .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
           .eq('culto_id', cultoId)
           .order('ordem', { ascending: true });
 
@@ -786,7 +874,8 @@ export async function GET(request: NextRequest) {
               itensLegacy.filter((item) => !isBoletimFallbackTipo(item.tipo)),
               canticosPorId,
               true,
-              secao.id
+              secao.id,
+              locale
             ),
           };
         });

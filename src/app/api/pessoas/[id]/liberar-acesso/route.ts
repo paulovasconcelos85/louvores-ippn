@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,11 +32,11 @@ export async function POST(
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers) {
-      return NextResponse.json({ error: 'Sem permissão para liberar acesso.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para liberar acesso.');
     }
 
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(
@@ -50,16 +51,14 @@ export async function POST(
       .single();
 
     if (pessoaError || !pessoa) {
-      return NextResponse.json(
-        { error: 'Pessoa não encontrada.' },
-        { status: 404 }
-      );
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada.');
     }
 
     if (!pessoa.email) {
-      return NextResponse.json(
-        { error: 'Adicione um e-mail antes de liberar o acesso.' },
-        { status: 400 }
+      return apiError(
+        'ACCESS_EMAIL_REQUIRED',
+        400,
+        'Adicione um e-mail antes de liberar o acesso.'
       );
     }
 
@@ -127,9 +126,10 @@ export async function POST(
     }
 
     if (acessoExistente?.pessoa_id && acessoExistente.pessoa_id !== pessoa.id) {
-      return NextResponse.json(
-        { error: 'Este e-mail já está vinculado a outra pessoa com acesso.' },
-        { status: 409 }
+      return apiError(
+        'ACCESS_EMAIL_CONFLICT',
+        409,
+        'Este e-mail já está vinculado a outra pessoa com acesso.'
       );
     }
 
@@ -209,17 +209,22 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: authUserId
-        ? `${pessoa.nome} agora tem acesso liberado e sincronizado.`
-        : `${pessoa.nome} agora tem acesso liberado. A pessoa já pode criar ou usar a conta com este e-mail.`,
-    });
+    return apiSuccess(
+      {},
+      {
+        message: authUserId
+          ? `${pessoa.nome} agora tem acesso liberado e sincronizado.`
+          : `${pessoa.nome} agora tem acesso liberado. A pessoa já pode criar ou usar a conta com este e-mail.`,
+        messageCode: authUserId ? 'ACCESS_GRANTED_SYNCED' : 'ACCESS_GRANTED',
+        messageParams: { nome: pessoa.nome },
+      }
+    );
   } catch (error: any) {
     console.error('Erro ao liberar acesso:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao liberar acesso.' },
-      { status: 500 }
+    return apiError(
+      'SAVE_PERSON_FAILED',
+      500,
+      error.message || 'Erro ao liberar acesso.'
     );
   }
 }

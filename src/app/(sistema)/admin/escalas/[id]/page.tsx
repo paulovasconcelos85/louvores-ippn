@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -8,12 +8,11 @@ import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { formatPhoneNumber } from '@/lib/phone-mask';
+import { getIntlLocale } from '@/i18n/config';
+import { useLocale } from '@/i18n/provider';
 import {
   ArrowLeft,
   Calendar,
-  Clock,
-  Church,
-  Music,
   Users,
   Plus,
   Save,
@@ -22,12 +21,9 @@ import {
   CheckCircle2,
   Clock3,
   Phone,
-  Mail,
-  MessageCircle,
   Loader2,
   UserPlus,
   AlertCircle,
-  Share2,
   Image as ImageIcon
 } from 'lucide-react';
 
@@ -81,17 +77,24 @@ interface Cantico {
 
 // 🎵 APENAS CATEGORIAS MUSICAIS E TÉCNICAS
 const CATEGORIAS_MUSICAIS = {
-  'louvor_lideranca': { nome: '🎤 Ministração', ordem: 1 },
-  'louvor_vocal': { nome: '🎵 Vocais', ordem: 2 },
-  'louvor_instrumento': { nome: '🎸 Instrumentos', ordem: 3 },
-  'tecnico_audio': { nome: '🎛️ Mesa/Áudio', ordem: 4 },
-  'tecnico_video': { nome: '📽️ Mídia/Slideshow', ordem: 5 },
+  'louvor_lideranca': { ordem: 1 },
+  'louvor_vocal': { ordem: 2 },
+  'louvor_instrumento': { ordem: 3 },
+  'tecnico_audio': { ordem: 4 },
+  'tecnico_video': { ordem: 5 },
 };
 
 export default function GerenciarEscalaPage() {
   const router = useRouter();
   const params = useParams();
   const escalaId = params?.id as string;
+  const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
   
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
@@ -100,6 +103,7 @@ export default function GerenciarEscalaPage() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
+  const [mensagemTipo, setMensagemTipo] = useState<'success' | 'warning' | 'error' | null>(null);
   
   const [titulo, setTitulo] = useState('');
   const [data, setData] = useState('');
@@ -118,6 +122,35 @@ export default function GerenciarEscalaPage() {
   const [todasTags, setTodasTags] = useState<Tag[]>([]);
 
   const totalLoading = authLoading || permLoading;
+  const tipoCultoLabels = useMemo(
+    () => ({
+      dominical_manha: tr('Dominical - Manhã', 'Dominical - Mañana', 'Sunday - Morning'),
+      dominical_noite: tr('Dominical - Noite', 'Dominical - Noche', 'Sunday - Evening'),
+      quarta: tr('Quarta-feira', 'Miércoles', 'Wednesday'),
+      especial: tr('Culto Especial', 'Culto Especial', 'Special Service'),
+    }),
+    [tr]
+  );
+  const statusLabels = useMemo(
+    () => ({
+      rascunho: tr('Rascunho', 'Borrador', 'Draft'),
+      publicada: tr('Publicada', 'Publicada', 'Published'),
+      concluida: tr('Concluída', 'Concluida', 'Completed'),
+    }),
+    [tr]
+  );
+  const formatarDataCompleta = useCallback(
+    (value: string) => new Date(value + 'T00:00:00').toLocaleDateString(intlLocale),
+    [intlLocale]
+  );
+  const formatarDataLonga = useCallback(
+    (value: string) =>
+      new Date(value + 'T00:00:00').toLocaleDateString(intlLocale, {
+        day: '2-digit',
+        month: 'long',
+      }),
+    [intlLocale]
+  );
 
   useEffect(() => {
     if (!totalLoading && !user) {
@@ -131,12 +164,6 @@ export default function GerenciarEscalaPage() {
   }, [user, totalLoading, permissoes.podeGerenciarEscalas, router]);
 
   useEffect(() => {
-    if (user && permissoes.podeGerenciarEscalas && escalaId) {
-      carregarDados();
-    }
-  }, [user, permissoes.podeGerenciarEscalas, escalaId]);
-
-  useEffect(() => {
     if (escala) {
       setTitulo(escala.titulo);
       setData(escala.data);
@@ -148,14 +175,15 @@ export default function GerenciarEscalaPage() {
     }
   }, [escala]);
 
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
       const igrejaId = getStoredChurchId();
 
       if (!igrejaId) {
         setEscala(null);
-        setMensagem('Selecione uma igreja para visualizar a escala');
+        setMensagem(tr('Selecione uma igreja para visualizar a escala', 'Selecciona una iglesia para ver la escala', 'Select a church to view the schedule'));
+        setMensagemTipo('warning');
         return;
       }
       
@@ -212,7 +240,10 @@ export default function GerenciarEscalaPage() {
       const usuariosPayload = await usuariosResponse.json();
 
       if (!usuariosResponse.ok) {
-        throw new Error(usuariosPayload.error || 'Erro ao carregar usuários');
+        throw new Error(
+          usuariosPayload.error ||
+            tr('Erro ao carregar usuários', 'Error al cargar usuarios', 'Error loading users')
+        );
       }
 
       setTodosUsuarios(usuariosPayload.data || []);
@@ -227,22 +258,30 @@ export default function GerenciarEscalaPage() {
       
     } catch (error: any) {
       console.error('Erro ao carregar:', error);
-      setMensagem('Erro ao carregar escala');
+      setMensagem(tr('Erro ao carregar escala', 'Error al cargar la escala', 'Error loading schedule'));
+      setMensagemTipo('error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [escalaId, tr]);
+
+  useEffect(() => {
+    if (user && permissoes.podeGerenciarEscalas && escalaId) {
+      carregarDados();
+    }
+  }, [carregarDados, user, permissoes.podeGerenciarEscalas, escalaId]);
 
   const salvarCampos = async () => {
     if (!escala) return;
     
     setSalvando(true);
     setMensagem('');
+    setMensagemTipo(null);
     
     try {
       const igrejaId = getStoredChurchId();
       if (!igrejaId) {
-        throw new Error('Nenhuma igreja selecionada');
+        throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
       const { error } = await supabase
         .from('escalas')
@@ -261,11 +300,16 @@ export default function GerenciarEscalaPage() {
 
       if (error) throw error;
       
-      setMensagem('Alterações salvas!');
-      setTimeout(() => setMensagem(''), 2000);
+      setMensagem(tr('Alterações salvas!', '¡Cambios guardados!', 'Changes saved!'));
+      setMensagemTipo('success');
+      setTimeout(() => {
+        setMensagem('');
+        setMensagemTipo(null);
+      }, 2000);
       carregarDados();
     } catch (error: any) {
-      setMensagem(`Erro: ${error.message}`);
+      setMensagem(`${tr('Erro', 'Error', 'Error')}: ${error.message}`);
+      setMensagemTipo('error');
     } finally {
       setSalvando(false);
     }
@@ -280,7 +324,8 @@ export default function GerenciarEscalaPage() {
 
   const adicionarPessoa = async () => {
     if (!usuarioSelecionado || !funcaoSelecionada || !escala) {
-      setMensagem('Selecione usuário e função');
+      setMensagem(tr('Selecione usuário e função', 'Selecciona usuario y función', 'Select user and role'));
+      setMensagemTipo('warning');
       return;
     }
 
@@ -305,14 +350,24 @@ export default function GerenciarEscalaPage() {
   };
 
   const removerPessoa = async (funcaoId: string, nome: string) => {
-    if (!confirm(`Remover ${nome} da escala?`) || !escala) return;
+    if (
+      !confirm(
+        tr(
+          `Remover ${nome} da escala?`,
+          `¿Quitar a ${nome} de la escala?`,
+          `Remove ${nome} from the schedule?`
+        )
+      ) ||
+      !escala
+    ) return;
 
     setEscala(prev => ({
       ...prev!,
       escalas_funcoes: prev!.escalas_funcoes.filter(f => f.id !== funcaoId)
     }));
 
-    setMensagem('Pessoa removida (pendente de salvar)');
+    setMensagem(tr('Pessoa removida (pendente de salvar)', 'Persona eliminada (pendiente de guardar)', 'Person removed (pending save)'));
+    setMensagemTipo('warning');
   };
 
   const toggleConfirmacao = async (funcaoId: string, confirmadoAtual: boolean) => {
@@ -327,14 +382,17 @@ export default function GerenciarEscalaPage() {
   };
 
   const getTipoCultoLabel = (tipo: string) => {
-    const labels: Record<string, string> = {
-      dominical_manha: 'Dominical - Manhã',
-      dominical_noite: 'Dominical - Noite',
-      quarta: 'Quarta-feira',
-      especial: 'Culto Especial'
-    };
-    return labels[tipo] || tipo;
+    return tipoCultoLabels[tipo as keyof typeof tipoCultoLabels] || tipo;
   };
+
+  const getCategoriaNome = (categoria: string) =>
+    ({
+      louvor_lideranca: tr('🎤 Ministração', '🎤 Ministración', '🎤 Leading'),
+      louvor_vocal: tr('🎵 Vocais', '🎵 Vocales', '🎵 Vocals'),
+      louvor_instrumento: tr('🎸 Instrumentos', '🎸 Instrumentos', '🎸 Instruments'),
+      tecnico_audio: tr('🎛️ Mesa/Áudio', '🎛️ Mesa/Audio', '🎛️ Audio Desk'),
+      tecnico_video: tr('📽️ Mídia/Slideshow', '📽️ Medios/Presentación', '📽️ Media/Slideshow'),
+    }[categoria] || categoria);
 
   // 🎯 Agrupar APENAS por categorias musicais
   const agruparPorCategoria = () => {
@@ -362,15 +420,12 @@ export default function GerenciarEscalaPage() {
   const gerarImagemEscala = () => {
     if (!escala) return;
 
-    const dataFormatada = new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'long'
-    });
+    const dataFormatada = formatarDataLonga(escala.data);
 
     let texto = `📅 ${escala.titulo.toUpperCase()}\n`;
-    texto += `DATA: ${dataFormatada.toUpperCase()}\n`;
-    texto += `HORÁRIO: ${escala.hora_inicio}\n`;
-    if (escala.culto_id) texto += `CULTO: #${escala.culto_id}\n`;
+    texto += `${tr('DATA', 'FECHA', 'DATE')}: ${dataFormatada.toUpperCase()}\n`;
+    texto += `${tr('HORÁRIO', 'HORARIO', 'TIME')}: ${escala.hora_inicio}\n`;
+    if (escala.culto_id) texto += `${tr('CULTO', 'CULTO', 'SERVICE')}: #${escala.culto_id}\n`;
     texto += `\n${'═'.repeat(30)}\n\n`;
 
     const grupos = agruparPorCategoria();
@@ -381,10 +436,9 @@ export default function GerenciarEscalaPage() {
     });
 
     categoriasOrdenadas.forEach(cat => {
-      const catInfo = CATEGORIAS_MUSICAIS[cat as keyof typeof CATEGORIAS_MUSICAIS];
       const funcoes = grupos[cat];
 
-      texto += `${catInfo.nome}\n`;
+      texto += `${getCategoriaNome(cat)}\n`;
       funcoes.forEach(func => {
         texto += `  • ${func.pessoas.nome} - ${func.tags_funcoes.nome}\n`;
       });
@@ -392,27 +446,32 @@ export default function GerenciarEscalaPage() {
     });
 
     texto += `${'═'.repeat(30)}\n`;
-    texto += `Igreja Presbiteriana da Ponta Negra\n`;
-    texto += `Uma igreja da família de Deus`;
+    texto += `${tr('Igreja Presbiteriana da Ponta Negra', 'Iglesia Presbiteriana de Ponta Negra', 'Ponta Negra Presbyterian Church')}\n`;
+    texto += `${tr('Uma igreja da família de Deus', 'Una iglesia de la familia de Dios', "A church in God's family")}`;
 
     navigator.clipboard.writeText(texto);
     
     const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');
     
-    setMensagem('✅ Escala copiada! Abrindo WhatsApp...');
-    setTimeout(() => setMensagem(''), 3000);
+    setMensagem(tr('✅ Escala copiada! Abrindo WhatsApp...', '✅ ¡Escala copiada! Abriendo WhatsApp...', '✅ Schedule copied! Opening WhatsApp...'));
+    setMensagemTipo('success');
+    setTimeout(() => {
+      setMensagem('');
+      setMensagemTipo(null);
+    }, 3000);
   };
 
   const salvarEscalaCompleta = async () => {
     if (!escala) return;
     setSalvando(true);
     setMensagem('');
+    setMensagemTipo(null);
 
     try {
       const igrejaId = getStoredChurchId();
       if (!igrejaId) {
-        throw new Error('Nenhuma igreja selecionada');
+        throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
       await supabase.from('escalas_funcoes').delete().eq('escala_id', escalaId);
 
@@ -427,10 +486,12 @@ export default function GerenciarEscalaPage() {
       const { error } = await supabase.from('escalas_funcoes').insert(payload);
       if (error) throw error;
 
-      setMensagem('Escala salva com sucesso!');
+      setMensagem(tr('Escala salva com sucesso!', '¡Escala guardada con éxito!', 'Schedule saved successfully!'));
+      setMensagemTipo('success');
       carregarDados();
-    } catch (e: any) {
-      setMensagem('Erro ao salvar escala');
+    } catch {
+      setMensagem(tr('Erro ao salvar escala', 'Error al guardar la escala', 'Error saving schedule'));
+      setMensagemTipo('error');
     } finally {
       setSalvando(false);
     }
@@ -441,7 +502,7 @@ export default function GerenciarEscalaPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="animate-spin h-12 w-12 text-emerald-700 mx-auto" />
-          <p className="mt-4 text-slate-600">Carregando...</p>
+          <p className="mt-4 text-slate-600">{tr('Carregando...', 'Cargando...', 'Loading...')}</p>
         </div>
       </div>
     );
@@ -452,13 +513,15 @@ export default function GerenciarEscalaPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <p className="text-slate-600 text-lg mb-4">Escala não encontrada</p>
+          <p className="text-slate-600 text-lg mb-4">
+            {tr('Escala não encontrada', 'Escala no encontrada', 'Schedule not found')}
+          </p>
           <button
             onClick={() => router.push('/admin/escalas')}
             className="text-emerald-700 hover:text-emerald-800 font-medium flex items-center gap-2 mx-auto"
           >
             <ArrowLeft size={18} />
-            Voltar
+            {tr('Voltar', 'Volver', 'Back')}
           </button>
         </div>
       </div>
@@ -486,7 +549,7 @@ export default function GerenciarEscalaPage() {
               className="text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-2"
             >
               <ArrowLeft size={20} />
-              <span>Voltar</span>
+              <span>{tr('Voltar', 'Volver', 'Back')}</span>
             </button>
             
             <button
@@ -494,21 +557,27 @@ export default function GerenciarEscalaPage() {
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
             >
               <ImageIcon size={18} />
-              <span>Compartilhar</span>
+              <span>{tr('Compartilhar', 'Compartir', 'Share')}</span>
             </button>
           </div>
 
           {mensagem && (
             <div className={`p-4 rounded-lg ${
-              mensagem.includes('sucesso') || mensagem.includes('salva') || mensagem.includes('Alterações') || mensagem.includes('copiada')
+              mensagemTipo === 'success'
                 ? 'bg-green-50 text-green-800 border border-green-200' 
-                : mensagem.includes('pendente')
+                : mensagemTipo === 'warning'
                 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200'
                 : 'bg-red-50 text-red-800 border border-red-200'
             }`}>
               <div className="flex items-center justify-between">
                 <span>{mensagem}</span>
-                <button onClick={() => setMensagem('')} className="text-current opacity-50 hover:opacity-100">
+                <button
+                  onClick={() => {
+                    setMensagem('');
+                    setMensagemTipo(null);
+                  }}
+                  className="text-current opacity-50 hover:opacity-100"
+                >
                   <X size={18} />
                 </button>
               </div>
@@ -518,12 +587,17 @@ export default function GerenciarEscalaPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
               <Calendar className="text-emerald-700" size={24} />
-              Informações do Culto
+              {tr('Informações do Culto', 'Información del Culto', 'Service Information')}
             </h2>
+            <p className="mb-4 text-sm text-slate-500">
+              {getTipoCultoLabel(tipoCulto)}{data ? ` • ${formatarDataCompleta(data)}` : ''}
+            </p>
             
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Título</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Título', 'Título', 'Title')}
+                </label>
                 <input
                   type="text"
                   value={titulo}
@@ -533,7 +607,9 @@ export default function GerenciarEscalaPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Data</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Data', 'Fecha', 'Date')}
+                </label>
                 <input
                   type="date"
                   value={data}
@@ -543,7 +619,9 @@ export default function GerenciarEscalaPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Hora Início</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Hora Início', 'Hora de Inicio', 'Start Time')}
+                </label>
                 <input
                   type="time"
                   value={horaInicio}
@@ -553,7 +631,9 @@ export default function GerenciarEscalaPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Hora Fim</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Hora Fim', 'Hora de Fin', 'End Time')}
+                </label>
                 <input
                   type="time"
                   value={horaFim}
@@ -563,41 +643,47 @@ export default function GerenciarEscalaPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de Culto</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Tipo de Culto', 'Tipo de Culto', 'Service Type')}
+                </label>
                 <select
                   value={tipoCulto}
                   onChange={(e) => setTipoCulto(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                 >
-                  <option value="dominical_manha">Dominical - Manhã</option>
-                  <option value="dominical_noite">Dominical - Noite</option>
-                  <option value="quarta">Quarta-feira</option>
-                  <option value="especial">Culto Especial</option>
+                  <option value="dominical_manha">{tipoCultoLabels.dominical_manha}</option>
+                  <option value="dominical_noite">{tipoCultoLabels.dominical_noite}</option>
+                  <option value="quarta">{tipoCultoLabels.quarta}</option>
+                  <option value="especial">{tipoCultoLabels.especial}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {tr('Status', 'Estado', 'Status')}
+                </label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as any)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                 >
-                  <option value="rascunho">📝 Rascunho</option>
-                  <option value="publicada">✅ Publicada</option>
-                  <option value="concluida">🎉 Concluída</option>
+                  <option value="rascunho">📝 {statusLabels.rascunho}</option>
+                  <option value="publicada">✅ {statusLabels.publicada}</option>
+                  <option value="concluida">🎉 {statusLabels.concluida}</option>
                 </select>
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Observações</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                {tr('Observações', 'Observaciones', 'Notes')}
+              </label>
               <textarea
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 rows={3}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none resize-none"
-                placeholder="Anotações, instruções especiais..."
+                placeholder={tr('Anotações, instruções especiais...', 'Anotaciones, instrucciones especiales...', 'Notes, special instructions...')}
               />
             </div>
 
@@ -608,7 +694,9 @@ export default function GerenciarEscalaPage() {
                 className="px-6 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 font-medium flex items-center gap-2"
               >
                 <Save size={18} />
-                {salvando ? 'Salvando...' : 'Salvar Alterações'}
+                {salvando
+                  ? tr('Salvando...', 'Guardando...', 'Saving...')
+                  : tr('Salvar Alterações', 'Guardar Cambios', 'Save Changes')}
               </button>
             </div>
           </div>
@@ -616,25 +704,24 @@ export default function GerenciarEscalaPage() {
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <Users className="text-emerald-700" size={24} />
-              Equipe Musical ({totalPessoasMusicais})
+              {tr('Equipe Musical', 'Equipo Musical', 'Music Team')} ({totalPessoasMusicais})
             </h2>
 
             {categoriasOrdenadas.map(categoria => {
               const funcoes = grupos[categoria] || [];
-              const catInfo = CATEGORIAS_MUSICAIS[categoria as keyof typeof CATEGORIAS_MUSICAIS];
               
               return (
                 <div key={categoria} className="bg-white rounded-xl border-2 border-slate-200 overflow-hidden">
                   <div className="bg-slate-100 px-4 py-3 border-b-2 border-slate-200 flex items-center justify-between">
                     <h3 className="font-bold text-slate-900 text-base">
-                      {catInfo.nome} ({funcoes.length})
+                      {getCategoriaNome(categoria)} ({funcoes.length})
                     </h3>
                     <button
                       onClick={() => abrirModalAdicionar(categoria)}
                       className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-1"
                     >
                       <UserPlus size={16} />
-                      <span>Adicionar</span>
+                      <span>{tr('Adicionar', 'Agregar', 'Add')}</span>
                     </button>
                   </div>
                   
@@ -642,8 +729,12 @@ export default function GerenciarEscalaPage() {
                     {funcoes.length === 0 ? (
                       <div className="px-4 py-6 text-center text-slate-400">
                         <Users size={32} className="mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">Nenhuma pessoa escalada</p>
-                        <p className="text-xs mt-1">Clique em "Adicionar" para escalar alguém</p>
+                        <p className="text-sm">
+                          {tr('Nenhuma pessoa escalada', 'Ninguna persona asignada', 'No assigned people')}
+                        </p>
+                        <p className="text-xs mt-1">
+                          {tr('Clique em "Adicionar" para escalar alguém', 'Haz clic en "Agregar" para asignar a alguien', 'Click "Add" to assign someone')}
+                        </p>
                       </div>
                     ) : (
                       funcoes.map(func => (
@@ -685,12 +776,12 @@ export default function GerenciarEscalaPage() {
                                 {func.confirmado ? (
                                   <>
                                     <CheckCircle2 size={12} />
-                                    Confirmado
+                                    {tr('Confirmado', 'Confirmado', 'Confirmed')}
                                   </>
                                 ) : (
                                   <>
                                     <Clock3 size={12} />
-                                    Pendente
+                                    {tr('Pendente', 'Pendiente', 'Pending')}
                                   </>
                                 )}
                               </button>
@@ -698,7 +789,7 @@ export default function GerenciarEscalaPage() {
                               <button
                                 onClick={() => removerPessoa(func.id, func.pessoas.nome)}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remover"
+                                title={tr('Remover', 'Quitar', 'Remove')}
                               >
                                 <Trash2 size={18} />
                               </button>
@@ -721,7 +812,9 @@ export default function GerenciarEscalaPage() {
             className="px-8 py-3 bg-emerald-700 text-white rounded-xl hover:bg-emerald-800 transition-colors font-semibold shadow flex items-center gap-2 disabled:opacity-50"
           >
             <Save size={20} />
-            {salvando ? 'Salvando Escala...' : 'Salvar Escala'}
+            {salvando
+              ? tr('Salvando Escala...', 'Guardando Escala...', 'Saving Schedule...')
+              : tr('Salvar Escala', 'Guardar Escala', 'Save Schedule')}
           </button>
         </div>
       </main>
@@ -733,10 +826,10 @@ export default function GerenciarEscalaPage() {
               <div>
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                   <UserPlus size={24} />
-                  Adicionar Pessoa
+                  {tr('Adicionar Pessoa', 'Agregar Persona', 'Add Person')}
                 </h3>
                 <p className="text-emerald-100 text-sm mt-1">
-                  {CATEGORIAS_MUSICAIS[categoriaParaAdicionar as keyof typeof CATEGORIAS_MUSICAIS]?.nome}
+                  {getCategoriaNome(categoriaParaAdicionar)}
                 </p>
               </div>
               <button
@@ -750,14 +843,14 @@ export default function GerenciarEscalaPage() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Pessoa *
+                  {tr('Pessoa', 'Persona', 'Person')} *
                 </label>
                 <select
                   value={usuarioSelecionado}
                   onChange={(e) => setUsuarioSelecionado(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                 >
-                  <option value="">Selecione...</option>
+                  <option value="">{tr('Selecione...', 'Selecciona...', 'Select...')}</option>
                   {todosUsuarios.map(user => (
                     <option key={user.id} value={user.id}>
                       {user.nome}
@@ -768,14 +861,14 @@ export default function GerenciarEscalaPage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Função *
+                  {tr('Função', 'Función', 'Role')} *
                 </label>
                 <select
                   value={funcaoSelecionada}
                   onChange={(e) => setFuncaoSelecionada(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none"
                 >
-                  <option value="">Selecione...</option>
+                  <option value="">{tr('Selecione...', 'Selecciona...', 'Select...')}</option>
                   {getTagsDaCategoria(categoriaParaAdicionar).map(tag => (
                     <option key={tag.id} value={tag.id}>
                       {tag.icone} {tag.nome}
@@ -791,14 +884,16 @@ export default function GerenciarEscalaPage() {
                   className="flex-1 bg-emerald-700 text-white px-6 py-2.5 rounded-lg hover:bg-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
                 >
                   <Plus size={18} />
-                  {salvando ? 'Adicionando...' : 'Adicionar'}
+                  {salvando
+                    ? tr('Adicionando...', 'Agregando...', 'Adding...')
+                    : tr('Adicionar', 'Agregar', 'Add')}
                 </button>
                 <button
                   onClick={() => setModalAberto(false)}
                   disabled={salvando}
                   className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
                 >
-                  Cancelar
+                  {tr('Cancelar', 'Cancelar', 'Cancel')}
                 </button>
               </div>
             </div>

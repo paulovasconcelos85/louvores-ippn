@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
+import { apiError, apiSuccess } from '@/lib/api-response';
+import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church-i18n';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,11 +20,11 @@ async function ensureSuperAdmin(request: NextRequest) {
   const user = await getAuthenticatedUserFromServerCookies(request);
 
   if (!user?.id) {
-    return { error: NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 }) };
+    return { error: apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.') };
   }
 
   if (!isSuperAdmin(user.email)) {
-    return { error: NextResponse.json({ error: 'Sem permissão para gerenciar igrejas.' }, { status: 403 }) };
+    return { error: apiError('FORBIDDEN', 403, 'Sem permissão para gerenciar igrejas.') };
   }
 
   return { user };
@@ -59,6 +61,8 @@ type IgrejaPayload = {
   timezone_boletim?: string | null;
   apresentacao_titulo?: string | null;
   apresentacao_texto?: string | null;
+  apresentacao_titulo_i18n?: unknown;
+  apresentacao_texto_i18n?: unknown;
   apresentacao_imagem_url?: string | null;
   apresentacao_youtube_url?: string | null;
   apresentacao_galeria?: string[] | null;
@@ -80,6 +84,15 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
         .filter(Boolean)
     : [];
+
+  const apresentacaoTituloI18n = normalizeLocalizedTextMap(
+    body.apresentacao_titulo_i18n,
+    body.apresentacao_titulo
+  );
+  const apresentacaoTextoI18n = normalizeLocalizedTextMap(
+    body.apresentacao_texto_i18n,
+    body.apresentacao_texto
+  );
 
   return {
     nome: body.nome?.trim(),
@@ -110,8 +123,10 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
     horario_publicacao_boletim: body.horario_publicacao_boletim?.trim() || null,
     dia_publicacao_boletim: body.dia_publicacao_boletim ?? null,
     timezone_boletim: body.timezone_boletim?.trim() || null,
-    apresentacao_titulo: body.apresentacao_titulo?.trim() || null,
-    apresentacao_texto: body.apresentacao_texto?.trim() || null,
+    apresentacao_titulo: apresentacaoTituloI18n.pt || body.apresentacao_titulo?.trim() || null,
+    apresentacao_texto: apresentacaoTextoI18n.pt || body.apresentacao_texto?.trim() || null,
+    apresentacao_titulo_i18n: compactLocalizedTextMap(apresentacaoTituloI18n),
+    apresentacao_texto_i18n: compactLocalizedTextMap(apresentacaoTextoI18n),
     apresentacao_imagem_url: body.apresentacao_imagem_url?.trim() || null,
     apresentacao_youtube_url: body.apresentacao_youtube_url?.trim() || null,
     apresentacao_galeria: apresentacao_galeria.length > 0 ? apresentacao_galeria : null,
@@ -143,10 +158,14 @@ export async function GET(request: NextRequest) {
       visivel_publico: igreja.visivel_publico ?? true,
     }));
 
-    return NextResponse.json({ igrejas });
+    return apiSuccess({ igrejas });
   } catch (error: any) {
     console.error('Erro ao listar igrejas admin:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao listar igrejas.' }, { status: 500 });
+    return apiError(
+      'LOAD_CHURCHES_FAILED',
+      500,
+      error.message || 'Erro ao listar igrejas.'
+    );
   }
 }
 
@@ -159,7 +178,7 @@ export async function POST(request: NextRequest) {
     const payload = normalizeChurchPayload(body);
 
     if (!payload.nome || !payload.slug) {
-      return NextResponse.json({ error: 'Nome e slug são obrigatórios.' }, { status: 400 });
+      return apiError('CHURCH_NAME_AND_SLUG_REQUIRED', 400, 'Nome e slug são obrigatórios.');
     }
 
     const { data, error } = await supabaseAdmin
@@ -170,9 +189,20 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, igreja: data }, { status: 201 });
+    return apiSuccess(
+      { igreja: data },
+      {
+        status: 201,
+        message: 'Igreja criada com sucesso.',
+        messageCode: 'CHURCH_CREATED',
+      }
+    );
   } catch (error: any) {
     console.error('Erro ao criar igreja:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao criar igreja.' }, { status: 500 });
+    return apiError(
+      'SAVE_CHURCH_FAILED',
+      500,
+      error.message || 'Erro ao criar igreja.'
+    );
   }
 }

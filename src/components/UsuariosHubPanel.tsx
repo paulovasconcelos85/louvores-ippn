@@ -26,6 +26,7 @@ import {
   type CargoTipo,
 } from '@/lib/permissions';
 import { useLocale } from '@/i18n/provider';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import {
   useHubUsuarios,
   type HubUsuario,
@@ -460,12 +461,15 @@ export function UsuariosHubPanel() {
 
         if (!response.ok) {
           throw new Error(
-            payload.error ||
+            resolveApiErrorMessage(
+              locale,
+              payload,
               tr(
                 'Erro ao carregar igrejas.',
                 'Error al cargar iglesias.',
                 'Error loading churches.'
               )
+            )
           );
         }
 
@@ -512,7 +516,7 @@ export function UsuariosHubPanel() {
     return () => {
       ativo = false;
     };
-  }, [tr]);
+  }, [tr, locale]);
 
   useEffect(() => {
     void listarUsuarios({

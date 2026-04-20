@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import { getIntlLocale } from '@/i18n/config';
@@ -298,12 +299,15 @@ export default function MembroDetalhesPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.error ||
+          resolveApiErrorMessage(
+            locale,
+            payload,
             tr(
               'Erro ao carregar membro',
               'Error al cargar miembro',
               'Error loading member'
             )
+          )
         );
       }
 
@@ -359,7 +363,7 @@ export default function MembroDetalhesPage() {
     } finally {
       setLoading(false);
     }
-  }, [membroId, tr]);
+  }, [membroId, tr, locale]);
 
   const carregarNotas = useCallback(async () => {
     try {
@@ -451,32 +455,37 @@ export default function MembroDetalhesPage() {
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(
-          payload.error ||
+          resolveApiErrorMessage(
+            locale,
+            payload,
             tr(
               'Erro ao salvar alterações',
               'Error al guardar cambios',
               'Error saving changes'
             )
+          )
         );
       }
       setMensagem(
-        tr(
-          'Alterações salvas com sucesso!',
-          '¡Cambios guardados con éxito!',
-          'Changes saved successfully!'
+        resolveApiSuccessMessage(
+          locale,
+          payload,
+          tr(
+            'Alterações salvas com sucesso!',
+            '¡Cambios guardados con éxito!',
+            'Changes saved successfully!'
+          )
         )
       );
       setModoEdicao(false);
       carregarMembro();
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
-      setMensagem(
-        tr(
-          'Erro ao salvar alterações',
-          'Error al guardar cambios',
-          'Error saving changes'
-        )
-      );
+      setMensagem(error.message || tr(
+        'Erro ao salvar alterações',
+        'Error al guardar cambios',
+        'Error saving changes'
+      ));
     } finally {
       setSalvando(false);
     }

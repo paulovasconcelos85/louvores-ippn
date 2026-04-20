@@ -14,13 +14,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useTranslations } from '@/i18n/provider';
+import { useLocale, useTranslations } from '@/i18n/provider';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
+  const locale = useLocale();
   const t = useTranslations();
   const { user, loading, signOut } = useAuth();
   const { usuarioPermitido, permissoes } = usePermissions();
@@ -43,7 +45,9 @@ export default function Header() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || t('header.loadChurchesError'));
+          throw new Error(
+            resolveApiErrorMessage(locale, data, t('header.loadChurchesError'))
+          );
         }
 
         if (!ativo) return;
@@ -77,7 +81,7 @@ export default function Header() {
     return () => {
       ativo = false;
     };
-  }, [t, user?.id]);
+  }, [t, user?.id, locale]);
 
   const handleTrocarIgreja = (novoId: string) => {
     setIgrejaAtualId(novoId);

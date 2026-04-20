@@ -34,6 +34,7 @@ import { getIntlLocale } from '@/i18n/config';
 import { supabase } from '@/lib/supabase';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 
 interface RankingItem {
   cantico: string;
@@ -231,7 +232,9 @@ export default function DashboardPage() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || t('header.loadChurchesError'));
+          throw new Error(
+            resolveApiErrorMessage(locale, data, t('header.loadChurchesError'))
+          );
         }
 
         if (!ativo) return;
@@ -265,7 +268,7 @@ export default function DashboardPage() {
     return () => {
       ativo = false;
     };
-  }, [t, user?.id]);
+  }, [t, user?.id, locale]);
 
   useEffect(() => {
     if (!igrejaAtualId) {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link'; // Adicionado import do Link
+import { useLocale } from '@/i18n/provider';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -100,6 +101,9 @@ const LABELS_CATEGORIAS: Record<string, string> = {
 
 export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaIntegradaProps) {
   const [expandida, setExpandida] = useState(false);
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) =>
+    locale === 'es' ? es : locale === 'en' ? en : pt;
   const { escala, loading } = useEscalaDoCulto(dataCulto, expandida);
 
   const toggleExpansao = () => {
@@ -132,7 +136,7 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-emerald-100" />
           <span className="text-sm font-medium text-emerald-50">
-            {escala ? escala.titulo : 'Escala do Culto'}
+            {escala ? escala.titulo : tr('Escala do Culto', 'Escala del Culto', 'Service Schedule')}
           </span>
           {escala && (
             <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full text-emerald-100">
@@ -159,10 +163,10 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
               {/* Cânticos (se houver) */}
               {escala.canticos && escala.canticos.length > 0 && (
                 <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-emerald-100 uppercase mb-2 px-2 flex items-center gap-2">
-                    <Music className="w-3.5 h-3.5" />
-                    Cânticos
-                  </h4>
+                    <h4 className="text-xs font-semibold text-emerald-100 uppercase mb-2 px-2 flex items-center gap-2">
+                      <Music className="w-3.5 h-3.5" />
+                      {tr('Cânticos', 'Cánticos', 'Songs')}
+                    </h4>
                   <div className="space-y-1.5">
                     {escala.canticos.map((cantico: any) => (
                       <div
@@ -197,7 +201,7 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
                                 rel="noopener noreferrer"
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                 className="p-1.5 bg-red-600/80 hover:bg-red-600 rounded-md transition-colors"
-                                title="Ver no YouTube"
+                                title={tr('Ver no YouTube', 'Ver en YouTube', 'Watch on YouTube')}
                               >
                                 <Youtube className="w-4 h-4 text-white" />
                               </a>
@@ -209,7 +213,7 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
                                 rel="noopener noreferrer"
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                 className="p-1.5 bg-green-600/80 hover:bg-green-600 rounded-md transition-colors"
-                                title="Ouvir no Spotify"
+                                title={tr('Ouvir no Spotify', 'Escuchar en Spotify', 'Listen on Spotify')}
                               >
                                 <SpotifyIcon size={16} />
                               </a>
@@ -265,12 +269,12 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
                             {funcao.confirmado ? (
                               <>
                                 <CheckCircle2 className="w-3 h-3" />
-                                Confirmado
+                                {tr('Confirmado', 'Confirmado', 'Confirmed')}
                               </>
                             ) : (
                               <>
                                 <Clock className="w-3 h-3" />
-                                Pendente
+                                {tr('Pendente', 'Pendiente', 'Pending')}
                               </>
                             )}
                           </span>
@@ -288,7 +292,7 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
                     href={`/escala/${escala.id}`}
                     className="text-xs text-emerald-100 hover:text-white hover:underline inline-flex items-center gap-1"
                   >
-                    Confirmar presença →
+                    {tr('Confirmar presença', 'Confirmar asistencia', 'Confirm attendance')} →
                   </Link>
                 </div>
               )}
@@ -296,7 +300,11 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
           ) : (
             <div className="text-center py-4">
               <p className="text-xs text-emerald-100/70">
-                Nenhuma escala cadastrada para este culto
+                {tr(
+                  'Nenhuma escala cadastrada para este culto',
+                  'No hay una escala registrada para este culto',
+                  'No schedule has been created for this service'
+                )}
               </p>
             </div>
           )}

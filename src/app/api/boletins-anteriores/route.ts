@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
+import { resolveLocalizedText } from '@/lib/church-i18n';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 
 const supabaseAdmin = createClient(
@@ -21,6 +23,7 @@ interface LegacyLouvorItemRow {
   tom: string | null;
   cantico_id: string | null;
   conteudo_publico: string | null;
+  conteudo_publico_i18n?: unknown;
   descricao: string | null;
 }
 
@@ -30,12 +33,43 @@ interface LegacyCultoRow {
   imagem_url: string | null;
   igreja_id: string | null;
   palavra_pastoral: string | null;
+  palavra_pastoral_i18n?: unknown;
   palavra_pastoral_autor: string | null;
 }
+
+interface StructuredBoletimSecaoRow {
+  id: string;
+  culto_id: number | null;
+  tipo: string;
+  titulo: string;
+  titulo_i18n?: unknown;
+  ordem: number | null;
+  visivel: boolean | null;
+}
+
+interface StructuredBoletimItemRow {
+  id: string;
+  secao_id: string | null;
+  conteudo: string;
+  conteudo_i18n?: unknown;
+  destaque: boolean | null;
+  ordem: number | null;
+}
+
+const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 
 function isUuid(value: string | null | undefined) {
   if (!value) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function getRequestedLocale(request: NextRequest): Locale {
+  const locale = request.nextUrl.searchParams.get('locale');
+  return SUPPORTED_LOCALES.includes(locale as Locale) ? (locale as Locale) : DEFAULT_LOCALE;
+}
+
+function isBoletimFallbackTipo(tipo: string | null | undefined): tipo is string {
+  return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
 }
 
 async function resolveCanticosPorId(canticoIdsRaw: Array<string | null>) {
@@ -113,13 +147,18 @@ function buildLegacyLiturgiaConteudo(
   item: LegacyLouvorItemRow,
   index: number,
   cantico: { nome: string | null; tipo: 'hinario' | 'cantico'; numero: string | null } | null | undefined,
-  includeInternal: boolean
+  includeInternal: boolean,
+  locale: Locale
 ) {
   const tituloItem = item.tipo || `Item ${index + 1}`;
   const linhaCantico = cantico?.nome
     ? `\n${cantico.tipo === 'hinario' ? 'Hino' : 'Cantico'}: ${cantico.nome}${item.tom ? ` (${item.tom})` : ''}`
     : '';
-  const conteudoBase = item.conteudo_publico?.trim() || '';
+  const conteudoBase = resolveLocalizedText(
+    item.conteudo_publico_i18n,
+    locale,
+    item.conteudo_publico || ''
+  );
   const descricao = includeInternal ? item.descricao?.trim() || '' : '';
 
   return `${tituloItem}${
@@ -129,10 +168,52 @@ function buildLegacyLiturgiaConteudo(
   }${linhaCantico}`;
 }
 
+function buildStructuredBoletimItems(
+  secoesRaw: StructuredBoletimSecaoRow[],
+  itensRaw: StructuredBoletimItemRow[],
+  locale: Locale
+) {
+  const itensPorSecao = new Map<string, StructuredBoletimItemRow[]>();
+
+  for (const item of itensRaw) {
+    if (!item.secao_id) continue;
+    const atuais = itensPorSecao.get(item.secao_id) || [];
+    atuais.push(item);
+    itensPorSecao.set(item.secao_id, atuais);
+  }
+
+  return [...secoesRaw]
+    .filter((secao) => secao.visivel !== false)
+    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+    .flatMap((secao) => {
+      const titulo = resolveLocalizedText(secao.titulo_i18n, locale, secao.titulo);
+
+      return (itensPorSecao.get(secao.id) || [])
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+        .map((item, itemIndex) => {
+          const conteudo = resolveLocalizedText(
+            item.conteudo_i18n,
+            locale,
+            item.conteudo || ''
+          ).trim();
+
+          if (!conteudo) return null;
+
+          return {
+            id: item.id,
+            conteudo: titulo ? `${titulo}\n${conteudo}` : conteudo,
+            ordem: 1000 + ((secao.ordem || 0) * 100) + itemIndex,
+          };
+        })
+        .filter((item): item is { id: string; conteudo: string; ordem: number } => Boolean(item));
+    });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthenticatedUserFromServerCookies(request);
     const includeInternal = Boolean(user?.id);
+    const locale = getRequestedLocale(request);
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
 
     if (!igrejaId) {
@@ -141,7 +222,7 @@ export async function GET(request: NextRequest) {
 
     const { data: cultosRaw, error: cultosError } = await supabaseAdmin
       .from('Louvores IPPN')
-      .select('"Culto nr.", Dia, imagem_url, igreja_id, palavra_pastoral, palavra_pastoral_autor')
+      .select('"Culto nr.", Dia, imagem_url, igreja_id, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
       .eq('igreja_id', igrejaId)
       .order('Dia', { ascending: false })
       .limit(7);
@@ -155,19 +236,50 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ boletins: [] });
     }
 
-    const { data: itensRaw, error: itensError } = await supabaseAdmin
-      .from('louvor_itens')
-      .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, descricao')
-      .in('culto_id', cultoIds)
-      .order('culto_id', { ascending: false })
-      .order('ordem', { ascending: true });
+    const [
+      { data: itensRaw, error: itensError },
+      { data: secoesRaw, error: secoesError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('louvor_itens')
+        .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao')
+        .in('culto_id', cultoIds)
+        .order('culto_id', { ascending: false })
+        .order('ordem', { ascending: true }),
+      supabaseAdmin
+        .from('boletim_secoes')
+        .select('id, culto_id, tipo, titulo, titulo_i18n, ordem, visivel')
+        .eq('igreja_id', igrejaId)
+        .in('culto_id', cultoIds)
+        .order('culto_id', { ascending: false })
+        .order('ordem', { ascending: true }),
+    ]);
 
     if (itensError) throw itensError;
+    if (secoesError) throw secoesError;
 
     const itens = (itensRaw || []) as LegacyLouvorItemRow[];
+    const secoesEstruturadas = (secoesRaw || []) as StructuredBoletimSecaoRow[];
+    const secaoIds = secoesEstruturadas
+      .map((secao) => secao.id)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+    const { data: itensEstruturadosRaw, error: itensEstruturadosError } =
+      secaoIds.length > 0
+        ? await supabaseAdmin
+            .from('boletim_itens')
+            .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem')
+            .in('secao_id', secaoIds)
+            .order('ordem', { ascending: true })
+        : { data: [], error: null };
+
+    if (itensEstruturadosError) throw itensEstruturadosError;
+
     const canticosPorId = await resolveCanticosPorId(itens.map((item) => item.cantico_id));
 
     const itensPorCulto = new Map<number, LegacyLouvorItemRow[]>();
+    const secoesEstruturadasPorCulto = new Map<number, StructuredBoletimSecaoRow[]>();
+    const itensEstruturados = (itensEstruturadosRaw || []) as StructuredBoletimItemRow[];
 
     for (const item of itens) {
       const lista = itensPorCulto.get(item.culto_id) || [];
@@ -175,8 +287,16 @@ export async function GET(request: NextRequest) {
       itensPorCulto.set(item.culto_id, lista);
     }
 
+    for (const secao of secoesEstruturadas) {
+      if (typeof secao.culto_id !== 'number') continue;
+      const lista = secoesEstruturadasPorCulto.get(secao.culto_id) || [];
+      lista.push(secao);
+      secoesEstruturadasPorCulto.set(secao.culto_id, lista);
+    }
+
     const boletins = cultos.map((culto) => {
-      const itensCulto = (itensPorCulto.get(culto['Culto nr.']) || []).map((item, index) => {
+      const itensCultoBase = itensPorCulto.get(culto['Culto nr.']) || [];
+      const itensLegacyCompletos = itensCultoBase.map((item, index) => {
         const cantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
 
         return {
@@ -185,18 +305,51 @@ export async function GET(request: NextRequest) {
             item,
             index,
             cantico,
-            includeInternal
+            includeInternal,
+            locale
           ),
           ordem: item.ordem ?? index,
         };
       });
+      const itensLiturgia = itensCultoBase
+        .filter((item) => !isBoletimFallbackTipo(item.tipo))
+        .map((item, index) => {
+          const cantico = item.cantico_id ? canticosPorId.get(String(item.cantico_id)) : null;
+
+          return {
+            id: item.id,
+            conteudo: buildLegacyLiturgiaConteudo(
+              item,
+              index,
+              cantico,
+              includeInternal,
+              locale
+            ),
+            ordem: item.ordem ?? index,
+          };
+        });
+      const itensEstruturadosCulto = buildStructuredBoletimItems(
+        secoesEstruturadasPorCulto.get(culto['Culto nr.']) || [],
+        itensEstruturados,
+        locale
+      );
+      const itensCulto =
+        itensEstruturadosCulto.length > 0
+          ? [...itensLiturgia, ...itensEstruturadosCulto].sort(
+              (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+            )
+          : itensLegacyCompletos;
 
       const itensComPastoral =
-        culto.palavra_pastoral?.trim()
+        resolveLocalizedText(culto.palavra_pastoral_i18n, locale, culto.palavra_pastoral || '').trim()
           ? [
               {
                 id: `legacy-pastoral-${culto['Culto nr.']}`,
-                conteudo: `Palavra Pastoral\n${culto.palavra_pastoral.trim()}${
+                conteudo: `Palavra Pastoral\n${resolveLocalizedText(
+                  culto.palavra_pastoral_i18n,
+                  locale,
+                  culto.palavra_pastoral || ''
+                ).trim()}${
                   culto.palavra_pastoral_autor?.trim()
                     ? `\n\n${culto.palavra_pastoral_autor.trim()}`
                     : ''

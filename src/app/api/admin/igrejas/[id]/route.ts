@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
+import { apiError, apiSuccess } from '@/lib/api-response';
+import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church-i18n';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,11 +20,11 @@ async function ensureSuperAdmin(request: NextRequest) {
   const user = await getAuthenticatedUserFromServerCookies(request);
 
   if (!user?.id) {
-    return { error: NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 }) };
+    return { error: apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.') };
   }
 
   if (!isSuperAdmin(user.email)) {
-    return { error: NextResponse.json({ error: 'Sem permissão para gerenciar igrejas.' }, { status: 403 }) };
+    return { error: apiError('FORBIDDEN', 403, 'Sem permissão para gerenciar igrejas.') };
   }
 
   return { user };
@@ -61,6 +63,15 @@ function normalizePais(value: unknown) {
 }
 
 function normalizeChurchPayload(body: Record<string, unknown>) {
+  const apresentacaoTituloI18n = normalizeLocalizedTextMap(
+    body.apresentacao_titulo_i18n,
+    sanitizeString(body.apresentacao_titulo)
+  );
+  const apresentacaoTextoI18n = normalizeLocalizedTextMap(
+    body.apresentacao_texto_i18n,
+    sanitizeString(body.apresentacao_texto)
+  );
+
   return {
     nome: sanitizeString(body.nome),
     slug: sanitizeString(body.slug),
@@ -90,8 +101,10 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     horario_publicacao_boletim: sanitizeString(body.horario_publicacao_boletim),
     dia_publicacao_boletim: sanitizeNumber(body.dia_publicacao_boletim),
     timezone_boletim: sanitizeString(body.timezone_boletim),
-    apresentacao_titulo: sanitizeString(body.apresentacao_titulo),
-    apresentacao_texto: sanitizeString(body.apresentacao_texto),
+    apresentacao_titulo: apresentacaoTituloI18n.pt || sanitizeString(body.apresentacao_titulo),
+    apresentacao_texto: apresentacaoTextoI18n.pt || sanitizeString(body.apresentacao_texto),
+    apresentacao_titulo_i18n: compactLocalizedTextMap(apresentacaoTituloI18n),
+    apresentacao_texto_i18n: compactLocalizedTextMap(apresentacaoTextoI18n),
     apresentacao_imagem_url: sanitizeString(body.apresentacao_imagem_url),
     apresentacao_youtube_url: sanitizeString(body.apresentacao_youtube_url),
     apresentacao_galeria: sanitizeStringArray(body.apresentacao_galeria),
@@ -155,11 +168,35 @@ function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
       const tipo = sanitizeString(row.tipo);
       const conteudo_publico_padrao =
         sanitizeString(row.conteudo_publico_padrao) || sanitizeString(row.conteudo_publico);
+      const conteudoPublicoI18n = normalizeLocalizedTextMap(
+        row.conteudo_publico_padrao_i18n,
+        conteudo_publico_padrao
+      );
       const descricao_interna_padrao =
         sanitizeString(row.descricao_interna_padrao) || sanitizeString(row.descricao_padrao);
-      const descricao_padrao = descricao_interna_padrao || conteudo_publico_padrao;
+      const descricaoInternaI18n = normalizeLocalizedTextMap(
+        row.descricao_interna_padrao_i18n,
+        descricao_interna_padrao
+      );
+      const conteudoPublicoCompactado = compactLocalizedTextMap(conteudoPublicoI18n);
+      const descricaoInternaCompactada = compactLocalizedTextMap(descricaoInternaI18n);
+      const descricao_padrao =
+        descricaoInternaI18n.pt ||
+        conteudoPublicoI18n.pt ||
+        descricaoInternaI18n.es ||
+        descricaoInternaI18n.en ||
+        conteudoPublicoI18n.es ||
+        conteudoPublicoI18n.en ||
+        descricao_interna_padrao ||
+        conteudo_publico_padrao;
 
-      if (!bloco || !tipo || !descricao_padrao) return null;
+      if (
+        !bloco ||
+        !tipo ||
+        (!descricao_padrao && !conteudoPublicoCompactado && !descricaoInternaCompactada)
+      ) {
+        return null;
+      }
 
       return {
         igreja_id: igrejaId,
@@ -167,6 +204,8 @@ function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
         ordem: sanitizeNumber(row.ordem) ?? index + 1,
         tipo,
         descricao_padrao,
+        conteudo_publico_padrao_i18n: conteudoPublicoCompactado,
+        descricao_interna_padrao_i18n: descricaoInternaCompactada,
         tem_cantico: typeof row.tem_cantico === 'boolean' ? row.tem_cantico : null,
       };
     })
@@ -212,7 +251,7 @@ export async function GET(
     if (igrejaError) throw igrejaError;
 
     if (!igreja) {
-      return NextResponse.json({ error: 'Igreja não encontrada.' }, { status: 404 });
+      return apiError('CHURCH_NOT_FOUND', 404, 'Igreja não encontrada.');
     }
 
     if (cultosResult.error) {
@@ -227,7 +266,7 @@ export async function GET(
       console.warn('Falha ao carregar modelos de liturgia da igreja no admin:', modelosResult.error);
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       igreja,
       cultos: sortByOrdem(cultosResult.data || []),
       redesSociais: sortByOrdem(redesResult.data || []),
@@ -235,7 +274,11 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Erro ao carregar igreja admin:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao carregar igreja.' }, { status: 500 });
+    return apiError(
+      'LOAD_CHURCH_DETAILS_FAILED',
+      500,
+      error.message || 'Erro ao carregar igreja.'
+    );
   }
 }
 
@@ -253,7 +296,7 @@ export async function PATCH(
     const igrejaPayload = normalizeChurchPayload(body);
 
     if (!igrejaPayload.nome || !igrejaPayload.slug) {
-      return NextResponse.json({ error: 'Nome e slug são obrigatórios.' }, { status: 400 });
+      return apiError('CHURCH_NAME_AND_SLUG_REQUIRED', 400, 'Nome e slug são obrigatórios.');
     }
 
     const cultos = normalizeCultos(id, body.cultos);
@@ -298,15 +341,24 @@ export async function PATCH(
       if (error) throw error;
     }
 
-    return NextResponse.json({
-      success: true,
-      igreja,
-      cultos,
-      redesSociais,
-      modelosLiturgia,
-    });
+    return apiSuccess(
+      {
+        igreja,
+        cultos,
+        redesSociais,
+        modelosLiturgia,
+      },
+      {
+        message: 'Igreja atualizada com sucesso.',
+        messageCode: 'CHURCH_UPDATED',
+      }
+    );
   } catch (error: any) {
     console.error('Erro ao atualizar igreja:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao atualizar igreja.' }, { status: 500 });
+    return apiError(
+      'SAVE_CHURCH_FAILED',
+      500,
+      error.message || 'Erro ao atualizar igreja.'
+    );
   }
 }

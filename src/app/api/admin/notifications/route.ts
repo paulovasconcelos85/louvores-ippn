@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getUserPermissionContext } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,23 +30,25 @@ async function ensureNotificationAccess(request: NextRequest, preferredIgrejaId?
   const contexto = await getUserPermissionContext(preferredIgrejaId, request);
 
   if (!contexto?.user?.id) {
-    return { error: NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 }) };
+    return { error: apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.') };
   }
 
   if (!contexto.acesso?.id) {
     return {
-      error: NextResponse.json(
-        { error: 'Usuário sem acesso vinculado para consultar notificações.' },
-        { status: 403 }
+      error: apiError(
+        'NOTIFICATION_ACCESS_REQUIRED',
+        403,
+        'Usuário sem acesso vinculado para consultar notificações.'
       ),
     };
   }
 
   if (!contexto.igrejaId) {
     return {
-      error: NextResponse.json(
-        { error: 'Nenhuma igreja ativa foi identificada para este usuário.' },
-        { status: 400 }
+      error: apiError(
+        'ACTIVE_CHURCH_REQUIRED',
+        400,
+        'Nenhuma igreja ativa foi identificada para este usuário.'
       ),
     };
   }
@@ -78,7 +81,7 @@ export async function GET(request: NextRequest) {
       baseHeadQuery().eq('tipo', 'escala.usuario_alistado'),
     ]);
 
-    return NextResponse.json({
+    return apiSuccess({
       igrejaAtualId,
       unread: {
         total: unreadTotal || 0,
@@ -88,9 +91,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro ao carregar resumo de notificações:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao carregar notificações.' },
-      { status: 500 }
+    return apiError(
+      'LOAD_NOTIFICATIONS_FAILED',
+      500,
+      error.message || 'Erro ao carregar notificações.'
     );
   }
 }
@@ -124,15 +128,15 @@ export async function PATCH(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       updated: (data || []).length,
     });
   } catch (error: any) {
     console.error('Erro ao marcar notificações como lidas:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao atualizar notificações.' },
-      { status: 500 }
+    return apiError(
+      'UPDATE_NOTIFICATIONS_FAILED',
+      500,
+      error.message || 'Erro ao atualizar notificações.'
     );
   }
 }

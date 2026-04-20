@@ -5,6 +5,7 @@ import {
   readApnsConfigFromEnv,
   sendApnsNotification,
 } from '@/lib/apns';
+import { resolveNotificationCopy } from '@/lib/notification-copy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,7 @@ type PushDeviceRow = {
   authorization_status: string;
   ambiente: 'development' | 'production';
   ativo: boolean;
+  locale: string | null;
 };
 
 function getRequestedLimit(body: unknown) {
@@ -139,7 +141,7 @@ async function handleDispatch(request: NextRequest) {
     if (usuarioIds.length > 0) {
       const { data: devicesData, error: devicesError } = await supabaseAdmin
         .from('push_dispositivos')
-        .select('id, usuario_acesso_id, push_token, plataforma, authorization_status, ambiente, ativo')
+        .select('id, usuario_acesso_id, push_token, plataforma, authorization_status, ambiente, ativo, locale')
         .in('usuario_acesso_id', usuarioIds)
         .eq('ativo', true)
         .eq('plataforma', 'ios')
@@ -238,6 +240,14 @@ async function handleDispatch(request: NextRequest) {
       let firstApnsId: string | null = null;
 
       for (const device of devices) {
+        const resolvedCopy = resolveNotificationCopy({
+          tipo: notification.tipo,
+          titulo: notification.titulo,
+          corpo: notification.corpo,
+          payload: notification.payload,
+          preferredLocale: device.locale,
+        });
+
         try {
           const result = await sendApnsNotification({
             token: device.push_token,
@@ -246,8 +256,8 @@ async function handleDispatch(request: NextRequest) {
             notification: {
               notificationId: notification.id,
               tipo: notification.tipo,
-              title: notification.titulo,
-              body: notification.corpo,
+              title: resolvedCopy.title,
+              body: resolvedCopy.body,
               deepLink: notification.deep_link,
               payload: notification.payload,
             },

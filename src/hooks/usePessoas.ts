@@ -4,6 +4,8 @@ import { useState, useCallback } from 'react';
 import { CargoTipo } from '@/lib/permissions';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { useLocale } from '@/i18n/provider';
+import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 
 export interface Pessoa {
   id: string;
@@ -28,6 +30,7 @@ export interface Pessoa {
 }
 
 export function usePessoas() {
+  const locale = useLocale();
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,9 @@ export function usePessoas() {
       });
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao listar pessoas');
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao listar pessoas'));
+      }
 
       setPessoas(data.data || []);
       return data.data || [];
@@ -70,7 +75,7 @@ export function usePessoas() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   // Criar pessoa
   const criarPessoa = useCallback(async (dados: {
@@ -95,16 +100,22 @@ export function usePessoas() {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao criar pessoa');
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao criar pessoa'));
+      }
 
-      return { success: true, data: data.data };
+      return {
+        success: true,
+        data: data.data,
+        message: resolveApiSuccessMessage(locale, data, data.message),
+      };
     } catch (err: any) {
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   // Atualizar pessoa
   const atualizarPessoa = useCallback(async (id: string, dados: Partial<Pessoa>) => {
@@ -123,16 +134,22 @@ export function usePessoas() {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao atualizar pessoa');
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao atualizar pessoa'));
+      }
 
-      return { success: true, data: data.data };
+      return {
+        success: true,
+        data: data.data,
+        message: resolveApiSuccessMessage(locale, data, data.message),
+      };
     } catch (err: any) {
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   // Deletar pessoa
   const deletarPessoa = useCallback(async (id: string) => {
@@ -150,16 +167,21 @@ export function usePessoas() {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao deletar pessoa');
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao deletar pessoa'));
+      }
 
-      return { success: true };
+      return {
+        success: true,
+        message: resolveApiSuccessMessage(locale, data, data.message),
+      };
     } catch (err: any) {
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   const enviarConvite = useCallback(async (dados: {
     pessoa_id?: string;
@@ -197,16 +219,21 @@ export function usePessoas() {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Erro ao liberar acesso');
+      if (!response.ok) {
+        throw new Error(resolveApiErrorMessage(locale, data, 'Erro ao liberar acesso'));
+      }
 
-      return { success: true, message: data.message };
+      return {
+        success: true,
+        message: resolveApiSuccessMessage(locale, data, data.message),
+      };
     } catch (err: any) {
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [locale]);
 
   return {
     pessoas,

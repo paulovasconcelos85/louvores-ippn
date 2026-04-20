@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
@@ -235,8 +236,11 @@ export default function NovoMembroPage() {
       if (!response.ok) {
         throw Object.assign(
           new Error(
-            payload.error ||
+            resolveApiErrorMessage(
+              locale,
+              payload,
               tr('Erro ao salvar', 'Error al guardar', 'Error saving')
+            )
           ),
           payload
         );
@@ -245,7 +249,11 @@ export default function NovoMembroPage() {
       setTimeout(() => router.push('/admin/membros'), 1500);
     } catch (err: any) {
       console.error(err);
-      if (err.code === '23505') {
+      if (
+        err.code === '23505' ||
+        err.code === 'PERSON_DUPLICATE_EMAIL' ||
+        err.code === 'PERSON_DUPLICATE_EMAIL_IN_CHURCH'
+      ) {
         setErro(
           tr(
             'Já existe um membro com este email.',
@@ -309,7 +317,9 @@ export default function NovoMembroPage() {
               <h1 className="text-lg font-bold text-slate-900">
                 {tr('Novo Membro', 'Nuevo Miembro', 'New Member')}
               </h1>
-              <p className="text-xs text-slate-500">Igreja Presbiteriana Ponta Negra</p>
+              <p className="text-xs text-slate-500">
+                {tr('Cadastro interno da igreja', 'Registro interno de la iglesia', 'Internal church registration')}
+              </p>
             </div>
           </div>
           <button

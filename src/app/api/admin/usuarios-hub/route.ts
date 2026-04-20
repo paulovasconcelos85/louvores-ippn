@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   getUserPermissionContext,
   resolveAuthorizedCurrentIgrejaId,
 } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,8 @@ const supabaseAdmin = createClient(
     },
   }
 );
+
+const userHubCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
 
 type IgrejaBasica = {
   id: string;
@@ -81,6 +84,13 @@ function buildDisplayName(
   return normalizedName || email || 'Usuário sem nome';
 }
 
+function createRouteError(message: string, code: string, status = 500) {
+  const error = new Error(message) as Error & { code: string; status: number };
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
 async function getManageableChurchIds(
   request: NextRequest,
   preferredIgrejaId: string | null,
@@ -128,7 +138,11 @@ async function findUniqueAccessByEmail(email: string) {
   if (error) throw error;
 
   if ((data || []).length > 1) {
-    throw new Error('Há mais de um usuário de acesso com este e-mail. Resolva a duplicidade antes de continuar.');
+    throw createRouteError(
+      'Há mais de um usuário de acesso com este e-mail. Resolva a duplicidade antes de continuar.',
+      'HUB_DUPLICATE_ACCESS_EMAIL',
+      409
+    );
   }
 
   return ((data || [])[0] || null) as UsuarioAcessoRow | null;
@@ -144,7 +158,11 @@ async function findUniquePessoaByEmail(email: string) {
   if (error) throw error;
 
   if ((data || []).length > 1) {
-    throw new Error('Há mais de uma pessoa com este e-mail. Resolva a duplicidade antes de continuar.');
+    throw createRouteError(
+      'Há mais de uma pessoa com este e-mail. Resolva a duplicidade antes de continuar.',
+      'HUB_DUPLICATE_PERSON_EMAIL',
+      409
+    );
   }
 
   return ((data || [])[0] || null) as PessoaRow | null;
@@ -166,18 +184,19 @@ export async function GET(request: NextRequest) {
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers) {
-      return NextResponse.json(
-        { error: 'Sem permissão para visualizar o hub de usuários.' },
-        { status: 403 }
+      return apiError(
+        'FORBIDDEN',
+        403,
+        'Sem permissão para visualizar o hub de usuários.'
       );
     }
 
     if (churchIds.length === 0) {
-      return NextResponse.json({
+      return apiSuccess({
         success: true,
         scope,
         igrejas: [],
@@ -326,22 +345,22 @@ export async function GET(request: NextRequest) {
         nome_exibicao: buildDisplayName(usuario.nome, usuario.email),
         ativo: usuario.vinculos.some((vinculo) => vinculo.ativo),
         vinculos: usuario.vinculos.sort((a, b) =>
-          a.igreja_nome.localeCompare(b.igreja_nome, 'pt-BR')
+          userHubCollator.compare(a.igreja_nome, b.igreja_nome)
         ),
       }))
-      .sort((a, b) => a.nome_exibicao.localeCompare(b.nome_exibicao, 'pt-BR'));
+      .sort((a, b) => userHubCollator.compare(a.nome_exibicao, b.nome_exibicao));
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       scope,
       igrejas: igrejas || [],
       usuarios,
     });
   } catch (error: any) {
     console.error('Erro ao listar hub de usuários:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao listar hub de usuários.' },
-      { status: 500 }
+    return apiError(
+      error.code || 'LOAD_HUB_USERS_FAILED',
+      error.status || 500,
+      error.message || 'Erro ao listar hub de usuários.'
     );
   }
 }
@@ -357,13 +376,14 @@ export async function POST(request: NextRequest) {
     const permissionContext = await getUserPermissionContext(firstChurchId, request);
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers) {
-      return NextResponse.json(
-        { error: 'Sem permissão para provisionar usuários.' },
-        { status: 403 }
+      return apiError(
+        'FORBIDDEN',
+        403,
+        'Sem permissão para provisionar usuários.'
       );
     }
 
@@ -375,13 +395,14 @@ export async function POST(request: NextRequest) {
         : null;
 
     if (!normalizedEmail) {
-      return NextResponse.json({ error: 'E-mail é obrigatório.' }, { status: 400 });
+      return apiError('HUB_EMAIL_REQUIRED', 400, 'E-mail é obrigatório.');
     }
 
     if (requestedChurches.length === 0) {
-      return NextResponse.json(
-        { error: 'Selecione pelo menos uma igreja para conceder acesso.' },
-        { status: 400 }
+      return apiError(
+        'HUB_CHURCH_REQUIRED',
+        400,
+        'Selecione pelo menos uma igreja para conceder acesso.'
       );
     }
 
@@ -393,9 +414,10 @@ export async function POST(request: NextRequest) {
 
     for (const church of requestedChurches) {
       if (!allowedSet.has(church.igrejaId)) {
-        return NextResponse.json(
-          { error: 'Você tentou gerenciar uma igreja fora do seu escopo atual.' },
-          { status: 403 }
+        return apiError(
+          'HUB_SCOPE_FORBIDDEN',
+          403,
+          'Você tentou gerenciar uma igreja fora do seu escopo atual.'
         );
       }
     }
@@ -416,9 +438,10 @@ export async function POST(request: NextRequest) {
     const accessByEmail = await findUniqueAccessByEmail(normalizedEmail);
 
     if (existingAccess && accessByEmail && existingAccess.id !== accessByEmail.id) {
-      return NextResponse.json(
-        { error: 'Este e-mail já pertence a outro usuário de acesso.' },
-        { status: 409 }
+      return apiError(
+        'HUB_ACCESS_EMAIL_CONFLICT',
+        409,
+        'Este e-mail já pertence a outro usuário de acesso.'
       );
     }
 
@@ -453,9 +476,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingAccess?.pessoa_id && pessoa?.id && existingAccess.pessoa_id !== pessoa.id) {
-      return NextResponse.json(
-        { error: 'O usuário de acesso já está vinculado a outra pessoa.' },
-        { status: 409 }
+      return apiError(
+        'HUB_ACCESS_PERSON_CONFLICT',
+        409,
+        'O usuário de acesso já está vinculado a outra pessoa.'
       );
     }
 
@@ -464,9 +488,10 @@ export async function POST(request: NextRequest) {
       pessoa?.usuario_id &&
       existingAccess.auth_user_id !== pessoa.usuario_id
     ) {
-      return NextResponse.json(
-        { error: 'Conflito entre o usuário autenticado e o cadastro de pessoa vinculado.' },
-        { status: 409 }
+      return apiError(
+        'HUB_PERSON_AUTH_CONFLICT',
+        409,
+        'Conflito entre o usuário autenticado e o cadastro de pessoa vinculado.'
       );
     }
 
@@ -474,9 +499,10 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
 
     if (!primaryChurch) {
-      return NextResponse.json(
-        { error: 'Selecione pelo menos uma igreja válida.' },
-        { status: 400 }
+      return apiError(
+        'HUB_INVALID_CHURCH_SELECTION',
+        400,
+        'Selecione pelo menos uma igreja válida.'
       );
     }
 
@@ -663,22 +689,27 @@ export async function POST(request: NextRequest) {
 
     if (updatePessoaMirrorError) throw updatePessoaMirrorError;
 
-    return NextResponse.json({
-      success: true,
-      message: existingAccess
-        ? 'Usuário atualizado no hub com sucesso.'
-        : 'Usuário cadastrado no hub com sucesso.',
-      data: {
-        id: savedAccess.id,
-        pessoa_id: pessoa.id,
-        email: savedAccess.email,
+    return apiSuccess(
+      {
+        data: {
+          id: savedAccess.id,
+          pessoa_id: pessoa.id,
+          email: savedAccess.email,
+        },
       },
-    });
+      {
+        message: existingAccess
+          ? 'Usuário atualizado no hub com sucesso.'
+          : 'Usuário cadastrado no hub com sucesso.',
+        messageCode: existingAccess ? 'HUB_USER_UPDATED' : 'HUB_USER_CREATED',
+      }
+    );
   } catch (error: any) {
     console.error('Erro ao salvar hub de usuários:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao salvar hub de usuários.' },
-      { status: 500 }
+    return apiError(
+      error.code || 'SAVE_HUB_USER_FAILED',
+      error.status || 500,
+      error.message || 'Erro ao salvar hub de usuários.'
     );
   }
 }

@@ -19,6 +19,10 @@ type IgrejaPublica = {
   slug?: string | null;
   cidade?: string | null;
   uf?: string | null;
+  apresentacao_titulo?: string | null;
+  apresentacao_texto?: string | null;
+  apresentacao_titulo_i18n?: Record<string, string> | null;
+  apresentacao_texto_i18n?: Record<string, string> | null;
   ativo?: boolean | null;
   visivel_publico?: boolean | null;
 };
@@ -40,7 +44,7 @@ function nullableLowerEmail(value: unknown) {
 async function findChurchById(igrejaId: string) {
   const { data, error } = await supabaseAdmin
     .from('igrejas')
-    .select('id, nome, nome_abreviado, slug, cidade, uf, ativo, visivel_publico')
+    .select('id, nome, nome_abreviado, slug, cidade, uf, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, ativo, visivel_publico')
     .eq('id', igrejaId)
     .eq('ativo', true)
     .maybeSingle<IgrejaPublica>();
@@ -58,7 +62,7 @@ async function findChurchBySlug(igrejaSlug: string) {
 
   const { data, error } = await supabaseAdmin
     .from('igrejas')
-    .select('id, nome, nome_abreviado, slug, cidade, uf, ativo, visivel_publico')
+    .select('id, nome, nome_abreviado, slug, cidade, uf, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, ativo, visivel_publico')
     .eq('slug', normalizedSlug)
     .eq('ativo', true)
     .maybeSingle<IgrejaPublica>();
@@ -72,7 +76,7 @@ async function findChurchBySlug(igrejaSlug: string) {
 async function resolveDefaultPublicChurch() {
   const bySlug = await supabaseAdmin
     .from('igrejas')
-    .select('id, nome, nome_abreviado, slug, cidade, uf, ativo, visivel_publico')
+    .select('id, nome, nome_abreviado, slug, cidade, uf, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, ativo, visivel_publico')
     .eq('slug', 'ippn')
     .eq('ativo', true)
     .maybeSingle<IgrejaPublica>();
@@ -82,7 +86,7 @@ async function resolveDefaultPublicChurch() {
 
   const byName = await supabaseAdmin
     .from('igrejas')
-    .select('id, nome, nome_abreviado, slug, cidade, uf, ativo, visivel_publico')
+    .select('id, nome, nome_abreviado, slug, cidade, uf, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, ativo, visivel_publico')
     .ilike('nome', '%ponta negra%')
     .eq('ativo', true)
     .limit(1)
@@ -93,7 +97,7 @@ async function resolveDefaultPublicChurch() {
 
   const fallback = await supabaseAdmin
     .from('igrejas')
-    .select('id, nome, nome_abreviado, slug, cidade, uf, ativo, visivel_publico')
+    .select('id, nome, nome_abreviado, slug, cidade, uf, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, ativo, visivel_publico')
     .eq('ativo', true)
     .order('nome', { ascending: true })
     .limit(1)

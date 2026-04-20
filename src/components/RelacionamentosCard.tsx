@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import { useLocale } from '@/i18n/provider';
 import { Users, Plus, Trash2, Search } from 'lucide-react';
 
@@ -207,12 +208,15 @@ export default function RelacionamentosCard({
 
         if (!response.ok) {
           throw new Error(
-            payload.error ||
+            resolveApiErrorMessage(
+              locale,
+              payload,
               tr(
                 'Erro ao buscar pessoas',
                 'Error al buscar personas',
                 'Error searching people'
               )
+            )
           );
         }
 
@@ -226,7 +230,7 @@ export default function RelacionamentosCard({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [busca, membroId, tr]);
+  }, [busca, membroId, tr, locale]);
 
   const salvar = async () => {
     if (!pessoaSelecionada) return;

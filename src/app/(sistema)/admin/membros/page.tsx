@@ -8,6 +8,7 @@ import { CargoTipo, getCargoCor } from '@/lib/permissions';
 import { formatPhoneNumber } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import FamiliaView from '@/components/FamiliaView';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
@@ -122,12 +123,15 @@ export default function PastorarMembrosPage() {
 
       if (!response.ok) {
         throw new Error(
-          payload.error ||
+          resolveApiErrorMessage(
+            locale,
+            payload,
             tr(
               'Erro ao carregar membros',
               'Error al cargar miembros',
               'Error loading members'
             )
+          )
         );
       }
 
@@ -144,7 +148,7 @@ export default function PastorarMembrosPage() {
     } finally {
       setLoading(false);
     }
-  }, [tr]);
+  }, [tr, locale]);
 
   useEffect(() => {
     if (user && podeAcessar) void carregarMembros();

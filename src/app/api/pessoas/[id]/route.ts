@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,11 +65,11 @@ export async function GET(
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
-      return NextResponse.json({ error: 'Sem permissão para consultar pessoas.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para consultar pessoas.');
     }
 
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(
@@ -77,10 +78,7 @@ export async function GET(
     );
 
     if (!igrejaId) {
-      return NextResponse.json(
-        { error: 'Nenhuma igreja selecionada.' },
-        { status: 400 }
-      );
+      return apiError('CHURCH_REQUIRED', 400, 'Nenhuma igreja selecionada.');
     }
 
     const { data: pessoaComVinculo, error } = await supabaseAdmin
@@ -108,10 +106,7 @@ export async function GET(
     if (error && error.code !== 'PGRST116') throw error;
 
     if (!pessoa) {
-      return NextResponse.json(
-        { error: 'Pessoa não encontrada' },
-        { status: 404 }
-      );
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada');
     }
 
     const temAcesso = await pessoaTemAcesso(pessoa.id, pessoa.usuario_id);
@@ -129,16 +124,16 @@ export async function GET(
         .filter(Boolean) || []
     };
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       data: pessoaFormatada
     });
 
   } catch (error: any) {
     console.error('Erro ao buscar pessoa:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao buscar pessoa' },
-      { status: 500 }
+    return apiError(
+      'LOAD_PEOPLE_FAILED',
+      500,
+      error.message || 'Erro ao buscar pessoa'
     );
   }
 }
@@ -159,11 +154,11 @@ export async function PATCH(
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers && !permissionContext.canPastorMembers) {
-      return NextResponse.json({ error: 'Sem permissão para atualizar pessoas.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para atualizar pessoas.');
     }
 
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(
@@ -187,17 +182,15 @@ export async function PATCH(
       cargo !== undefined || email !== undefined || body.tem_acesso !== undefined;
 
     if (alterandoCamposSensíveis && !permissionContext.canManageUsers) {
-      return NextResponse.json(
-        { error: 'Sem permissão para alterar cargo, e-mail ou acesso ao sistema.' },
-        { status: 403 }
+      return apiError(
+        'PERSON_SENSITIVE_FIELDS_FORBIDDEN',
+        403,
+        'Sem permissão para alterar cargo, e-mail ou acesso ao sistema.'
       );
     }
 
     if (!igrejaId) {
-      return NextResponse.json(
-        { error: 'Nenhuma igreja selecionada.' },
-        { status: 400 }
-      );
+      return apiError('CHURCH_REQUIRED', 400, 'Nenhuma igreja selecionada.');
     }
 
     // Verificar se pessoa existe
@@ -208,10 +201,7 @@ export async function PATCH(
     .single();
 
     if (!pessoaExistente) {
-      return NextResponse.json(
-        { error: 'Pessoa não encontrada' },
-        { status: 404 }
-      );
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada');
     }
 
     const { data: vinculoExistente, error: vinculoLookupError } = await supabaseAdmin
@@ -234,9 +224,10 @@ export async function PATCH(
 
     // Não permitir editar email se já tem acesso
     if (temAcesso && email && email !== pessoaExistente.email) {
-      return NextResponse.json(
-        { error: 'Não é possível alterar email de pessoa com acesso ao sistema' },
-        { status: 400 }
+      return apiError(
+        'PERSON_ACCESS_EMAIL_CHANGE_FORBIDDEN',
+        400,
+        'Não é possível alterar email de pessoa com acesso ao sistema'
       );
     }
 
@@ -349,32 +340,34 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Pessoa atualizada com sucesso',
-      data: {
-        ...pessoa,
-        tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
-        igreja_id: vinculoExistente?.igreja_id || igrejaId,
-        cargo: cargo ?? vinculoExistente?.cargo ?? pessoa.cargo,
-        status_membro: status_membro ?? vinculoExistente?.status_membro ?? pessoa.status_membro,
-        ativo: ativo ?? vinculoExistente?.ativo ?? pessoa.ativo,
+    return apiSuccess(
+      {
+        data: {
+          ...pessoa,
+          tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
+          igreja_id: vinculoExistente?.igreja_id || igrejaId,
+          cargo: cargo ?? vinculoExistente?.cargo ?? pessoa.cargo,
+          status_membro: status_membro ?? vinculoExistente?.status_membro ?? pessoa.status_membro,
+          ativo: ativo ?? vinculoExistente?.ativo ?? pessoa.ativo,
+        }
+      },
+      {
+        message: 'Pessoa atualizada com sucesso',
+        messageCode: 'PERSON_UPDATED',
       }
-    });
+    );
 
   } catch (error: any) {
     console.error('Erro ao atualizar pessoa:', error);
     
     if (error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Já existe outra pessoa com este email' },
-        { status: 409 }
-      );
+      return apiError('PERSON_DUPLICATE_EMAIL', 409, 'Já existe outra pessoa com este email');
     }
 
-    return NextResponse.json(
-      { error: error.message || 'Erro ao atualizar pessoa' },
-      { status: 500 }
+    return apiError(
+      'SAVE_PERSON_FAILED',
+      500,
+      error.message || 'Erro ao atualizar pessoa'
     );
   }
 }
@@ -394,11 +387,11 @@ export async function DELETE(
     );
 
     if (!permissionContext?.user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+      return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
     }
 
     if (!permissionContext.canManageUsers) {
-      return NextResponse.json({ error: 'Sem permissão para remover pessoas.' }, { status: 403 });
+      return apiError('FORBIDDEN', 403, 'Sem permissão para remover pessoas.');
     }
 
     const igrejaId = await resolveAuthorizedCurrentIgrejaId(
@@ -414,10 +407,7 @@ export async function DELETE(
       .single();
 
     if (!pessoa) {
-      return NextResponse.json(
-        { error: 'Pessoa não encontrada' },
-        { status: 404 }
-      );
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada');
     }
 
     const { data: vinculos, error: vinculosError } = await supabaseAdmin
@@ -469,17 +459,22 @@ export async function DELETE(
         }
       }
 
-      return NextResponse.json({
-        success: true,
-        message: `${pessoa.nome} foi removido da igreja atual, mantendo os demais vínculos.`
-      });
+      return apiSuccess(
+        {},
+        {
+          message: `${pessoa.nome} foi removido da igreja atual, mantendo os demais vínculos.`,
+          messageCode: 'PERSON_REMOVED_FROM_CHURCH',
+          messageParams: { nome: pessoa.nome },
+        }
+      );
     }
 
     // Não permitir deletar se tem acesso (precisa desativar primeiro)
     if (temAcesso) {
-      return NextResponse.json(
-        { error: 'Não é possível deletar pessoa com acesso ao sistema. Desative-a primeiro.' },
-        { status: 400 }
+      return apiError(
+        'PERSON_DELETE_ACCESS_FORBIDDEN',
+        400,
+        'Não é possível deletar pessoa com acesso ao sistema. Desative-a primeiro.'
       );
     }
 
@@ -490,12 +485,11 @@ export async function DELETE(
       .eq('pessoa_id', id);
 
     if (countEscalas && countEscalas > 0) {
-      return NextResponse.json(
-        { 
-          error: `${pessoa.nome} está em ${countEscalas} escala(s). Remova das escalas primeiro ou desative a pessoa.`,
-          count_escalas: countEscalas
-        },
-        { status: 400 }
+      return apiError(
+        'PERSON_IN_ESCALAS',
+        400,
+        `${pessoa.nome} está em ${countEscalas} escala(s). Remova das escalas primeiro ou desative a pessoa.`,
+        { nome: pessoa.nome, count_escalas: countEscalas }
       );
     }
 
@@ -507,16 +501,21 @@ export async function DELETE(
 
     if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
-      message: `${pessoa.nome} removido com sucesso`
-    });
+    return apiSuccess(
+      {},
+      {
+        message: `${pessoa.nome} removido com sucesso`,
+        messageCode: 'PERSON_DELETED',
+        messageParams: { nome: pessoa.nome },
+      }
+    );
 
   } catch (error: any) {
     console.error('Erro ao deletar pessoa:', error);
-    return NextResponse.json(
-      { error: error.message || 'Erro ao deletar pessoa' },
-      { status: 500 }
+    return apiError(
+      'SAVE_PERSON_FAILED',
+      500,
+      error.message || 'Erro ao deletar pessoa'
     );
   }
 }

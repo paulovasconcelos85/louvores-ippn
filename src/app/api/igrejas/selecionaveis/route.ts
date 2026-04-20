@@ -2,10 +2,10 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import https from 'node:https';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { findUsuarioAcessoByAuthOrEmail, resolveCurrentIgrejaId } from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
+import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -221,17 +221,16 @@ export async function GET() {
     }
 
     etapa = 'resposta';
-    return NextResponse.json({
+    return apiSuccess({
       igrejas,
       igrejaAtualId,
     });
   } catch (error: any) {
     console.error('Erro ao listar igrejas selecionaveis:', { etapa, error });
-    return NextResponse.json(
-      {
-        error: error.message || 'Erro ao carregar igrejas.',
-      },
-      { status: 500 }
+    return apiError(
+      'LOAD_CHURCHES_FAILED',
+      500,
+      error.message || 'Erro ao carregar igrejas.'
     );
   }
 }
