@@ -524,28 +524,45 @@ function filtrarSecoesEstruturadasAtuais(
   return secoesGlobais.length > 0 ? secoesGlobais : [];
 }
 
-async function buildLatestLiturgiaSection(
-  igrejaId: string,
-  locale: Locale,
-  includeInternal = false
-): Promise<LegacyBoletimSecao | null> {
-  const { data: cultoRaw, error: cultoError } = await supabaseAdmin
+async function fetchLatestCultosDoBoletim(igrejaId: string) {
+  const { data: cultoAtualRaw, error: cultoAtualError } = await supabaseAdmin
     .from('Louvores IPPN')
-    .select('"Culto nr.", Dia')
+    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
     .eq('igreja_id', igrejaId)
     .order('Dia', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (cultoError) throw cultoError;
-  if (!cultoRaw) return null;
+  if (cultoAtualError) throw cultoAtualError;
+  if (!cultoAtualRaw?.Dia) return [];
 
-  const culto = cultoRaw as Pick<LegacyCultoRow, 'Culto nr.' | 'Dia'>;
+  const { data: cultosRaw, error: cultosError } = await supabaseAdmin
+    .from('Louvores IPPN')
+    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
+    .eq('igreja_id', igrejaId)
+    .eq('Dia', cultoAtualRaw.Dia);
+
+  if (cultosError) throw cultosError;
+
+  return ((cultosRaw || []) as LegacyCultoRow[]).sort(
+    (a, b) => a['Culto nr.'] - b['Culto nr.']
+  );
+}
+
+async function buildLatestLiturgiaSection(
+  igrejaId: string,
+  locale: Locale,
+  includeInternal = false
+): Promise<LegacyBoletimSecao | null> {
+  const cultos = await fetchLatestCultosDoBoletim(igrejaId);
+  if (cultos.length === 0) return null;
+  const cultoReferencia = cultos[0];
+  const cultoIds = cultos.map((culto) => culto['Culto nr.']);
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-    .eq('culto_id', culto['Culto nr.'])
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+    .in('culto_id', cultoIds)
     .order('ordem', { ascending: true });
 
   if (itensError) throw itensError;
@@ -556,24 +573,43 @@ async function buildLatestLiturgiaSection(
   if (itensLiturgia.length === 0) return null;
 
   const canticosPorId = await resolveCanticosPorId(itensLiturgia.map((item) => item.cantico_id));
+  const itensPorCulto = new Map<number, LegacyLouvorItemRow[]>();
+
+  for (const item of itensLiturgia) {
+    const cultoId = typeof item.culto_id === 'number' ? item.culto_id : null;
+    if (cultoId === null) continue;
+    const listaAtual = itensPorCulto.get(cultoId) || [];
+    listaAtual.push(item);
+    itensPorCulto.set(cultoId, listaAtual);
+  }
+
+  let ordemSequencial = 0;
+  const itensCombinados = cultos.flatMap((culto) =>
+    buildLiturgiaBoletimItems(
+      (itensPorCulto.get(culto['Culto nr.']) || []).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)),
+      canticosPorId,
+      includeInternal,
+      `legacy-liturgia-${cultoReferencia.Dia}`,
+      locale
+    ).map((item) => ({
+      ...item,
+      ordem: ordemSequencial++,
+    }))
+  );
+
+  if (itensCombinados.length === 0) return null;
 
   return {
-    id: `legacy-liturgia-${culto['Culto nr.']}`,
+    id: `legacy-liturgia-${cultoReferencia.Dia}`,
     igreja_id: null,
-    culto_id: culto['Culto nr.'],
+    culto_id: null,
     tipo: 'liturgia',
-    titulo: `Liturgia do culto de ${culto.Dia}`,
+    titulo: `Liturgias do boletim de ${cultoReferencia.Dia}`,
     icone: null,
     ordem: 2,
     visivel: true,
     criado_em: null,
-    itens: buildLiturgiaBoletimItems(
-      itensLiturgia,
-      canticosPorId,
-      includeInternal,
-      `legacy-liturgia-${culto['Culto nr.']}`,
-      locale
-    ),
+    itens: itensCombinados,
   };
 }
 
@@ -582,35 +618,28 @@ async function buildLegacyBoletimFallback(
   locale: Locale,
   includeInternal = false
 ) {
-  const { data: cultoRaw, error: cultoError } = await supabaseAdmin
-    .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor, igreja_id')
-    .eq('igreja_id', igrejaId)
-    .order('Dia', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const cultos = await fetchLatestCultosDoBoletim(igrejaId);
 
-  if (cultoError) throw cultoError;
-  if (!cultoRaw) {
+  if (cultos.length === 0) {
     return {
       boletimSecoes: [],
       legacyMessage: 'Esta igreja ainda nao publicou secoes do boletim.',
     };
   }
 
-  const culto = cultoRaw as LegacyCultoRow;
+  const culto = cultos.find((item) => item.palavra_pastoral?.trim() || item.imagem_url) || cultos[0];
+  const cultoIds = cultos.map((item) => item['Culto nr.']);
 
   const { data: itensRaw, error: itensError } = await supabaseAdmin
     .from('louvor_itens')
-    .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-    .eq('culto_id', culto['Culto nr.'])
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+    .in('culto_id', cultoIds)
     .order('ordem', { ascending: true });
 
   if (itensError) throw itensError;
 
   const itens = (itensRaw || []) as LegacyLouvorItemRow[];
-  const itensLiturgia = itens.filter((item) => !isBoletimFallbackTipo(item.tipo));
-  const canticosPorId = await resolveCanticosPorId(itens.map((item) => item.cantico_id));
+  const liturgiaSecao = await buildLatestLiturgiaSection(igrejaId, locale, includeInternal);
 
   const secoes: LegacyBoletimSecao[] = [];
 
@@ -671,28 +700,12 @@ async function buildLegacyBoletimFallback(
     });
   }
 
-  if (itensLiturgia.length > 0) {
-    secoes.push({
-      id: `legacy-liturgia-${culto['Culto nr.']}`,
-      igreja_id: null,
-      culto_id: culto['Culto nr.'],
-      tipo: 'liturgia',
-      titulo: `Liturgia do culto de ${culto.Dia}`,
-      icone: null,
-      ordem: 2,
-      visivel: true,
-      criado_em: null,
-      itens: buildLiturgiaBoletimItems(
-        itensLiturgia,
-        canticosPorId,
-        includeInternal,
-        `legacy-liturgia-${culto['Culto nr.']}`,
-        locale
-      ),
-    });
+  if (liturgiaSecao) {
+    secoes.push(liturgiaSecao);
   }
 
-  secoes.push(...buildExtraSectionsFromFallbackRows(itens, culto['Culto nr.'], locale));
+  const itensDoCultoReferencia = itens.filter((item) => item.culto_id === culto['Culto nr.']);
+  secoes.push(...buildExtraSectionsFromFallbackRows(itensDoCultoReferencia, culto['Culto nr.'], locale));
 
   return {
     boletimSecoes: secoes,
@@ -843,40 +856,15 @@ export async function GET(request: NextRequest) {
 
     if (includeInternal && boletimSecoes.some((secao) => secao.id.startsWith('legacy-'))) {
       etapa = 'fallback-legado-interno';
-      const { data: cultoRaw } = await supabaseAdmin
-        .from('Louvores IPPN')
-        .select('"Culto nr."')
-        .eq('igreja_id', igrejaId)
-        .order('Dia', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const liturgiaSecaoInterna = await buildLatestLiturgiaSection(igrejaId, locale, true);
 
-      const cultoId = cultoRaw?.['Culto nr.'];
-
-      if (cultoId) {
-        const { data: itensRaw, error: itensError } = await supabaseAdmin
-          .from('louvor_itens')
-          .select('id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-          .eq('culto_id', cultoId)
-          .order('ordem', { ascending: true });
-
-        if (itensError) throw itensError;
-
-        const itensLegacy = (itensRaw || []) as LegacyLouvorItemRow[];
-        const canticosPorId = await resolveCanticosPorId(itensLegacy.map((item) => item.cantico_id));
-
+      if (liturgiaSecaoInterna) {
         boletimSecoes = boletimSecoes.map((secao) => {
           if (secao.tipo !== 'liturgia') return secao;
 
           return {
             ...secao,
-            itens: buildLiturgiaBoletimItems(
-              itensLegacy.filter((item) => !isBoletimFallbackTipo(item.tipo)),
-              canticosPorId,
-              true,
-              secao.id,
-              locale
-            ),
+            itens: liturgiaSecaoInterna.itens,
           };
         });
       }
