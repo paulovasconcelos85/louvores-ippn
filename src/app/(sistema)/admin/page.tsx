@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLocale } from '@/i18n/provider';
+import { getIntlLocale } from '@/i18n/config';
 import { getCargoLabel, getCargoCor } from '@/lib/permissions';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, getStoredChurchId } from '@/lib/church-utils';
@@ -42,6 +43,12 @@ interface MinhaProximaEscala {
 export default function AdminPage() {
   const router = useRouter();
   const locale = useLocale();
+  const intlLocale = getIntlLocale(locale);
+  const tr = useCallback(
+    (pt: string, es: string, en: string) =>
+      locale === 'es' ? es : locale === 'en' ? en : pt,
+    [locale]
+  );
   const { user, loading: authLoading } = useAuth();
   const { usuarioPermitido, loading: permLoading, permissoes } = usePermissions();
   
@@ -106,7 +113,7 @@ export default function AdminPage() {
           data: escala.data,
           hora_inicio: escala.hora_inicio,
           tipo_culto: escala.tipo_culto,
-          funcao: funcoes[0]?.tags_funcoes?.nome || 'Função',
+          funcao: funcoes[0]?.tags_funcoes?.nome || tr('Função', 'Función', 'Role'),
           confirmado: funcoes[0]?.confirmado || false
         });
       } else {
@@ -116,7 +123,7 @@ export default function AdminPage() {
       console.error('Erro ao buscar próxima escala:', error);
       setProximaEscala(null);
     }
-  }, [user, igrejaAtual?.id]);
+  }, [user, igrejaAtual?.id, tr]);
 
   const carregarResumoNotificacoes = useCallback(async () => {
     if (!user) return;
@@ -136,7 +143,7 @@ export default function AdminPage() {
 
       if (!response.ok) {
         throw new Error(
-          resolveApiErrorMessage(locale, data, 'Erro ao carregar notificações.')
+          resolveApiErrorMessage(locale, data, tr('Erro ao carregar notificações.', 'Error al cargar notificaciones.', 'Error loading notifications.'))
         );
       }
 
@@ -145,16 +152,32 @@ export default function AdminPage() {
       console.error('Erro ao carregar resumo de notificações:', error);
       setUnreadNotifications({ total: 0, pastoral: 0, escalas: 0 });
     }
-  }, [user, igrejaAtual?.id, locale]);
+  }, [user, igrejaAtual?.id, locale, tr]);
 
   const getTipoCultoLabel = (tipo: string) => {
     const labels: Record<string, string> = {
-      dominical_manha: 'Dominical - Manhã',
-      dominical_noite: 'Dominical - Noite',
-      quarta: 'Quarta-feira',
-      especial: 'Culto Especial'
+      dominical_manha: tr('Dominical - Manhã', 'Dominical - Mañana', 'Sunday - Morning'),
+      dominical_noite: tr('Dominical - Noite', 'Dominical - Noche', 'Sunday - Evening'),
+      quarta: tr('Quarta-feira', 'Miércoles', 'Wednesday'),
+      especial: tr('Culto Especial', 'Culto Especial', 'Special Service')
     };
     return labels[tipo] || tipo;
+  };
+
+  const getCargoDisplayLabel = (cargo: string) => {
+    const labels: Record<string, string> = {
+      membro: tr('Membro', 'Miembro', 'Member'),
+      diacono: tr('Diácono', 'Diácono', 'Deacon'),
+      presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
+      pastor: tr('Pastor', 'Pastor', 'Pastor'),
+      seminarista: tr('Seminarista', 'Seminarista', 'Seminarian'),
+      staff: tr('Staff', 'Staff', 'Staff'),
+      musico: tr('Músico', 'Músico', 'Musician'),
+      admin: tr('Admin', 'Admin', 'Admin'),
+      superadmin: 'Super Admin',
+    };
+
+    return labels[cargo] || getCargoLabel(cargo as any);
   };
 
   useEffect(() => {
@@ -234,7 +257,7 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Carregando...</p>
+          <p className="mt-4 text-slate-600">{tr('Carregando...', 'Cargando...', 'Loading...')}</p>
         </div>
       </div>
     );
@@ -247,7 +270,7 @@ export default function AdminPage() {
   const podeAcessarMembros = permissoes.podePastorearMembros;
   const podeAcessarPedidosPastorais =
     permissoes.isSuperAdmin || ['pastor', 'seminarista'].includes(usuarioPermitido?.cargo || '');
-  const nomeIgreja = igrejaAtual?.nome || 'sua igreja';
+  const nomeIgreja = igrejaAtual?.nome || tr('sua igreja', 'su iglesia', 'your church');
   const tituloHub = igrejaAtual?.sigla ? `OIKOS Hub • ${igrejaAtual.sigla}` : 'OIKOS Hub';
 
   return (
@@ -257,19 +280,19 @@ export default function AdminPage() {
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-600 rounded-2xl p-8 text-white mb-8">
           <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <Church className="w-8 h-8" />
-            Bem-vindo ao {tituloHub}
+            {tr('Bem-vindo ao', 'Bienvenido a', 'Welcome to')} {tituloHub}
           </h2>
           <p className="text-emerald-100 mb-4 text-sm sm:text-base">
-            Painel administrativo de {nomeIgreja}
+            {tr('Painel administrativo de', 'Panel administrativo de', 'Administrative panel for')} {nomeIgreja}
           </p>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-2 text-emerald-100">
               <UserCheck className="w-4 h-4" />
-              <span>Usuário: <span className="font-semibold text-white">{usuarioPermitido?.nome || user.email}</span></span>
+              <span>{tr('Usuário:', 'Usuario:', 'User:')} <span className="font-semibold text-white">{usuarioPermitido?.nome || user.email}</span></span>
             </div>
             {usuarioPermitido?.cargo && (
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getCargoCor(usuarioPermitido.cargo)}`}>
-                {getCargoLabel(usuarioPermitido.cargo)}
+                {getCargoDisplayLabel(usuarioPermitido.cargo)}
               </span>
             )}
             {permissoes.isSuperAdmin && (
@@ -282,7 +305,11 @@ export default function AdminPage() {
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 inline-flex items-center gap-2">
             <MapPin className="w-4 h-4" />
             <p className="text-sm">
-              Gerencie cultos, músicas, escalas e membros
+              {tr(
+                'Gerencie cultos, músicas, escalas e membros',
+                'Gestiona cultos, música, escalas y miembros',
+                'Manage services, music, schedules, and members'
+              )}
             </p>
           </div>
         </div>
@@ -307,15 +334,15 @@ export default function AdminPage() {
                   }`}>
                     <Music className="w-5 h-5" />
                     {proximaEscala.confirmado 
-                      ? 'Você está escalado e confirmado!' 
-                      : 'Você está escalado - Confirme sua presença!'}
+                      ? tr('Você está escalado e confirmado!', '¡Estás asignado y confirmado!', 'You are scheduled and confirmed!')
+                      : tr('Você está escalado - Confirme sua presença!', 'Estás asignado - ¡Confirma tu asistencia!', 'You are scheduled - Confirm your attendance!')}
                   </p>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                     proximaEscala.confirmado 
                       ? 'bg-green-200 text-green-800' 
                       : 'bg-amber-200 text-amber-900'
                   }`}>
-                    {proximaEscala.confirmado ? 'CONFIRMADO' : 'PENDENTE'}
+                    {proximaEscala.confirmado ? tr('CONFIRMADO', 'CONFIRMADO', 'CONFIRMED') : tr('PENDENTE', 'PENDIENTE', 'PENDING')}
                   </span>
                 </div>
                 
@@ -324,11 +351,11 @@ export default function AdminPage() {
                 } mb-3`}>
                   <p className="font-semibold flex items-center gap-2">
                     <CalendarDays className="w-4 h-4" />
-                    {new Date(proximaEscala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                    {new Date(proximaEscala.data + 'T00:00:00').toLocaleDateString(intlLocale, {
                       weekday: 'long',
                       day: '2-digit',
                       month: 'long'
-                    })} às {proximaEscala.hora_inicio}
+                    })} {tr('às', 'a las', 'at')} {proximaEscala.hora_inicio}
                   </p>
                   <p className="text-sm mt-1 flex items-center gap-2">
                     <Church className="w-3.5 h-3.5" />
@@ -345,9 +372,13 @@ export default function AdminPage() {
                   }`}>
                     <p className="font-semibold mb-1 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
-                      Por favor, confirme sua presença:
+                      {tr('Por favor, confirme sua presença:', 'Por favor, confirma tu asistencia:', 'Please confirm your attendance:')}
                     </p>
-                    <p>Entre em contato com o responsável pelas escalas ou acesse a página de escalas para confirmar.</p>
+                    <p>{tr(
+                      'Entre em contato com o responsável pelas escalas ou acesse a página de escalas para confirmar.',
+                      'Ponte en contacto con el responsable de las escalas o accede a la página de escalas para confirmar.',
+                      'Contact the person responsible for schedules or open the schedule page to confirm.'
+                    )}</p>
                   </div>
                 )}
 
@@ -362,12 +393,12 @@ export default function AdminPage() {
                   {proximaEscala.confirmado ? (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      Ver Detalhes da Escala
+                      {tr('Ver Detalhes da Escala', 'Ver detalles de la escala', 'View Schedule Details')}
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      Confirmar Presença
+                      {tr('Confirmar Presença', 'Confirmar asistencia', 'Confirm Attendance')}
                     </>
                   )}
                 </button>
@@ -387,14 +418,14 @@ export default function AdminPage() {
                 <Users className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Gerenciar Usuários
+                {tr('Gerenciar Usuários', 'Gestionar Usuarios', 'Manage Users')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Controle quem pode acessar o sistema
+                {tr('Controle quem pode acessar o sistema', 'Controla quién puede acceder al sistema', 'Control who can access the system')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Disponível
+                {tr('Disponível', 'Disponible', 'Available')}
               </span>
             </button>
           )}
@@ -408,14 +439,14 @@ export default function AdminPage() {
                 <UserCog className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Pastorear Membros
+                {tr('Pastorear Membros', 'Pastorear Miembros', 'Member Care')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Acompanhamento e cuidado pastoral
+                {tr('Acompanhamento e cuidado pastoral', 'Seguimiento y cuidado pastoral', 'Pastoral follow-up and care')}
               </p>
               <span className="text-xs text-blue-700 font-semibold bg-blue-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Disponível
+                {tr('Disponível', 'Disponible', 'Available')}
               </span>
             </button>
           )}
@@ -436,20 +467,28 @@ export default function AdminPage() {
                 ) : null}
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Pedidos
+                {tr('Pedidos', 'Solicitudes', 'Requests')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Caixa de entrada para oração, aconselhamento e visitas
+                {tr(
+                  'Caixa de entrada para oração, aconselhamento e visitas',
+                  'Bandeja de entrada para oración, consejería y visitas',
+                  'Inbox for prayer, counseling, and visits'
+                )}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-cyan-700 font-semibold bg-cyan-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
-                  Disponível
+                  {tr('Disponível', 'Disponible', 'Available')}
                 </span>
                 {unreadNotifications.pastoral > 0 ? (
                   <span className="text-xs text-rose-700 font-semibold bg-rose-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />
-                    {unreadNotifications.pastoral} novo{unreadNotifications.pastoral === 1 ? '' : 's'}
+                    {locale === 'es'
+                      ? `${unreadNotifications.pastoral} nuevo${unreadNotifications.pastoral === 1 ? '' : 's'}`
+                      : locale === 'en'
+                        ? `${unreadNotifications.pastoral} new`
+                        : `${unreadNotifications.pastoral} novo${unreadNotifications.pastoral === 1 ? '' : 's'}`}
                   </span>
                 ) : null}
               </div>
@@ -465,14 +504,14 @@ export default function AdminPage() {
                 <Calendar className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Gerenciar Escalas
+                {tr('Gerenciar Escalas', 'Gestionar Escalas', 'Manage Schedules')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Crie e organize as escalas de músicos
+                {tr('Crie e organize as escalas de músicos', 'Crea y organiza las escalas de músicos', 'Create and organize musician schedules')}
               </p>
               <span className="text-xs text-purple-700 font-semibold bg-purple-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Disponível
+                {tr('Disponível', 'Disponible', 'Available')}
               </span>
             </button>
           )}
@@ -483,12 +522,12 @@ export default function AdminPage() {
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
                 <Music className="w-6 h-6 text-slate-600" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Músicas</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{tr('Músicas', 'Música', 'Music')}</h3>
               <p className="text-slate-600 text-sm mb-4">
-                Gerencie letras e cifras
+                {tr('Gerencie letras e cifras', 'Gestiona letras y cifras', 'Manage lyrics and chords')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
-                Acessar
+                {tr('Acessar', 'Acceder', 'Access')}
               </span>
             </div>
           </Link>
@@ -500,12 +539,12 @@ export default function AdminPage() {
               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
                 <CalendarDays className="w-6 h-6 text-slate-600" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Boletins</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{tr('Boletins', 'Boletines', 'Bulletins')}</h3>
               <p className="text-slate-600 text-sm mb-4">
-                Organize liturgias e o boletim do dia
+                {tr('Organize liturgias e o boletim do dia', 'Organiza liturgias y el boletín del día', 'Organize liturgies and the daily bulletin')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
-                Acessar
+                {tr('Acessar', 'Acceder', 'Access')}
               </span>
             </div>
           </Link>
@@ -517,13 +556,13 @@ export default function AdminPage() {
                 <BarChart3 className="w-6 h-6 text-slate-600" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Estatísticas
+                {tr('Estatísticas', 'Estadísticas', 'Statistics')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Músicas mais cantadas, por mês, por posição
+                {tr('Músicas mais cantadas, por mês, por posição', 'Música más cantada, por mes, por posición', 'Most-played songs by month and position')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
-                Acessar
+                {tr('Acessar', 'Acceder', 'Access')}
               </span>
             </div>
           </Link>
@@ -537,10 +576,14 @@ export default function AdminPage() {
                 <Globe className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Igrejas
+                {tr('Igrejas', 'Iglesias', 'Churches')}
               </h3>
               <p className="text-slate-600 text-sm mb-4">
-                Base inicial para gestão multi-igreja e expansão geográfica
+                {tr(
+                  'Base inicial para gestão multi-igreja e expansão geográfica',
+                  'Base inicial para gestión multiiglesia y expansión geográfica',
+                  'Initial foundation for multi-church management and geographic expansion'
+                )}
               </p>
               <span className="text-xs text-amber-800 font-semibold bg-amber-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <Star className="w-3 h-3" />

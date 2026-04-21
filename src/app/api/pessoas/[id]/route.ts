@@ -26,6 +26,40 @@ function escolherVinculoPrincipal<T extends { igreja_id: string; ativo?: boolean
   );
 }
 
+type UsuarioAcessoRelacionado = {
+  id: string;
+  igreja_id: string | null;
+};
+
+async function buscarUsuarioAcessoRelacionado(
+  pessoaId: string,
+  authUserId?: string | null
+) {
+  if (authUserId) {
+    const porAuth = await supabaseAdmin
+      .from('usuarios_acesso')
+      .select('id, igreja_id')
+      .eq('auth_user_id', authUserId)
+      .order('atualizado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle<UsuarioAcessoRelacionado>();
+
+    if (porAuth.error) throw porAuth.error;
+    if (porAuth.data?.id) return porAuth.data;
+  }
+
+  const porPessoa = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, igreja_id')
+    .eq('pessoa_id', pessoaId)
+    .order('atualizado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle<UsuarioAcessoRelacionado>();
+
+  if (porPessoa.error) throw porPessoa.error;
+  return porPessoa.data || null;
+}
+
 async function pessoaTemAcesso(pessoaId: string, usuarioId?: string | null) {
   const porPessoa = await supabaseAdmin
     .from('usuarios_acesso')
@@ -177,6 +211,9 @@ export async function PATCH(
       ...restoDados
     } = body;
     delete restoDados.tem_acesso;
+    delete restoDados.igreja_id;
+    delete restoDados.tags;
+    delete restoDados.usuario_id;
 
     const alterandoCamposSensíveis =
       cargo !== undefined || email !== undefined || body.tem_acesso !== undefined;
@@ -271,10 +308,12 @@ export async function PATCH(
       if (observacoes !== undefined) atualizacaoVinculo.observacoes = observacoes || null;
 
       if (Object.keys(atualizacaoVinculo).length > 0) {
-        await supabaseAdmin
+        const { error: updateVinculoError } = await supabaseAdmin
           .from('pessoas_igrejas')
           .update(atualizacaoVinculo)
           .eq('id', vinculoExistente.id);
+
+        if (updateVinculoError) throw updateVinculoError;
       }
     } else if (cargo !== undefined || status_membro !== undefined || ativo !== undefined) {
       const { error: vinculoInsertError } = await supabaseAdmin
@@ -291,13 +330,7 @@ export async function PATCH(
 
     // Sincronizar cargo/ativo em usuarios_igrejas e usuarios_acesso (se o usuário tem acesso)
     if (pessoaExistente.usuario_id && (cargo !== undefined || ativo !== undefined || nome !== undefined || telefone !== undefined)) {
-      const { data: acessoExistente, error: acessoLookupError } = await supabaseAdmin
-        .from('usuarios_acesso')
-        .select('id, igreja_id')
-        .eq('auth_user_id', pessoaExistente.usuario_id)
-        .maybeSingle();
-
-      if (acessoLookupError) throw acessoLookupError;
+      const acessoExistente = await buscarUsuarioAcessoRelacionado(id, pessoaExistente.usuario_id);
 
       const atualizacoesVinculo: any = {};
       if (cargo !== undefined) atualizacoesVinculo.cargo = cargo;
@@ -305,7 +338,7 @@ export async function PATCH(
 
       // Atualizar usuarios_igrejas (fonte de verdade para cargo)
       if (acessoExistente?.id && igrejaId && Object.keys(atualizacoesVinculo).length > 0) {
-        await supabaseAdmin
+        const { error: upsertUsuarioIgrejaError } = await supabaseAdmin
           .from('usuarios_igrejas')
           .upsert(
             {
@@ -316,6 +349,8 @@ export async function PATCH(
             },
             { onConflict: 'usuario_id,igreja_id' }
           );
+
+        if (upsertUsuarioIgrejaError) throw upsertUsuarioIgrejaError;
       }
 
       // Manter usuarios_acesso em sincronia
@@ -332,10 +367,12 @@ export async function PATCH(
         atualizacoesAcesso.auth_user_id = pessoaExistente.usuario_id;
 
         if (acessoExistente?.id) {
-          await supabaseAdmin
+          const { error: updateAcessoError } = await supabaseAdmin
             .from('usuarios_acesso')
             .update(atualizacoesAcesso)
             .eq('id', acessoExistente.id);
+
+          if (updateAcessoError) throw updateAcessoError;
         }
       }
     }
