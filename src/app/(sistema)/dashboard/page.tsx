@@ -1,28 +1,29 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
-  Award,
   BarChart3,
-  Calendar,
-  Globe,
+  CalendarDays,
+  Church,
+  HeartHandshake,
+  Home,
   Music,
-  Target,
+  ShieldCheck,
+  Sparkles,
   TrendingUp,
-  Trophy,
+  UserRoundCheck,
+  Users,
 } from 'lucide-react';
 import {
-  BarChart,
   Bar,
+  BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,133 +32,128 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useLocale, useTranslations } from '@/i18n/provider';
 import { getIntlLocale } from '@/i18n/config';
-import { supabase } from '@/lib/supabase';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
 
-interface RankingItem {
-  cantico: string;
-  total: number;
-}
+type DashboardResponse = {
+  igreja: IgrejaSelecionavel | null;
+  availableYears: number[];
+  selectedYear: number | null;
+  overview: {
+    totalRegistered: number;
+    totalPeople: number;
+    inactiveRecords: number;
+    activeMembers: number;
+    congregants: number;
+    visitors: number;
+    families: number;
+    peopleInFamilies: number;
+    withAccess: number;
+    servingPeople: number;
+    averageAge: number | null;
+  };
+  breakdowns: {
+    status: Array<{ status: string; total: number }>;
+    age: Array<{ faixa: string; total: number }>;
+    roles: Array<{ cargo: string; total: number }>;
+  };
+  activity: {
+    servicesInYear: number;
+    latestServiceDate: string | null;
+    monthlyServices: Array<{ month: number; total: number }>;
+    recentServiceDays: Array<{ date: string; total: number }>;
+  };
+  music: {
+    totalExecutions: number;
+    uniqueSongs: number;
+    topKey: string | null;
+    averageSongsPerService: number;
+    mostPlayedSong: string | null;
+    topSongs: Array<{ song: string; total: number }>;
+    monthlyExecutions: Array<{ month: number; total: number }>;
+    topKeys: Array<{ key: string; total: number }>;
+    recentSongs: Array<{ song: string; lastDate: string; daysAgo: number }>;
+  };
+};
 
-interface EvolucaoMensal {
-  mes: string;
-  total: number;
-}
-
-interface CanticoRecente {
-  cantico: string;
-  ultimaData: string;
-  diasAtras: number;
-}
-
-interface TomItem {
-  tom: string;
-  total: number;
-}
-
-interface CultoResumo {
-  'Culto nr.': number;
-  Dia: string;
-}
-
-interface LouvorItemResumo {
-  culto_id: number;
-  cantico_id: string | number | null;
-  tom: string | null;
-}
-
-type TranslateFn = (
-  key: string,
-  values?: Record<string, string | number | null | undefined>
-) => string;
-
-const COLORS = [
-  '#10b981',
-  '#3b82f6',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#f97316',
-];
-
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function getAnoFromDate(date: string) {
-  return Number(date.slice(0, 4));
-}
-
-function getMesFromDate(date: string) {
-  return Number(date.slice(5, 7));
-}
-
-function filtrarCultosPorPeriodo(cultos: CultoResumo[], ano: number | null, mes: number | null) {
-  return cultos.filter((culto) => {
-    const anoCulto = getAnoFromDate(culto.Dia);
-    const mesCulto = getMesFromDate(culto.Dia);
-
-    if (ano !== null && anoCulto !== ano) return false;
-    if (mes !== null && mesCulto !== mes) return false;
-
-    return true;
-  });
-}
-
-function formatarDiasAtras(diasAtras: number, t: TranslateFn) {
-  if (diasAtras <= 0) return t('dashboard.today');
-  if (diasAtras === 1) return t('dashboard.yesterday');
-  return t('dashboard.daysAgo', { count: diasAtras });
-}
-
-async function resolveNomesMusicais(igrejaId: string, canticoIds: string[], t: TranslateFn) {
-  const idsUuid = canticoIds.filter(isUuid);
-  const idsHinario = canticoIds
-    .filter((value) => !isUuid(value) && /^\d+$/.test(value))
-    .map((value) => Number(value));
-
-  const [canticosResult, hinarioResult] = await Promise.all([
-    idsUuid.length > 0
-      ? supabase.from('canticos').select('id, nome').eq('igreja_id', igrejaId).in('id', idsUuid)
-      : Promise.resolve({ data: [], error: null }),
-    idsHinario.length > 0
-      ? supabase.from('hinario_novo_cantico').select('id, numero, titulo').in('id', idsHinario)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-
-  if (canticosResult.error) throw canticosResult.error;
-  if (hinarioResult.error) throw hinarioResult.error;
-
-  const nomesPorId = new Map<string, string>();
-
-  ((canticosResult.data || []) as Array<{ id: string; nome: string | null }>).forEach((cantico) => {
-    nomesPorId.set(String(cantico.id), cantico.nome?.trim() || t('dashboard.songWithoutName'));
-  });
-
-  (
-    (hinarioResult.data || []) as Array<{
-      id: string | number;
-      numero: string | null;
-      titulo: string | null;
-    }>
-  ).forEach((hino) => {
-    const numero = hino.numero?.trim();
-    const titulo = hino.titulo?.trim() || t('dashboard.untitled');
-    const nome = numero
-      ? t('dashboard.hymnWithNumber', { number: numero, title: titulo })
-      : t('dashboard.hymnWithoutNumber', { title: titulo });
-    nomesPorId.set(String(hino.id), nome);
-  });
-
-  return nomesPorId;
-}
+const STATUS_COLORS: Record<string, string> = {
+  ativo: '#0f766e',
+  congregado: '#2563eb',
+  visitante: '#d97706',
+  afastado: '#7c3aed',
+  falecido: '#64748b',
+  sem_status: '#94a3b8',
+};
 
 function EmptyChartState({ message }: { message: string }) {
-  return <div className="flex h-[300px] items-center justify-center text-center text-slate-400">{message}</div>;
+  return (
+    <div className="flex h-[280px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center text-sm text-slate-500">
+      {message}
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  accent: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm shadow-slate-200/70 backdrop-blur">
+      <div className={`mb-3 inline-flex rounded-2xl p-2 ${accent}`}>{icon}</div>
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-white/80 bg-white/90 p-5 shadow-sm shadow-slate-200/70 backdrop-blur md:p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-2xl bg-slate-100 p-2 text-slate-700">{icon}</div>
+        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ServiceRoleCard({
+  label,
+  total,
+  note,
+  accentClass,
+}: {
+  label: string;
+  total: number;
+  note: string;
+  accentClass: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className={`mb-3 h-1.5 w-14 rounded-full ${accentClass}`} />
+      <p className="text-sm font-semibold text-slate-900">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{total}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-500">{note}</p>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -169,27 +165,17 @@ export default function DashboardPage() {
 
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
   const [igrejaAtualId, setIgrejaAtualId] = useState<string | null>(null);
-  const [todosCultosIgreja, setTodosCultosIgreja] = useState<CultoResumo[]>([]);
-  const [anos, setAnos] = useState<number[]>([]);
-  const [ano, setAno] = useState<number | null>(null);
-  const [mes, setMes] = useState<number | null>(null);
-  const [ranking, setRanking] = useState<RankingItem[]>([]);
-  const [evolucaoMensal, setEvolucaoMensal] = useState<EvolucaoMensal[]>([]);
-  const [canticosRecentes, setCanticosRecentes] = useState<CanticoRecente[]>([]);
-  const [rankingTons, setRankingTons] = useState<TomItem[]>([]);
-  const [totalExecucoes, setTotalExecucoes] = useState(0);
-  const [totalCanticos, setTotalCanticos] = useState(0);
-  const [totalCultos, setTotalCultos] = useState(0);
-  const [mediaPorCulto, setMediaPorCulto] = useState(0);
-  const [maisCantado, setMaisCantado] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [summary, setSummary] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const monthLongFormatter = useMemo(
-    () => new Intl.DateTimeFormat(intlLocale, { month: 'long' }),
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(intlLocale, { month: 'short' }),
     [intlLocale]
   );
-  const monthShortFormatter = useMemo(
-    () => new Intl.DateTimeFormat(intlLocale, { month: 'short' }),
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(intlLocale, { day: '2-digit', month: 'short', year: 'numeric' }),
     [intlLocale]
   );
   const decimalFormatter = useMemo(
@@ -200,15 +186,51 @@ export default function DashboardPage() {
       }),
     [intlLocale]
   );
-
-  const monthOptions = useMemo(
+  const percentFormatter = useMemo(
     () =>
-      Array.from({ length: 12 }, (_, index) => ({
-        v: index + 1,
-        n: monthLongFormatter.format(new Date(2024, index, 1)),
-      })),
-    [monthLongFormatter]
+      new Intl.NumberFormat(intlLocale, {
+        style: 'percent',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }),
+    [intlLocale]
   );
+
+  const humanizeKey = (value: string) =>
+    value
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      ativo: t('dashboard.status.ativo'),
+      congregado: t('dashboard.status.congregado'),
+      visitante: t('dashboard.status.visitante'),
+      afastado: t('dashboard.status.afastado'),
+      falecido: t('dashboard.status.falecido'),
+      sem_status: t('dashboard.status.sem_status'),
+    };
+
+    return labels[status] || humanizeKey(status);
+  };
+
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      membro: t('dashboard.roles.membro'),
+      musico: t('dashboard.roles.musico'),
+      staff: t('dashboard.roles.staff'),
+      seminarista: t('dashboard.roles.seminarista'),
+      diacono: t('dashboard.roles.diacono'),
+      presbitero: t('dashboard.roles.presbitero'),
+      pastor: t('dashboard.roles.pastor'),
+      admin: t('dashboard.roles.admin'),
+      superadmin: t('dashboard.roles.superadmin'),
+    };
+
+    return labels[role] || humanizeKey(role);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -220,704 +242,756 @@ export default function DashboardPage() {
     if (!user?.id) {
       setIgrejas([]);
       setIgrejaAtualId(null);
-      setTodosCultosIgreja([]);
       return;
     }
 
-    let ativo = true;
+    let active = true;
 
-    const carregarIgrejas = async () => {
+    const loadChurches = async () => {
       try {
         const response = await fetch('/api/igrejas/selecionaveis');
-        const data = await response.json();
+        const payload = await response.json();
 
         if (!response.ok) {
           throw new Error(
-            resolveApiErrorMessage(locale, data, t('header.loadChurchesError'))
+            resolveApiErrorMessage(locale, payload, t('header.loadChurchesError'))
           );
         }
 
-        if (!ativo) return;
+        if (!active) return;
 
-        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
-        const igrejaUrl =
+        const list = (payload.igrejas || []) as IgrejaSelecionavel[];
+        const churchFromUrl =
           typeof window !== 'undefined'
             ? new URLSearchParams(window.location.search).get('igreja_id')
             : null;
-        const igrejaPreferida =
+        const preferredChurch =
           typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
-        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
-          Boolean
-        ) as string[];
-        const igrejaResolvida =
-          prioridade.find((id) => lista.some((igreja) => igreja.id === id)) || null;
+        const resolvedChurchId =
+          [churchFromUrl, preferredChurch, payload.igrejaAtualId, list[0]?.id || null]
+            .filter(Boolean)
+            .find((id) => list.some((church) => church.id === id)) || null;
 
-        setIgrejas(lista);
-        setIgrejaAtualId(igrejaResolvida);
-      } catch (error) {
-        console.error('Erro ao carregar igrejas do dashboard:', error);
-        if (!ativo) return;
+        setIgrejas(list);
+        setIgrejaAtualId(resolvedChurchId);
+      } catch (loadError) {
+        console.error('Erro ao carregar igrejas do dashboard:', loadError);
+        if (!active) return;
         setIgrejas([]);
         setIgrejaAtualId(null);
-        setTodosCultosIgreja([]);
       }
     };
 
-    void carregarIgrejas();
+    void loadChurches();
 
     return () => {
-      ativo = false;
+      active = false;
     };
-  }, [t, user?.id, locale]);
+  }, [locale, t, user?.id]);
 
   useEffect(() => {
-    if (!igrejaAtualId) {
-      setTodosCultosIgreja([]);
-      setAnos([]);
-      return;
-    }
-
-    let ativo = true;
-
-    async function fetchCultosDaIgreja() {
-      const { data, error } = await supabase
-        .from('Louvores IPPN')
-        .select('"Culto nr.", Dia')
-        .eq('igreja_id', igrejaAtualId)
-        .order('Dia', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao buscar cultos da igreja:', error);
-        if (ativo) {
-          setTodosCultosIgreja([]);
-          setAnos([]);
-        }
-        return;
-      }
-
-      if (!ativo) return;
-
-      const cultos = (data || []) as CultoResumo[];
-      setTodosCultosIgreja(cultos);
-
-      const anosUnicos = Array.from(new Set(cultos.map((culto) => getAnoFromDate(culto.Dia)))).sort((a, b) => b - a);
-      setAnos(anosUnicos);
-    }
-
-    void fetchCultosDaIgreja();
-
-    return () => {
-      ativo = false;
-    };
+    if (!igrejaAtualId || typeof window === 'undefined') return;
+    window.localStorage.setItem(CHURCH_STORAGE_KEY, igrejaAtualId);
   }, [igrejaAtualId]);
 
   useEffect(() => {
-    let ativo = true;
+    if (!user?.id) {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
 
-    async function fetchDados() {
-      setLoading(true);
+    if (!igrejaAtualId) {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
 
-      if (!igrejaAtualId) {
-        setRanking([]);
-        setEvolucaoMensal([]);
-        setRankingTons([]);
-        setTotalExecucoes(0);
-        setTotalCanticos(0);
-        setTotalCultos(0);
-        setMaisCantado(null);
-        setMediaPorCulto(0);
-        setLoading(false);
-        return;
-      }
+    let active = true;
+    const controller = new AbortController();
 
-      const cultosFiltrados = filtrarCultosPorPeriodo(todosCultosIgreja, ano, mes);
-
-      if (cultosFiltrados.length === 0) {
-        setRanking([]);
-        setEvolucaoMensal([]);
-        setRankingTons([]);
-        setTotalExecucoes(0);
-        setTotalCanticos(0);
-        setTotalCultos(0);
-        setMaisCantado(null);
-        setMediaPorCulto(0);
-        setLoading(false);
-        return;
-      }
-
+    const loadDashboard = async () => {
       try {
-        const cultoIds = cultosFiltrados.map((culto) => culto['Culto nr.']);
-        const cultosPorId = new Map(cultosFiltrados.map((culto) => [culto['Culto nr.'], culto.Dia]));
-        const { data: itensMusicais, error } = await supabase
-          .from('louvor_itens')
-          .select('culto_id, cantico_id, tom')
-          .in('culto_id', cultoIds)
-          .not('cantico_id', 'is', null);
+        setLoading(true);
+        setError(null);
 
-        if (error) {
-          throw error;
+        const params = new URLSearchParams({ igreja_id: igrejaAtualId });
+        if (selectedYear) {
+          params.set('year', String(selectedYear));
         }
 
-        const itensValidos = ((itensMusicais || []) as LouvorItemResumo[])
-          .map((item) => ({
-            culto_id: item.culto_id,
-            cantico_id: item.cantico_id ? String(item.cantico_id) : null,
-            tom: item.tom,
-          }))
-          .filter((item) => item.cantico_id && cultosPorId.has(item.culto_id));
-
-        if (itensValidos.length === 0) {
-          if (!ativo) return;
-          setRanking([]);
-          setEvolucaoMensal([]);
-          setRankingTons([]);
-          setTotalExecucoes(0);
-          setTotalCanticos(0);
-          setTotalCultos(0);
-          setMaisCantado(null);
-          setMediaPorCulto(0);
-          return;
-        }
-
-        const nomesPorId = await resolveNomesMusicais(
-          igrejaAtualId,
-          Array.from(new Set(itensValidos.map((item) => item.cantico_id!).filter(Boolean))),
-          t
-        );
-
-        const execucoes = itensValidos.map((item) => {
-          const dataCulto = cultosPorId.get(item.culto_id)!;
-
-          return {
-            cantico: nomesPorId.get(item.cantico_id!) || t('dashboard.songFallback', { id: item.cantico_id }),
-            ano: getAnoFromDate(dataCulto),
-            mes: getMesFromDate(dataCulto),
-            data: dataCulto,
-            culto_nr: item.culto_id,
-            tom: item.tom,
-          };
+        const response = await fetch(`/api/dashboard?${params.toString()}`, {
+          headers: await buildAuthenticatedHeaders(),
+          signal: controller.signal,
         });
+        const payload = await response.json();
 
-        const contagemCanticos = execucoes.reduce<Record<string, number>>((acc, curr) => {
-          acc[curr.cantico] = (acc[curr.cantico] || 0) + 1;
-          return acc;
-        }, {});
-
-        const rankingArray = Object.entries(contagemCanticos)
-          .map(([cantico, total]) => ({
-            cantico,
-            total,
-          }))
-          .sort((a, b) => b.total - a.total);
-
-        const cultosUnicos = new Set(cultoIds);
-        const evolucaoComData = execucoes.reduce<
-          Record<string, { mes: string; total: number; anoNum: number; mesNum: number }>
-        >((acc, curr) => {
-          const mesNome = monthShortFormatter
-            .format(new Date(curr.ano, curr.mes - 1, 1))
-            .replace(/\.$/, '');
-          const anoStr = curr.ano.toString().slice(-2);
-          const key = ano ? mesNome : `${mesNome}/${anoStr}`;
-
-          if (!acc[key]) {
-            acc[key] = {
-              mes: key,
-              total: 0,
-              anoNum: curr.ano,
-              mesNum: curr.mes,
-            };
-          }
-
-          acc[key].total++;
-          return acc;
-        }, {});
-
-        const evolucaoArray = Object.values(evolucaoComData)
-          .sort((a, b) => {
-            if (a.anoNum !== b.anoNum) {
-              return a.anoNum - b.anoNum;
-            }
-            return a.mesNum - b.mesNum;
-          })
-          .map(({ mes: label, total }) => ({ mes: label, total }));
-
-        const contagemTons = execucoes
-          .filter((execucao) => execucao.tom !== null)
-          .reduce<Record<string, number>>((acc, curr) => {
-            const tom = curr.tom!;
-            acc[tom] = (acc[tom] || 0) + 1;
-            return acc;
-          }, {});
-
-        const rankingTonsArray = Object.entries(contagemTons)
-          .map(([tom, total]) => ({
-            tom,
-            total,
-          }))
-          .sort((a, b) => b.total - a.total);
-
-        if (!ativo) return;
-
-        setRanking(rankingArray);
-        setTotalExecucoes(execucoes.length);
-        setTotalCanticos(rankingArray.length);
-        setMaisCantado(rankingArray[0]?.cantico || null);
-        setTotalCultos(cultosUnicos.size);
-        setEvolucaoMensal(evolucaoArray);
-        setMediaPorCulto(cultosUnicos.size > 0 ? execucoes.length / cultosUnicos.size : 0);
-        setRankingTons(rankingTonsArray);
-      } catch (error) {
-        console.error('Erro ao buscar dados do dashboard:', error);
-        if (!ativo) return;
-        setRanking([]);
-        setEvolucaoMensal([]);
-        setRankingTons([]);
-        setTotalExecucoes(0);
-        setTotalCanticos(0);
-        setTotalCultos(0);
-        setMaisCantado(null);
-        setMediaPorCulto(0);
-      } finally {
-        if (ativo) setLoading(false);
-      }
-    }
-
-    void fetchDados();
-
-    return () => {
-      ativo = false;
-    };
-  }, [ano, mes, igrejaAtualId, todosCultosIgreja, monthShortFormatter, t]);
-
-  useEffect(() => {
-    let ativo = true;
-
-    async function fetchCanticosRecentes() {
-      if (!igrejaAtualId) {
-        setCanticosRecentes([]);
-        return;
-      }
-
-      try {
-        const quatroSemanasAtras = new Date();
-        quatroSemanasAtras.setDate(quatroSemanasAtras.getDate() - 28);
-        const limite = quatroSemanasAtras.toISOString().split('T')[0];
-        const cultoIdsRecentes = todosCultosIgreja
-          .filter((culto) => culto.Dia >= limite)
-          .map((culto) => culto['Culto nr.']);
-
-        if (cultoIdsRecentes.length === 0) {
-          if (ativo) setCanticosRecentes([]);
-          return;
+        if (!response.ok) {
+          throw new Error(
+            resolveApiErrorMessage(locale, payload, t('dashboard.errors.load'))
+          );
         }
 
-        const { data: execucoes, error } = await supabase
-          .from('louvor_itens')
-          .select('culto_id, cantico_id')
-          .in('culto_id', cultoIdsRecentes)
-          .not('cantico_id', 'is', null);
+        if (!active) return;
 
-        if (error) {
-          throw error;
+        const nextSummary = payload as DashboardResponse;
+        setSummary(nextSummary);
+
+        if (nextSummary.selectedYear !== selectedYear) {
+          setSelectedYear(nextSummary.selectedYear);
         }
-
-        if (!execucoes || execucoes.length === 0) {
-          if (ativo) setCanticosRecentes([]);
-          return;
-        }
-
-        const nomesPorId = await resolveNomesMusicais(
-          igrejaAtualId,
-          Array.from(
-            new Set(
-              execucoes
-                .map((item: { cantico_id: string | number | null }) => item.cantico_id)
-                .filter(Boolean)
-                .map((item) => String(item))
-            )
-          ),
-          t
+      } catch (loadError) {
+        if (controller.signal.aborted || !active) return;
+        console.error('Erro ao carregar resumo do dashboard:', loadError);
+        setSummary(null);
+        setError(
+          loadError instanceof Error ? loadError.message : t('dashboard.errors.load')
         );
-
-        const hoje = new Date();
-        const canticosUnicos = execucoes.reduce<Record<string, CanticoRecente>>((acc, curr: any) => {
-          const canticoId = curr.cantico_id ? String(curr.cantico_id) : null;
-          const dataCulto = curr.culto_id
-            ? todosCultosIgreja.find((culto) => culto['Culto nr.'] === curr.culto_id)?.Dia || null
-            : null;
-
-          if (!canticoId || !dataCulto) return acc;
-
-          const nomeCantico = nomesPorId.get(canticoId) || t('dashboard.songFallback', { id: canticoId });
-
-          if (!acc[nomeCantico]) {
-            const dataExecucao = new Date(dataCulto);
-            const diasAtras = Math.floor((hoje.getTime() - dataExecucao.getTime()) / (1000 * 60 * 60 * 24));
-
-            acc[nomeCantico] = {
-              cantico: nomeCantico,
-              ultimaData: dataCulto,
-              diasAtras,
-            };
-          }
-
-          return acc;
-        }, {});
-
-        const canticosArray = Object.values(canticosUnicos);
-        canticosArray.sort((a, b) => a.cantico.localeCompare(b.cantico, intlLocale));
-
-        if (ativo) setCanticosRecentes(canticosArray);
-      } catch (error) {
-        console.error('Erro ao buscar músicas recentes:', error);
-        if (ativo) setCanticosRecentes([]);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-    }
+    };
 
-    void fetchCanticosRecentes();
+    void loadDashboard();
 
     return () => {
-      ativo = false;
+      active = false;
+      controller.abort();
     };
-  }, [igrejaAtualId, intlLocale, t, todosCultosIgreja]);
+  }, [igrejaAtualId, locale, selectedYear, t, user?.id]);
+
+  const igrejaAtual =
+    igrejas.find((igreja) => igreja.id === igrejaAtualId) || summary?.igreja || null;
+  const yearOptions = summary?.availableYears || [];
+  const activeRecords = summary?.overview.totalPeople || 0;
+  const selectedYearLabel = summary?.selectedYear || selectedYear;
+
+  const statusData = (summary?.breakdowns.status || []).map((item) => ({
+    ...item,
+    name: getStatusLabel(item.status),
+    fill: STATUS_COLORS[item.status] || STATUS_COLORS.sem_status,
+  }));
+
+  const ageData = summary?.breakdowns.age || [];
+
+  const serviceRoleTotals = new Map(
+    (summary?.breakdowns.roles || []).map((item) => [item.cargo, item.total])
+  );
+
+  const serviceRoleCards = [
+    {
+      cargo: 'musico',
+      label: getRoleLabel('musico'),
+      total: serviceRoleTotals.get('musico') || 0,
+      note: t('dashboard.roleNotes.musico'),
+      accentClass: 'bg-emerald-500',
+    },
+    {
+      cargo: 'staff',
+      label: getRoleLabel('staff'),
+      total: serviceRoleTotals.get('staff') || 0,
+      note: t('dashboard.roleNotes.staff'),
+      accentClass: 'bg-sky-500',
+    },
+    {
+      cargo: 'seminarista',
+      label: getRoleLabel('seminarista'),
+      total: serviceRoleTotals.get('seminarista') || 0,
+      note: t('dashboard.roleNotes.seminarista'),
+      accentClass: 'bg-amber-500',
+    },
+    {
+      cargo: 'diacono',
+      label: getRoleLabel('diacono'),
+      total: serviceRoleTotals.get('diacono') || 0,
+      note: t('dashboard.roleNotes.diacono'),
+      accentClass: 'bg-violet-500',
+    },
+    {
+      cargo: 'presbitero',
+      label: getRoleLabel('presbitero'),
+      total: serviceRoleTotals.get('presbitero') || 0,
+      note: t('dashboard.roleNotes.presbitero'),
+      accentClass: 'bg-rose-500',
+    },
+    {
+      cargo: 'pastor',
+      label: getRoleLabel('pastor'),
+      total: serviceRoleTotals.get('pastor') || 0,
+      note: t('dashboard.roleNotes.pastor'),
+      accentClass: 'bg-slate-700',
+    },
+    {
+      cargo: 'admin',
+      label: t('dashboard.roles.adminAndSuperadmin'),
+      total: (serviceRoleTotals.get('admin') || 0) + (serviceRoleTotals.get('superadmin') || 0),
+      note: t('dashboard.roleNotes.admin'),
+      accentClass: 'bg-indigo-500',
+    },
+  ];
+
+  const monthlyServicesData = useMemo(
+    () =>
+      (summary?.activity.monthlyServices || []).map((item) => ({
+        ...item,
+        label: monthFormatter.format(new Date(2024, item.month - 1, 1)).replace(/\.$/, ''),
+      })),
+    [monthFormatter, summary?.activity.monthlyServices]
+  );
+
+  const recentServiceDays = summary?.activity.recentServiceDays || [];
+  const topSongs = summary?.music.topSongs || [];
+  const topKeys = summary?.music.topKeys || [];
+  const recentSongs = summary?.music.recentSongs || [];
+
+  const monthlyExecutionsData = useMemo(
+    () =>
+      (summary?.music.monthlyExecutions || []).map((item) => ({
+        ...item,
+        label: monthFormatter.format(new Date(2024, item.month - 1, 1)).replace(/\.$/, ''),
+      })),
+    [monthFormatter, summary?.music.monthlyExecutions]
+  );
+
+  const accessCoverage =
+    activeRecords > 0
+      ? percentFormatter.format((summary?.overview.withAccess || 0) / activeRecords)
+      : percentFormatter.format(0);
+  const servingCoverage =
+    activeRecords > 0
+      ? percentFormatter.format((summary?.overview.servingPeople || 0) / activeRecords)
+      : percentFormatter.format(0);
+  const familyCoverage =
+    activeRecords > 0
+      ? percentFormatter.format((summary?.overview.peopleInFamilies || 0) / activeRecords)
+      : percentFormatter.format(0);
+
+  const formatDate = (date: string | null) =>
+    date ? dateFormatter.format(new Date(`${date}T00:00:00`)) : t('dashboard.hero.noService');
+  const formatDaysAgo = (days: number) => {
+    if (days <= 0) return t('dashboard.music.today');
+    if (days === 1) return t('dashboard.music.yesterday');
+    return t('dashboard.music.daysAgo', { count: days });
+  };
 
   if (authLoading || !user) return null;
 
-  const igrejaAtual = igrejas.find((igreja) => igreja.id === igrejaAtualId) || null;
-  const top5 = ranking.slice(0, 5);
-  const percentualTop5 = top5.map((item) => ({
-    name: item.cantico,
-    value: item.total,
-    percent: totalExecucoes > 0 ? ((item.total / totalExecucoes) * 100).toFixed(1) : '0.0',
-  }));
-  const formatDecimal = (value: number) => decimalFormatter.format(value);
-  const formatPercent = (value: number | string) => `${decimalFormatter.format(Number(value))}%`;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <div className="mb-6">
-        <h1 className="mb-2 flex items-center gap-3 text-3xl font-bold text-slate-800">
-          <BarChart3 className="h-8 w-8 text-emerald-600" />
-          {t('dashboard.title')}
-        </h1>
-        <p className="text-slate-600">
-          {igrejaAtual
-            ? t('dashboard.subtitleWithChurch', { church: igrejaAtual.sigla || igrejaAtual.nome })
-            : t('dashboard.subtitleGeneric')}
-        </p>
-      </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.08),_transparent_38%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)]">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
+        <section className="overflow-hidden rounded-[28px] border border-white/80 bg-slate-950 text-white shadow-xl shadow-slate-900/10">
+          <div className="grid gap-6 p-6 md:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)] md:p-8">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-slate-100">
+                <Sparkles className="h-4 w-4 text-emerald-300" />
+                {t('dashboard.kicker')}
+              </div>
+              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+                {t('dashboard.title')}
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
+                {igrejaAtual
+                  ? t('dashboard.subtitleWithChurch', {
+                      church: igrejaAtual.sigla || igrejaAtual.nome,
+                    })
+                  : t('dashboard.subtitleGeneric')}
+              </p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                {t('dashboard.description')}
+              </p>
+              {summary?.overview.inactiveRecords ? (
+                <p className="mt-4 text-sm text-amber-200">
+                  {t('dashboard.notes.inactiveRecords', {
+                    count: summary.overview.inactiveRecords,
+                  })}
+                </p>
+              ) : null}
+            </div>
 
-      <div className="mb-6 rounded-xl bg-white p-4 shadow-md">
-        <h3 className="mb-3 font-semibold text-slate-700">{t('dashboard.filters')}</h3>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="mb-1 flex items-center gap-2 text-sm text-slate-600">
-              <Globe className="h-4 w-4" />
-              {t('dashboard.year')}
-            </label>
-            <select
-              value={ano || ''}
-              onChange={(e) => setAno(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded-lg border border-slate-300 p-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">{t('dashboard.allYears')}</option>
-              {anos.map((anoItem) => (
-                <option key={anoItem} value={anoItem}>
-                  {anoItem}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur md:p-5">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+                    <Church className="h-4 w-4" />
+                    {t('dashboard.filters.church')}
+                  </label>
+                  <select
+                    value={igrejaAtualId || ''}
+                    onChange={(event) => {
+                      setIgrejaAtualId(event.target.value || null);
+                      setSelectedYear(null);
+                    }}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none ring-0 transition focus:border-emerald-400"
+                  >
+                    <option value="">{t('dashboard.filters.selectChurch')}</option>
+                    {igrejas.map((igreja) => (
+                      <option key={igreja.id} value={igreja.id}>
+                        {igreja.sigla || igreja.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          <div className="flex-1">
-            <label className="mb-1 flex items-center gap-2 text-sm text-slate-600">
-              <Calendar className="h-4 w-4" />
-              {t('dashboard.month')}
-            </label>
-            <select
-              value={mes || ''}
-              onChange={(e) => setMes(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded-lg border border-slate-300 p-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">{t('dashboard.allMonths')}</option>
-              {monthOptions.map((monthOption) => (
-                <option key={monthOption.v} value={monthOption.v}>
-                  {monthOption.n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 text-white shadow-lg">
-          <p className="mb-1 flex items-center gap-2 text-sm text-emerald-100">
-            <Activity className="h-4 w-4" />
-            {t('dashboard.stats.totalExecutions')}
-          </p>
-          <p className="text-3xl font-bold">{totalExecucoes}</p>
-        </div>
-
-        <div className="rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-5 text-white shadow-lg">
-          <p className="mb-1 flex items-center gap-2 text-sm text-blue-100">
-            <Music className="h-4 w-4" />
-            {t('dashboard.stats.uniqueSongs')}
-          </p>
-          <p className="text-3xl font-bold">{totalCanticos}</p>
-        </div>
-
-        <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 text-white shadow-lg">
-          <p className="mb-1 flex items-center gap-2 text-sm text-indigo-100">
-            <Calendar className="h-4 w-4" />
-            {t('dashboard.stats.totalServices')}
-          </p>
-          <p className="text-3xl font-bold">{totalCultos}</p>
-        </div>
-
-        <div className="rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 p-5 text-white shadow-lg">
-          <p className="mb-1 flex items-center gap-2 text-sm text-purple-100">
-            <Target className="h-4 w-4" />
-            {t('dashboard.stats.averagePerService')}
-          </p>
-          <p className="text-3xl font-bold">{formatDecimal(mediaPorCulto)}</p>
-        </div>
-
-        <div className="rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 p-5 text-white shadow-lg">
-          <p className="mb-1 flex items-center gap-2 text-sm text-orange-100">
-            <Award className="h-4 w-4" />
-            {t('dashboard.stats.mostPlayed')}
-          </p>
-          <p className="truncate text-sm font-semibold">{maisCantado || '-'}</p>
-        </div>
-      </div>
-
-      <div className="mb-6 rounded-xl bg-white p-6 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-            <Music className="h-6 w-6 text-emerald-600" />
-            {t('dashboard.recentSongsTitle')}
-          </h2>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
-            {t('dashboard.recentSongsCount', { count: canticosRecentes.length })}
-          </span>
-        </div>
-
-        {canticosRecentes.length === 0 ? (
-          <p className="py-8 text-center text-slate-500">{t('dashboard.recentSongsEmpty')}</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {canticosRecentes.map((item, idx) => (
-              <div
-                key={`${item.cantico}-${item.ultimaData}`}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-emerald-300 hover:bg-slate-50"
-              >
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-700">
-                  {idx + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-slate-700">{item.cantico}</p>
-                  <p className="text-xs text-slate-500">{formatarDiasAtras(item.diasAtras, t)}</p>
+                <div>
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
+                    <CalendarDays className="h-4 w-4" />
+                    {t('dashboard.filters.year')}
+                  </label>
+                  <select
+                    value={selectedYearLabel || ''}
+                    onChange={(event) =>
+                      setSelectedYear(event.target.value ? Number(event.target.value) : null)
+                    }
+                    className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-white outline-none ring-0 transition focus:border-emerald-400"
+                  >
+                    <option value="">{t('dashboard.filters.allYears')}</option>
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {loading ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-3">
-          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-emerald-600" />
-          <p className="text-sm text-slate-500">{t('dashboard.loading')}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              {t('dashboard.charts.topSongs')}
-            </h2>
-            {ranking.length === 0 ? (
-              <EmptyChartState message={t('dashboard.noChartData')} />
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={ranking.slice(0, 10)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="cantico"
-                    angle={-45}
-                    textAnchor="end"
-                    height={100}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <YAxis />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="total" fill="#10b981" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-              <Target className="h-5 w-5 text-blue-500" />
-              {t('dashboard.charts.topDistribution')}
-            </h2>
-            {percentualTop5.length === 0 ? (
-              <EmptyChartState message={t('dashboard.noChartData')} />
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={percentualTop5}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ payload }: { payload?: { percent?: string | number } }) =>
-                      formatPercent(payload?.percent || 0)
-                    }
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {percentualTop5.map((entry, index) => (
-                      <Cell key={`cell-${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: '12px' }}
-                    formatter={(value, entry: { payload?: { name?: string } }) =>
-                      entry.payload?.name || String(value)
-                    }
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-              <TrendingUp className="h-5 w-5 text-green-500" />
-              {t('dashboard.charts.monthlyTrend')}
-            </h2>
-            {evolucaoMensal.length === 0 ? (
-              <EmptyChartState message={t('dashboard.noChartData')} />
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={evolucaoMensal}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={80} />
-                  <YAxis />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={{ fill: '#3b82f6', r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-              <Music className="h-5 w-5 text-purple-500" />
-              {t('dashboard.charts.topKeys')}
-            </h2>
-            {rankingTons.length === 0 ? (
-              <EmptyChartState message={t('dashboard.noKeyRecorded')} />
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={rankingTons.slice(0, 10)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="tom" tick={{ fontSize: 12 }} />
-                  <YAxis />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="total" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-6 shadow-lg lg:col-span-2">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-800">
-              <BarChart3 className="h-5 w-5 text-slate-600" />
-              {t('dashboard.charts.fullRanking')}
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b-2 border-slate-200">
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">{t('dashboard.table.position')}</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">{t('dashboard.table.song')}</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">{t('dashboard.table.executions')}</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">{t('dashboard.table.percentTotal')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ranking.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
-                        {t('dashboard.rankingEmpty')}
-                      </td>
-                    </tr>
-                  ) : (
-                    ranking.map((item, idx) => (
-                      <tr key={`${item.cantico}-${idx}`} className="border-b border-slate-100 transition hover:bg-slate-50">
-                        <td className="px-4 py-3">
-                          {idx < 3 ? (
-                            <Trophy
-                              className={`h-5 w-5 ${
-                                idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : 'text-amber-600'
-                              }`}
-                            />
-                          ) : (
-                            <span className="text-slate-500">{idx + 1}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-800">{item.cantico}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-emerald-600">{item.total}</td>
-                        <td className="px-4 py-3 text-right text-slate-600">
-                          {formatPercent((item.total / totalExecucoes) * 100)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
+                    {t('dashboard.hero.servicesInYear', { year: selectedYearLabel || '-' })}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {summary?.activity.servicesInYear ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
+                    {t('dashboard.hero.lastService')}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-white">
+                    {formatDate(summary?.activity.latestServiceDate || null)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
+                    {t('dashboard.hero.accessCoverage')}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">{accessCoverage}</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </section>
+
+        {loading ? (
+          <section className="flex min-h-[320px] flex-col items-center justify-center rounded-[28px] border border-white/80 bg-white/90 text-center shadow-sm shadow-slate-200/70">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
+            <p className="mt-4 text-sm text-slate-500">{t('dashboard.loading')}</p>
+          </section>
+        ) : !igrejaAtualId || !summary ? (
+          <section className="rounded-[28px] border border-white/80 bg-white/90 p-8 text-center shadow-sm shadow-slate-200/70">
+            <h2 className="text-xl font-semibold text-slate-900">
+              {error ? t('dashboard.errorTitle') : t('dashboard.empty.title')}
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+              {error || t('dashboard.empty.description')}
+            </p>
+          </section>
+        ) : (
+          <>
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <MetricCard
+                icon={<Users className="h-5 w-5 text-slate-700" />}
+                label={t('dashboard.cards.totalRegistered')}
+                value={summary.overview.totalRegistered}
+                accent="bg-slate-100"
+              />
+              <MetricCard
+                icon={<Users className="h-5 w-5 text-cyan-700" />}
+                label={t('dashboard.cards.activeRecords')}
+                value={summary.overview.totalPeople}
+                accent="bg-cyan-100"
+              />
+              <MetricCard
+                icon={<Church className="h-5 w-5 text-emerald-700" />}
+                label={t('dashboard.cards.activeMembers')}
+                value={summary.overview.activeMembers}
+                accent="bg-emerald-100"
+              />
+              <MetricCard
+                icon={<Home className="h-5 w-5 text-sky-700" />}
+                label={t('dashboard.cards.families')}
+                value={summary.overview.families}
+                accent="bg-sky-100"
+              />
+              <MetricCard
+                icon={<UserRoundCheck className="h-5 w-5 text-amber-700" />}
+                label={t('dashboard.cards.congregants')}
+                value={summary.overview.congregants}
+                accent="bg-amber-100"
+              />
+              <MetricCard
+                icon={<Activity className="h-5 w-5 text-orange-700" />}
+                label={t('dashboard.cards.visitors')}
+                value={summary.overview.visitors}
+                accent="bg-orange-100"
+              />
+              <MetricCard
+                icon={<HeartHandshake className="h-5 w-5 text-violet-700" />}
+                label={t('dashboard.cards.servingPeople')}
+                value={summary.overview.servingPeople}
+                accent="bg-violet-100"
+              />
+              <MetricCard
+                icon={<ShieldCheck className="h-5 w-5 text-indigo-700" />}
+                label={t('dashboard.cards.withAccess')}
+                value={summary.overview.withAccess}
+                accent="bg-indigo-100"
+              />
+              <MetricCard
+                icon={<CalendarDays className="h-5 w-5 text-blue-700" />}
+                label={t('dashboard.cards.servicesInYear', { year: selectedYearLabel || '-' })}
+                value={summary.activity.servicesInYear}
+                accent="bg-blue-100"
+              />
+              <MetricCard
+                icon={<TrendingUp className="h-5 w-5 text-rose-700" />}
+                label={t('dashboard.cards.averageAge')}
+                value={
+                  summary.overview.averageAge === null
+                    ? t('dashboard.cards.noAverageAge')
+                    : `${decimalFormatter.format(summary.overview.averageAge)} ${t('dashboard.units.years')}`
+                }
+                accent="bg-rose-100"
+              />
+            </section>
+
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <MetricCard
+                icon={<Music className="h-5 w-5 text-emerald-700" />}
+                label={t('dashboard.music.cards.totalExecutions')}
+                value={summary.music.totalExecutions}
+                accent="bg-emerald-100"
+              />
+              <MetricCard
+                icon={<Music className="h-5 w-5 text-sky-700" />}
+                label={t('dashboard.music.cards.uniqueSongs')}
+                value={summary.music.uniqueSongs}
+                accent="bg-sky-100"
+              />
+              <MetricCard
+                icon={<TrendingUp className="h-5 w-5 text-violet-700" />}
+                label={t('dashboard.music.cards.averagePerService')}
+                value={decimalFormatter.format(summary.music.averageSongsPerService)}
+                accent="bg-violet-100"
+              />
+              <MetricCard
+                icon={<BarChart3 className="h-5 w-5 text-amber-700" />}
+                label={t('dashboard.music.cards.topKey')}
+                value={summary.music.topKey || t('dashboard.music.emptyDash')}
+                accent="bg-amber-100"
+              />
+              <MetricCard
+                icon={<Sparkles className="h-5 w-5 text-rose-700" />}
+                label={t('dashboard.music.cards.mostPlayed')}
+                value={summary.music.mostPlayedSong || t('dashboard.music.emptyDash')}
+                accent="bg-rose-100"
+              />
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <SectionCard title={t('dashboard.sections.status')} icon={<Users className="h-5 w-5" />}>
+                {statusData.length === 0 ? (
+                  <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={statusData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Bar dataKey="total" radius={[10, 10, 0, 0]}>
+                        {statusData.map((entry) => (
+                          <Cell key={entry.status} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard title={t('dashboard.sections.age')} icon={<BarChart3 className="h-5 w-5" />}>
+                {ageData.every((item) => item.total === 0) ? (
+                  <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={ageData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="faixa" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Bar dataKey="total" fill="#0f766e" radius={[10, 10, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title={t('dashboard.sections.servicesTrend')}
+                icon={<CalendarDays className="h-5 w-5" />}
+              >
+                {monthlyServicesData.every((item) => item.total === 0) ? (
+                  <EmptyChartState message={t('dashboard.charts.noActivityData')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={monthlyServicesData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="total"
+                        stroke="#2563eb"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#2563eb' }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title={t('dashboard.sections.roles')}
+                icon={<HeartHandshake className="h-5 w-5" />}
+              >
+                {serviceRoleCards.every((item) => item.total === 0) ? (
+                  <EmptyChartState message={t('dashboard.charts.noRolesData')} />
+                ) : (
+                  <div>
+                    <p className="mb-4 text-sm leading-6 text-slate-500">
+                      {t('dashboard.sections.rolesDescription', {
+                        serving: summary.overview.servingPeople,
+                        access: summary.overview.withAccess,
+                      })}
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {serviceRoleCards.map((item) => (
+                        <ServiceRoleCard
+                          key={item.cargo}
+                          label={item.label}
+                          total={item.total}
+                          note={item.note}
+                          accentClass={item.accentClass}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </SectionCard>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <SectionCard
+                title={t('dashboard.music.sections.topSongs')}
+                icon={<Music className="h-5 w-5" />}
+              >
+                {topSongs.length === 0 ? (
+                  <EmptyChartState message={t('dashboard.music.noData')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={topSongs}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="song" tick={{ fontSize: 11 }} angle={-18} textAnchor="end" height={70} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Bar dataKey="total" fill="#10b981" radius={[10, 10, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title={t('dashboard.music.sections.executionsTrend')}
+                icon={<TrendingUp className="h-5 w-5" />}
+              >
+                {monthlyExecutionsData.every((item) => item.total === 0) ? (
+                  <EmptyChartState message={t('dashboard.music.noData')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={monthlyExecutionsData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="total"
+                        stroke="#8b5cf6"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: '#8b5cf6' }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title={t('dashboard.music.sections.topKeys')}
+                icon={<BarChart3 className="h-5 w-5" />}
+              >
+                {topKeys.length === 0 ? (
+                  <EmptyChartState message={t('dashboard.music.noKeys')} />
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={topKeys}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="key" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                        }}
+                      />
+                      <Bar dataKey="total" fill="#f59e0b" radius={[10, 10, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title={t('dashboard.music.sections.recentSongs')}
+                icon={<Sparkles className="h-5 w-5" />}
+              >
+                {recentSongs.length === 0 ? (
+                  <p className="text-sm text-slate-500">{t('dashboard.music.noRecentSongs')}</p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {recentSongs.map((item) => (
+                      <div
+                        key={`${item.song}-${item.lastDate}`}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                      >
+                        <p className="truncate text-sm font-semibold text-slate-900">{item.song}</p>
+                        <p className="mt-1 text-sm text-slate-500">{formatDate(item.lastDate)}</p>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                          {formatDaysAgo(item.daysAgo)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <SectionCard
+                title={t('dashboard.sections.recentServices')}
+                icon={<CalendarDays className="h-5 w-5" />}
+              >
+                {recentServiceDays.length === 0 ? (
+                  <p className="text-sm text-slate-500">{t('dashboard.list.noRecentServices')}</p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {recentServiceDays.map((item) => (
+                      <div
+                        key={item.date}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                      >
+                        <p className="text-sm font-medium text-slate-900">
+                          {formatDate(item.date)}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {t('dashboard.list.servicesOnDate', { count: item.total })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+
+              <SectionCard title={t('dashboard.sections.insights')} icon={<Sparkles className="h-5 w-5" />}>
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {t('dashboard.insights.registryTitle')}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      {t('dashboard.insights.registryText', {
+                        count: summary.overview.totalRegistered,
+                        active: summary.overview.totalPeople,
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {t('dashboard.insights.accessTitle')}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      {t('dashboard.insights.accessText', {
+                        percent: accessCoverage,
+                        serving: servingCoverage,
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {t('dashboard.insights.familyTitle')}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      {t('dashboard.insights.familyText', {
+                        percent: familyCoverage,
+                        families: summary.overview.families,
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }

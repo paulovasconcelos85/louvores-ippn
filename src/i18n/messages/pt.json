@@ -124,48 +124,129 @@
     "selected": "Endereço selecionado"
   },
   "dashboard": {
-    "title": "Dashboard de Louvores",
-    "subtitleWithChurch": "Análise completa de execuções e tendências de {church}",
-    "subtitleGeneric": "Análise completa de execuções e tendências",
-    "filters": "Filtros",
-    "year": "Ano",
-    "month": "Mês",
-    "allYears": "Todos os anos",
-    "allMonths": "Todos os meses",
+    "kicker": "Visão executiva da igreja",
+    "title": "Dashboard da Igreja",
+    "subtitleWithChurch": "Indicadores de pessoas, acesso e atividade de {church}.",
+    "subtitleGeneric": "Indicadores de pessoas, acesso e atividade da igreja.",
+    "description": "Este painel resume cadastro, famílias, faixas etárias, engajamento no app e ritmo de cultos publicados.",
     "loading": "Carregando indicadores...",
-    "today": "Hoje",
-    "yesterday": "Ontem",
-    "daysAgo": "{count} dias atrás",
-    "recentSongsTitle": "Músicas das Últimas 4 Semanas",
-    "recentSongsCount": "{count} músicas",
-    "recentSongsEmpty": "Nenhuma música encontrada nas últimas 4 semanas.",
-    "noChartData": "Nenhum dado encontrado para os filtros selecionados.",
-    "noKeyRecorded": "Nenhum tom registrado",
-    "rankingEmpty": "Ainda não há execuções para montar o ranking.",
-    "songFallback": "Música {id}",
-    "songWithoutName": "Cântico sem nome",
-    "untitled": "Sem título",
-    "hymnWithNumber": "Hino {number} - {title}",
-    "hymnWithoutNumber": "Hino - {title}",
-    "stats": {
-      "totalExecutions": "Total de Execuções",
-      "uniqueSongs": "Músicas Únicas",
-      "totalServices": "Total de Cultos",
-      "averagePerService": "Média/Culto",
-      "mostPlayed": "Mais Executado"
+    "errorTitle": "Não foi possível carregar a dashboard",
+    "empty": {
+      "title": "Selecione uma igreja para começar",
+      "description": "Assim que uma igreja estiver definida, vamos mostrar o panorama de pessoas, famílias, acessos e cultos."
+    },
+    "errors": {
+      "load": "Erro ao carregar a dashboard."
+    },
+    "notes": {
+      "inactiveRecords": "{count} registros estão inativos ou encerrados e ficam fora dos cards principais."
+    },
+    "filters": {
+      "church": "Igreja",
+      "selectChurch": "Selecione uma igreja",
+      "year": "Ano de atividade",
+      "allYears": "Todos os anos"
+    },
+    "hero": {
+      "servicesInYear": "Cultos em {year}",
+      "lastService": "Último culto registrado",
+      "noService": "Sem registros",
+      "accessCoverage": "Cobertura de acesso",
+      "servingCoverage": "Pessoas servindo",
+      "familyCoverage": "Cobertura familiar"
+    },
+    "cards": {
+      "totalRegistered": "Total cadastrados",
+      "activeRecords": "Cadastros ativos",
+      "activeMembers": "Membros ativos",
+      "congregants": "Congregados",
+      "visitors": "Visitantes",
+      "families": "Famílias",
+      "withAccess": "Pessoas com acesso",
+      "servingPeople": "Pessoas servindo",
+      "servicesInYear": "Cultos em {year}",
+      "averageAge": "Idade média",
+      "noAverageAge": "-"
+    },
+    "sections": {
+      "status": "Situação cadastral",
+      "age": "Curva etária",
+      "servicesTrend": "Cultos ao longo do ano",
+      "roles": "Pessoas servindo por função",
+      "rolesDescription": "{serving} pessoas atuam em funções de serviço, dentro de um total de {access} pessoas com acesso ao app.",
+      "recentServices": "Cultos recentes",
+      "insights": "Leituras rápidas"
     },
     "charts": {
-      "topSongs": "Top 10 Músicas Mais Executadas",
-      "topDistribution": "Distribuição Top 5",
-      "monthlyTrend": "Evolução Mensal",
-      "topKeys": "Tons Mais Tocados",
-      "fullRanking": "Ranking Completo"
+      "noPeopleData": "Ainda não há dados suficientes de pessoas para este gráfico.",
+      "noActivityData": "Ainda não há cultos registrados para este período.",
+      "noRolesData": "Ainda não há pessoas com acesso em funções de serviço."
     },
-    "table": {
-      "position": "#",
-      "song": "Cântico",
-      "executions": "Execuções",
-      "percentTotal": "% do Total"
+    "list": {
+      "noRecentServices": "Nenhum culto recente encontrado.",
+      "servicesOnDate": "{count} cultos registrados nesta data"
+    },
+    "insights": {
+      "registryTitle": "Base atual",
+      "registryText": "A igreja possui {count} pessoas cadastradas, com {active} registros ativos no painel principal.",
+      "accessTitle": "Engajamento digital",
+      "accessText": "{percent} do cadastro ativo já tem acesso ao app, e {serving} está em funções de serviço.",
+      "familyTitle": "Estrutura familiar",
+      "familyText": "{percent} do cadastro ativo já está associado a grupos familiares, totalizando {families} famílias."
+    },
+    "units": {
+      "years": "anos"
+    },
+    "status": {
+      "ativo": "Ativos",
+      "congregado": "Congregados",
+      "visitante": "Visitantes",
+      "afastado": "Afastados",
+      "falecido": "Falecidos",
+      "sem_status": "Sem status"
+    },
+    "roles": {
+      "membro": "Membro",
+      "musico": "Músico",
+      "staff": "Staff",
+      "seminarista": "Seminarista",
+      "diacono": "Diácono",
+      "presbitero": "Presbítero",
+      "pastor": "Pastor",
+      "admin": "Administrador",
+      "superadmin": "Super Admin",
+      "adminAndSuperadmin": "Administração"
+    },
+    "roleNotes": {
+      "musico": "Equipe de louvor e instrumentistas vinculados ao app.",
+      "staff": "Apoio operacional, técnica e organização do culto.",
+      "seminarista": "Pessoas em formação e apoio ministerial.",
+      "diacono": "Serviço diaconal e cuidado prático da igreja.",
+      "presbitero": "Liderança local, acompanhamento e governo da igreja.",
+      "pastor": "Cobertura pastoral e condução espiritual.",
+      "admin": "Gestão administrativa e acessos sensíveis do sistema."
+    },
+    "music": {
+      "emptyDash": "-",
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "daysAgo": "{count} dias atrás",
+      "noData": "Ainda não há execuções musicais para este período.",
+      "noKeys": "Ainda não há tons registrados para este período.",
+      "noRecentSongs": "Nenhum cântico recente encontrado.",
+      "cards": {
+        "totalExecutions": "Execuções musicais",
+        "uniqueSongs": "Cânticos únicos",
+        "averagePerService": "Média por culto",
+        "topKey": "Tom mais usado",
+        "mostPlayed": "Cântico mais tocado"
+      },
+      "sections": {
+        "topSongs": "Top cânticos do período",
+        "executionsTrend": "Evolução mensal das execuções",
+        "topKeys": "Tons mais usados",
+        "recentSongs": "Repertório recente"
+      }
     }
   },
   "profile": {

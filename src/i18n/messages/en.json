@@ -124,48 +124,129 @@
     "selected": "Address selected"
   },
   "dashboard": {
-    "title": "Worship Dashboard",
-    "subtitleWithChurch": "Complete analysis of plays and trends for {church}",
-    "subtitleGeneric": "Complete analysis of plays and trends",
-    "filters": "Filters",
-    "year": "Year",
-    "month": "Month",
-    "allYears": "All years",
-    "allMonths": "All months",
+    "kicker": "Church executive view",
+    "title": "Church Dashboard",
+    "subtitleWithChurch": "People, access, and activity indicators for {church}.",
+    "subtitleGeneric": "People, access, and activity indicators for the church.",
+    "description": "This panel summarizes member records, families, age ranges, app engagement, and the rhythm of published services.",
     "loading": "Loading insights...",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "daysAgo": "{count} days ago",
-    "recentSongsTitle": "Songs from the Last 4 Weeks",
-    "recentSongsCount": "{count} songs",
-    "recentSongsEmpty": "No songs were found in the last 4 weeks.",
-    "noChartData": "No data was found for the selected filters.",
-    "noKeyRecorded": "No key was recorded",
-    "rankingEmpty": "There are no plays yet to build the ranking.",
-    "songFallback": "Song {id}",
-    "songWithoutName": "Untitled song",
-    "untitled": "Untitled",
-    "hymnWithNumber": "Hymn {number} - {title}",
-    "hymnWithoutNumber": "Hymn - {title}",
-    "stats": {
-      "totalExecutions": "Total Plays",
-      "uniqueSongs": "Unique Songs",
-      "totalServices": "Total Services",
-      "averagePerService": "Average/Service",
-      "mostPlayed": "Most Played"
+    "errorTitle": "The dashboard could not be loaded",
+    "empty": {
+      "title": "Select a church to begin",
+      "description": "As soon as a church is defined, we will show the overview of people, families, access, and services."
+    },
+    "errors": {
+      "load": "Error loading the dashboard."
+    },
+    "notes": {
+      "inactiveRecords": "{count} records are inactive or closed and remain outside the main cards."
+    },
+    "filters": {
+      "church": "Church",
+      "selectChurch": "Select a church",
+      "year": "Activity year",
+      "allYears": "All years"
+    },
+    "hero": {
+      "servicesInYear": "Services in {year}",
+      "lastService": "Last recorded service",
+      "noService": "No records",
+      "accessCoverage": "Access coverage",
+      "servingCoverage": "Serving people",
+      "familyCoverage": "Family coverage"
+    },
+    "cards": {
+      "totalRegistered": "Total registered",
+      "activeRecords": "Active records",
+      "activeMembers": "Active members",
+      "congregants": "Congregants",
+      "visitors": "Visitors",
+      "families": "Families",
+      "withAccess": "People with access",
+      "servingPeople": "People serving",
+      "servicesInYear": "Services in {year}",
+      "averageAge": "Average age",
+      "noAverageAge": "-"
+    },
+    "sections": {
+      "status": "Registry status",
+      "age": "Age curve",
+      "servicesTrend": "Services through the year",
+      "roles": "People serving by role",
+      "rolesDescription": "{serving} people are serving in ministry roles, within a total of {access} people with app access.",
+      "recentServices": "Recent services",
+      "insights": "Quick reads"
     },
     "charts": {
-      "topSongs": "Top 10 Most Played Songs",
-      "topDistribution": "Top 5 Distribution",
-      "monthlyTrend": "Monthly Trend",
-      "topKeys": "Most Played Keys",
-      "fullRanking": "Full Ranking"
+      "noPeopleData": "There is not enough people data for this chart yet.",
+      "noActivityData": "There are no services recorded for this period yet.",
+      "noRolesData": "There are no people with app access in service roles yet."
     },
-    "table": {
-      "position": "#",
-      "song": "Song",
-      "executions": "Plays",
-      "percentTotal": "% of Total"
+    "list": {
+      "noRecentServices": "No recent services were found.",
+      "servicesOnDate": "{count} services recorded on this date"
+    },
+    "insights": {
+      "registryTitle": "Current base",
+      "registryText": "The church has {count} registered people, with {active} active records considered in the main panel.",
+      "accessTitle": "Digital engagement",
+      "accessText": "{percent} of the active base already has app access, and {serving} is in service roles.",
+      "familyTitle": "Family structure",
+      "familyText": "{percent} of the active base is already associated with family groups, totaling {families} families."
+    },
+    "units": {
+      "years": "years"
+    },
+    "status": {
+      "ativo": "Active",
+      "congregado": "Congregants",
+      "visitante": "Visitors",
+      "afastado": "Away",
+      "falecido": "Deceased",
+      "sem_status": "No status"
+    },
+    "roles": {
+      "membro": "Member",
+      "musico": "Musician",
+      "staff": "Staff",
+      "seminarista": "Seminarian",
+      "diacono": "Deacon",
+      "presbitero": "Elder",
+      "pastor": "Pastor",
+      "admin": "Administrator",
+      "superadmin": "Super Admin",
+      "adminAndSuperadmin": "Administration"
+    },
+    "roleNotes": {
+      "musico": "Worship team and instrumentalists linked to the app.",
+      "staff": "Operational support, tech, and service organization.",
+      "seminarista": "People in ministry training and support roles.",
+      "diacono": "Diaconal service and practical care for the church.",
+      "presbitero": "Local leadership, shepherding, and church governance.",
+      "pastor": "Pastoral coverage and spiritual direction.",
+      "admin": "Administrative management and sensitive system access."
+    },
+    "music": {
+      "emptyDash": "-",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "daysAgo": "{count} days ago",
+      "noData": "There are no music executions for this period yet.",
+      "noKeys": "There are no recorded keys for this period yet.",
+      "noRecentSongs": "No recent songs were found.",
+      "cards": {
+        "totalExecutions": "Music executions",
+        "uniqueSongs": "Unique songs",
+        "averagePerService": "Average per service",
+        "topKey": "Most used key",
+        "mostPlayed": "Most played song"
+      },
+      "sections": {
+        "topSongs": "Top songs in the period",
+        "executionsTrend": "Monthly execution trend",
+        "topKeys": "Most used keys",
+        "recentSongs": "Recent repertoire"
+      }
     }
   },
   "profile": {
