@@ -187,14 +187,13 @@ export async function POST(request: NextRequest) {
     let pessoaExistente:
       | {
           id: string;
-          igreja_id: string | null;
           usuario_id: string | null;
         }
       | null = null;
 
     const porTelefone = await supabaseAdmin
       .from('pessoas')
-      .select('id, igreja_id, usuario_id')
+      .select('id, usuario_id')
       .eq('telefone', telefone)
       .maybeSingle();
 
@@ -206,7 +205,7 @@ export async function POST(request: NextRequest) {
     if (!pessoaExistente && email) {
       const porEmail = await supabaseAdmin
         .from('pessoas')
-        .select('id, igreja_id, usuario_id')
+        .select('id, usuario_id')
         .eq('email', email)
         .maybeSingle();
 
@@ -219,7 +218,7 @@ export async function POST(request: NextRequest) {
     if (!pessoaExistente) {
       const porNome = await supabaseAdmin
         .from('pessoas')
-        .select('id, igreja_id, usuario_id')
+        .select('id, usuario_id')
         .ilike('nome', nome)
         .maybeSingle();
 
@@ -270,7 +269,6 @@ export async function POST(request: NextRequest) {
       observacoes: nullableString(body.observacoes),
       ativo: body.ativo !== false,
       cargo: 'membro',
-      igreja_id: igreja.id,
       atualizado_em: now,
     };
 
