@@ -16,7 +16,8 @@ import {
   Church,
   UserCheck,
   Globe,
-  MessageSquareHeart
+  MessageSquareHeart,
+  MessageSquareText
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -512,6 +513,31 @@ export default function AdminPage() {
               <span className="text-xs text-purple-700 font-semibold bg-purple-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
                 {tr('Disponível', 'Disponible', 'Available')}
+              </span>
+            </button>
+          )}
+
+          {permissoes.isSuperAdmin && (
+            <button
+              onClick={() => router.push('/admin/oikos-leads')}
+              className="bg-white rounded-xl p-6 shadow-sm border-2 border-slate-900 hover:shadow-lg transition-all text-left group"
+            >
+              <div className="w-12 h-12 bg-slate-900 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <MessageSquareText className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {tr('Leads OIKOS', 'Leads OIKOS', 'OIKOS Leads')}
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                {tr(
+                  'Acompanhe interessados na landing comercial',
+                  'Acompaña interesados de la landing comercial',
+                  'Track interested contacts from the sales landing page'
+                )}
+              </p>
+              <span className="text-xs text-slate-800 font-semibold bg-slate-100 px-3 py-1 rounded-full inline-flex items-center gap-1">
+                <Star className="w-3 h-3" />
+                Super Admin
               </span>
             </button>
           )}
