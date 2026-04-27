@@ -130,6 +130,13 @@ const TIMEZONES_DISPONIVEIS = [
   { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
 ];
 
+const PAISES_DISPONIVEIS = [
+  { value: 'BR', label: 'Brasil' },
+  { value: 'PT', label: 'Portugal' },
+  { value: 'US', label: 'Estados Unidos' },
+  { value: 'CA', label: 'Canada' },
+];
+
 const TIPOS_REDE = ['instagram', 'youtube', 'facebook', 'spotify', 'site', 'outro'];
 
 const TIPOS_LITURGICOS_SUGERIDOS = [
