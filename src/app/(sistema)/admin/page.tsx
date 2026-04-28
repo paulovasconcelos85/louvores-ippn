@@ -11,6 +11,7 @@ import {
   BarChart3,
   CheckCircle2,
   AlertCircle,
+  Library,
   MapPin,
   Star,
   Church,
@@ -586,6 +587,23 @@ export default function AdminPage() {
               </h3>
               <p className="text-slate-600 text-sm mb-4">
                 {tr('Músicas mais cantadas, por mês, por posição', 'Música más cantada, por mes, por posición', 'Most-played songs by month and position')}
+              </p>
+              <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
+                {tr('Acessar', 'Acceder', 'Access')}
+              </span>
+            </div>
+          </Link>
+
+          <Link href="/recursos" className="block">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">
+              <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
+                <Library className="w-6 h-6 text-slate-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {tr('Recursos', 'Recursos', 'Resources')}
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                {tr('Cultos, EBD e estudos em video', 'Cultos, EBD y estudios en video', 'Services, Sunday school, and studies on video')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
                 {tr('Acessar', 'Acceder', 'Access')}

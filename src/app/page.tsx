@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Eye,
   Globe,
+  Library,
   MapPin,
   Music,
   Phone,
@@ -759,6 +760,9 @@ export default function Home() {
   const boletinsAnterioresHref = igrejaAtualId
     ? `/boletins-anteriores?igreja_id=${igrejaAtualId}`
     : '/boletins-anteriores';
+  const recursosHref = igrejaAtualId
+    ? `/recursos?igreja_id=${igrejaAtualId}`
+    : '/recursos';
   const pedidosPastoraisHref = igrejaSelecionada?.slug
     ? `/pedidos/${igrejaSelecionada.slug}`
     : igrejaAtualId
@@ -989,6 +993,13 @@ export default function Home() {
                 >
                   {t('home.pastBulletins')}
                   <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href={recursosHref}
+                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                >
+                  <Library className="w-4 h-4" />
+                  {t('home.resources')}
                 </Link>
                 <Link
                   href={pedidosPastoraisHref}

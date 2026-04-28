@@ -524,6 +524,132 @@ function filtrarSecoesEstruturadasAtuais(
   return secoesGlobais.length > 0 ? secoesGlobais : [];
 }
 
+function getCultoDateKey(dateValue: string) {
+  return String(dateValue || '').slice(0, 10);
+}
+
+function hasPublicSectionContent(secao: LegacyBoletimSecao) {
+  return secao.itens.some((item) => item.conteudo.trim().length > 0);
+}
+
+async function buscarUltimasSecoesPorTipo(
+  igrejaId: string,
+  diaAtual: string,
+  tipoDesejado: string,
+  locale: Locale
+): Promise<LegacyBoletimSecao[]> {
+  const { data: cultosAnterioresRaw, error: cultosError } = await supabaseAdmin
+    .from('Louvores IPPN')
+    .select('"Culto nr.", Dia')
+    .eq('igreja_id', igrejaId)
+    .lt('Dia', getCultoDateKey(diaAtual))
+    .order('Dia', { ascending: false })
+    .limit(40);
+
+  if (cultosError) throw cultosError;
+
+  const cultosAnteriores = (cultosAnterioresRaw || []) as Array<{
+    'Culto nr.': number;
+    Dia: string;
+  }>;
+  const cultoIds = cultosAnteriores
+    .map((culto) => culto['Culto nr.'])
+    .filter((cultoId): cultoId is number => typeof cultoId === 'number');
+
+  if (cultoIds.length === 0) return [];
+
+  const cultosAgrupadosPorDia = new Map<string, number[]>();
+  cultosAnteriores.forEach((culto) => {
+    const dia = getCultoDateKey(culto.Dia);
+    const idsAtuais = cultosAgrupadosPorDia.get(dia) || [];
+    idsAtuais.push(culto['Culto nr.']);
+    cultosAgrupadosPorDia.set(dia, idsAtuais);
+  });
+
+  const { data: secoesRaw, error: secoesError } = await supabaseAdmin
+    .from('boletim_secoes')
+    .select('*')
+    .eq('igreja_id', igrejaId)
+    .in('culto_id', cultoIds)
+    .eq('visivel', true)
+    .order('culto_id', { ascending: true })
+    .order('ordem', { ascending: true });
+
+  if (secoesError) throw secoesError;
+
+  const secoesEstruturadas = (secoesRaw || []) as BoletimSecaoRow[];
+  const secaoIds = secoesEstruturadas.map((secao) => secao.id);
+  const itensPorSecao = new Map<string, BoletimItemRow[]>();
+
+  if (secaoIds.length > 0) {
+    const { data: itensRaw, error: itensError } = await supabaseAdmin
+      .from('boletim_itens')
+      .select('*')
+      .in('secao_id', secaoIds)
+      .order('ordem', { ascending: true });
+
+    if (itensError) throw itensError;
+
+    ((itensRaw || []) as BoletimItemRow[]).forEach((item) => {
+      if (!item.secao_id) return;
+      const itensAtuais = itensPorSecao.get(item.secao_id) || [];
+      itensAtuais.push(item);
+      itensPorSecao.set(item.secao_id, itensAtuais);
+    });
+  }
+
+  if (secoesEstruturadas.length > 0) {
+    for (const idsDoDia of cultosAgrupadosPorDia.values()) {
+      const secoesDoDia = secoesEstruturadas
+        .filter((secao) => idsDoDia.includes(secao.culto_id || -1))
+        .filter((secao) => secao.tipo === tipoDesejado)
+        .map((secao) => ({
+          ...secao,
+          titulo: resolveLocalizedText(secao.titulo_i18n, locale, secao.titulo),
+          itens: (itensPorSecao.get(secao.id) || [])
+            .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+            .map((item) => ({
+              ...item,
+              conteudo: resolveLocalizedText(item.conteudo_i18n, locale, item.conteudo),
+            })),
+        }))
+        .filter(hasPublicSectionContent);
+
+      if (secoesDoDia.length > 0) return secoesDoDia;
+    }
+  }
+
+  const { data: fallbackRowsRaw, error: fallbackError } = await supabaseAdmin
+    .from('louvor_itens')
+    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+    .in('culto_id', cultoIds)
+    .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`)
+    .order('ordem', { ascending: true });
+
+  if (fallbackError) throw fallbackError;
+
+  const fallbackRows = (fallbackRowsRaw || []) as LegacyLouvorItemRow[];
+  const rowsPorCulto = new Map<number, LegacyLouvorItemRow[]>();
+
+  fallbackRows.forEach((row) => {
+    const cultoId = typeof row.culto_id === 'number' ? row.culto_id : null;
+    if (cultoId === null) return;
+    const rowsAtuais = rowsPorCulto.get(cultoId) || [];
+    rowsAtuais.push(row);
+    rowsPorCulto.set(cultoId, rowsAtuais);
+  });
+
+  for (const idsDoDia of cultosAgrupadosPorDia.values()) {
+    const rowsDoDia = idsDoDia.flatMap((cultoId) => rowsPorCulto.get(cultoId) || []);
+    const secoesDoDia = buildExtraSectionsFromFallbackRows(rowsDoDia, idsDoDia[0], locale)
+      .filter((secao) => secao.tipo === tipoDesejado && hasPublicSectionContent(secao));
+
+    if (secoesDoDia.length > 0) return secoesDoDia;
+  }
+
+  return [];
+}
+
 async function fetchLatestCultosDoBoletim(igrejaId: string) {
   const { data: cultoAtualRaw, error: cultoAtualError } = await supabaseAdmin
     .from('Louvores IPPN')
@@ -750,7 +876,7 @@ export async function GET(request: NextRequest) {
     etapa = 'buscar-culto-atual';
     const { data: cultoAtualRaw, error: cultoAtualError } = await supabaseAdmin
       .from('Louvores IPPN')
-      .select('"Culto nr."')
+      .select('"Culto nr.", Dia')
       .eq('igreja_id', igrejaId)
       .order('Dia', { ascending: false })
       .limit(1)
@@ -848,6 +974,25 @@ export async function GET(request: NextRequest) {
       const fallback = await buildLegacyBoletimFallback(igrejaId, locale, false);
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
+    }
+
+    const temOracaoComConteudo = boletimSecoes.some(
+      (secao) => secao.tipo === 'oracao' && hasPublicSectionContent(secao)
+    );
+
+    if (!temOracaoComConteudo && typeof cultoAtualRaw?.Dia === 'string') {
+      etapa = 'reaproveitar-oracao';
+      const secoesOracaoReaproveitadas = await buscarUltimasSecoesPorTipo(
+        igrejaId,
+        cultoAtualRaw.Dia,
+        'oracao',
+        locale
+      );
+
+      if (secoesOracaoReaproveitadas.length > 0) {
+        boletimSecoes = [...boletimSecoes, ...secoesOracaoReaproveitadas]
+          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+      }
     }
 
     etapa = 'sincronizar-liturgia';

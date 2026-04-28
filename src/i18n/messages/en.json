@@ -68,7 +68,8 @@
     "publicBulletin": "Public bulletin",
     "locationUnknown": "Location not provided",
     "shareBulletin": "Share bulletin",
-    "pastBulletins": "Previous bulletins"
+    "pastBulletins": "Previous bulletins",
+    "resources": "Resources"
   },
   "history": {
     "backToCurrent": "Back to current bulletin",

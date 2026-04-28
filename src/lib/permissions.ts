@@ -97,6 +97,13 @@ const CARGOS_EDITAR_LITURGIA_COMPLETA: CargoTipo[] = [
   'superadmin'
 ];
 
+const CARGOS_EDITAR_RECURSOS_MULTIMIDIA: CargoTipo[] = [
+  'seminarista',
+  'presbitero',
+  'pastor',
+  'superadmin'
+];
+
 function normalizeCategoria(categoria?: string | null) {
   return (categoria || '').trim().toLowerCase();
 }
@@ -111,6 +118,21 @@ export function temTagTecnica(tags: TagPermissao[] = []): boolean {
 
 export function temTagGestao(tags: TagPermissao[] = []): boolean {
   return tags.some((tag) => CATEGORIAS_TAGS_GESTAO.has(normalizeCategoria(tag.categoria)));
+}
+
+export function temTagLiderMinisterio(tags: TagPermissao[] = []): boolean {
+  return tags.some((tag) => {
+    const nome = tag.nome.trim().toLowerCase();
+    const categoria = normalizeCategoria(tag.categoria);
+
+    return (
+      nome.includes('lider') ||
+      nome.includes('líder') ||
+      categoria.includes('lider') ||
+      categoria.includes('lideranca') ||
+      categoria.includes('liderança')
+    );
+  });
 }
 
 /**
@@ -203,6 +225,11 @@ export function podeEditarLiturgiaCompleta(cargo: CargoTipo | null): boolean {
 
 export function podeEditarLouvor(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
   return podeEditarLiturgiaCompleta(cargo) || temTagLouvor(tags);
+}
+
+export function podeEditarRecursosMultimidia(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  if (cargo && CARGOS_EDITAR_RECURSOS_MULTIMIDIA.includes(cargo)) return true;
+  return temTagLiderMinisterio(tags);
 }
 
 /**

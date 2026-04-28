@@ -10,7 +10,8 @@ import {
   LogOut, 
   ArrowLeft,
   ChevronDown,
-  Church
+  Church,
+  Library
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -199,6 +200,17 @@ export default function Header() {
                     >
                       <User className="w-4 h-4" />
                       {t('header.profile')}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMenuAberto(false);
+                        router.push('/recursos');
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700 transition-colors"
+                    >
+                      <Library className="w-4 h-4" />
+                      Recursos
                     </button>
 
                     {permissoes?.podeAcessarAdmin && (

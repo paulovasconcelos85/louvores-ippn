@@ -68,7 +68,8 @@
     "publicBulletin": "Boletín público",
     "locationUnknown": "Ubicación no informada",
     "shareBulletin": "Compartir boletín",
-    "pastBulletins": "Boletines anteriores"
+    "pastBulletins": "Boletines anteriores",
+    "resources": "Recursos"
   },
   "history": {
     "backToCurrent": "Volver al boletín actual",
