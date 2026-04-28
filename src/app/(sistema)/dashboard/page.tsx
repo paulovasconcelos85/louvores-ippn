@@ -249,7 +249,9 @@ export default function DashboardPage() {
 
     const loadChurches = async () => {
       try {
-        const response = await fetch('/api/igrejas/selecionaveis');
+        const response = await fetch('/api/igrejas/selecionaveis', {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const payload = await response.json();
 
         if (!response.ok) {

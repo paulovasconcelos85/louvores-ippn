@@ -1,9 +1,11 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import https from 'node:https';
-import { cookies } from 'next/headers';
 import { normalizeIgreja } from '@/lib/church-utils';
-import { findUsuarioAcessoByAuthOrEmail, resolveCurrentIgrejaId } from '@/lib/server-church';
+import {
+  findUsuarioAcessoByAuthOrEmail,
+  getAuthenticatedUserFromServerCookies,
+  resolveCurrentIgrejaId,
+} from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
@@ -124,37 +126,15 @@ async function listarIgrejasAtivas(igrejaIds?: string[]) {
   return supabaseRestGet<Record<string, unknown>[]>(url.pathname + url.search);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   let etapa = 'iniciando';
 
   try {
-    etapa = 'cookies';
-    const cookieStore = await cookies();
-    etapa = 'cliente-auth';
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
-
     let user: { id?: string; email?: string | null } | null = null;
 
     try {
       etapa = 'auth.getUser';
-      const authResponse = await supabase.auth.getUser();
-      user = authResponse.data.user;
+      user = await getAuthenticatedUserFromServerCookies(request);
     } catch (authError) {
       console.warn(
         'Falha ao identificar usuario na rota de igrejas selecionaveis; seguindo como visitante.',
@@ -214,7 +194,7 @@ export async function GET() {
 
     if (user?.id) {
       try {
-        igrejaAtualId = await resolveCurrentIgrejaId();
+        igrejaAtualId = await resolveCurrentIgrejaId(null, request);
       } catch (resolveError) {
         console.warn('Falha ao resolver igreja atual; seguindo sem igreja atual.', resolveError);
       }
