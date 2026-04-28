@@ -208,7 +208,9 @@ export default function AdminPage() {
 
     const carregarIgrejaAtual = async () => {
       try {
-        const response = await fetch('/api/igrejas/selecionaveis');
+        const response = await fetch('/api/igrejas/selecionaveis', {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const data = await response.json();
 
         if (!response.ok) {

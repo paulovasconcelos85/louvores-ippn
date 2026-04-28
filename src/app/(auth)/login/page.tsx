@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from '@/i18n/provider';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { supabase } from '@/lib/supabase';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,7 +67,9 @@ export default function LoginPage() {
 
     const carregarIgrejaAtual = async () => {
       try {
-        const response = await fetch('/api/igrejas/selecionaveis');
+        const response = await fetch('/api/igrejas/selecionaveis', {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const data = await response.json();
 
         if (!response.ok) {

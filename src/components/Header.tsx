@@ -19,6 +19,7 @@ import { useLocale, useTranslations } from '@/i18n/provider';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
+import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 
 export default function Header() {
   const router = useRouter();
@@ -42,7 +43,9 @@ export default function Header() {
 
     const carregarIgrejas = async () => {
       try {
-        const response = await fetch('/api/igrejas/selecionaveis');
+        const response = await fetch('/api/igrejas/selecionaveis', {
+          headers: await buildAuthenticatedHeaders(),
+        });
         const data = await response.json();
 
         if (!response.ok) {
