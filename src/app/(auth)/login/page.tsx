@@ -4,10 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocale, useTranslations } from '@/i18n/provider';
-import type { IgrejaSelecionavel } from '@/lib/church-utils';
-import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { supabase } from '@/lib/supabase';
-import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,7 +20,6 @@ export default function LoginPage() {
   const [modo, setModo] = useState<'entrar' | 'primeiro_acesso'>('entrar');
   const [sincronizandoAcesso, setSincronizandoAcesso] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
-  const [igrejaAtual, setIgrejaAtual] = useState<IgrejaSelecionavel | null>(null);
 
   const finalizarAcesso = useCallback(async () => {
     const {
@@ -60,57 +56,6 @@ export default function LoginPage() {
     if (erroUrl) {
       setError(erroUrl);
     }
-  }, [t]);
-
-  useEffect(() => {
-    let ativo = true;
-
-    const carregarIgrejaAtual = async () => {
-      try {
-        const response = await fetch('/api/igrejas/selecionaveis', {
-          headers: await buildAuthenticatedHeaders(),
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || t('login.loadChurchError'));
-        }
-
-        if (!ativo) return;
-
-        const lista = (data.igrejas || []) as IgrejaSelecionavel[];
-        const igrejaUrl =
-          typeof window !== 'undefined'
-            ? new URLSearchParams(window.location.search).get('igreja_id')
-            : null;
-        const igrejaPreferida =
-          typeof window !== 'undefined' ? localStorage.getItem(CHURCH_STORAGE_KEY) : null;
-        const prioridade = [igrejaUrl, igrejaPreferida, data.igrejaAtualId, lista[0]?.id || null].filter(
-          Boolean
-        ) as string[];
-        const igrejaResolvida =
-          prioridade
-            .map((id) => lista.find((igreja) => igreja.id === id) || null)
-            .find(Boolean) || null;
-
-        setIgrejaAtual(igrejaResolvida);
-
-        if (igrejaResolvida && typeof window !== 'undefined') {
-          localStorage.setItem(CHURCH_STORAGE_KEY, igrejaResolvida.id);
-        }
-      } catch (err) {
-        console.error('Erro ao carregar identidade da igreja:', err);
-        if (ativo) {
-          setIgrejaAtual(null);
-        }
-      }
-    };
-
-    carregarIgrejaAtual();
-
-    return () => {
-      ativo = false;
-    };
   }, [t]);
 
   useEffect(() => {
@@ -245,30 +190,46 @@ export default function LoginPage() {
     );
   }
 
-  const tituloIgreja = igrejaAtual?.sigla || igrejaAtual?.nome || 'OIKOS';
-  const subtituloIgreja = igrejaAtual?.nome || 'OIKOS Hub';
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
-      {/* Background decorativo */}
+    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-emerald-700/20 rounded-full blur-3xl"></div>
+        <div className="absolute -top-24 left-1/2 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-emerald-400/10 blur-3xl"></div>
+        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-amber-300/10 blur-3xl"></div>
       </div>
 
-      <div className="relative w-full max-w-md">
-        {/* Logo/Nome da Igreja */}
+      <div className="relative w-full max-w-5xl">
         <div className="text-center mb-8">
           <div className="inline-block">
-            <h1 className="text-4xl font-bold text-white mb-2">{tituloIgreja}</h1>
-            <div className="h-1 bg-gradient-to-r from-transparent via-amber-600 to-transparent"></div>
+            <h1 className="text-4xl font-black tracking-tight text-white mb-2">OIKOS Hub</h1>
+            <div className="h-1 bg-gradient-to-r from-transparent via-emerald-300 to-transparent"></div>
           </div>
-          <p className="text-emerald-100 mt-3 text-sm">
-            {subtituloIgreja}
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-emerald-50/85">
+            O sistema que organiza boletins, cultos, escalas, louvores e cuidado pastoral em um só lugar.
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
+        <div className="grid overflow-hidden rounded-2xl bg-white shadow-2xl backdrop-blur-sm lg:grid-cols-[0.85fr_1fr]">
+          <aside className="hidden bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-300">Gestão para igrejas</p>
+              <h2 className="mt-5 text-3xl font-black leading-tight">
+                Menos trabalho espalhado. Mais clareza para cuidar de pessoas.
+              </h2>
+              <p className="mt-4 text-sm leading-6 text-slate-300">
+                OIKOS Hub conecta a rotina da igreja: equipe, programação, repertório, boletim público e cadastro pastoral.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-3">
+              {['Boletim público pronto para compartilhar', 'Escalas e cultos sempre conectados', 'Cadastro pastoral com visão da comunidade'].map((item) => (
+                <div key={item} className="rounded border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-slate-100">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <div className="p-8">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">
               {modo === 'entrar' ? t('login.welcomeBack') : t('login.firstAccess')}
@@ -449,6 +410,7 @@ export default function LoginPage() {
               <span className="font-semibold">{t('login.firstAccessHintTitle')}</span>{' '}
               {t('login.firstAccessHintBody')}
             </p>
+          </div>
           </div>
         </div>
 

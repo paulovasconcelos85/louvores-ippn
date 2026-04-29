@@ -12,6 +12,7 @@ import {
   FileText,
   HeartHandshake,
   Loader2,
+  LogIn,
   Mail,
   Music,
   Send,
@@ -21,6 +22,7 @@ import { useLocale } from '@/i18n/provider';
 
 type Copy = {
   navCta: string;
+  loginCta: string;
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -60,6 +62,7 @@ type Copy = {
 const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   pt: {
     navCta: 'Agendar conversa',
+    loginCta: 'Entrar',
     eyebrow: 'OIKOS Hub para igrejas',
     title: 'A igreja organizada sem perder o cuidado pastoral.',
     subtitle:
@@ -118,6 +121,7 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   },
   es: {
     navCta: 'Agendar conversación',
+    loginCta: 'Ingresar',
     eyebrow: 'OIKOS Hub para iglesias',
     title: 'La iglesia organizada sin perder el cuidado pastoral.',
     subtitle:
@@ -176,6 +180,7 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   },
   en: {
     navCta: 'Schedule a call',
+    loginCta: 'Sign in',
     eyebrow: 'OIKOS Hub for churches',
     title: 'A more organized church without losing pastoral care.',
     subtitle:
@@ -304,10 +309,16 @@ export default function OikosLandingClient() {
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-emerald-500 text-sm font-black text-slate-950 sm:h-9 sm:w-9">O</span>
             <span className="text-sm font-bold tracking-wide sm:text-base">OIKOS Hub</span>
           </Link>
-          <a href="#contato" className="inline-flex max-w-[48vw] items-center justify-center gap-1.5 rounded bg-emerald-400 px-3 py-2 text-center text-xs font-bold leading-tight text-slate-950 transition hover:bg-emerald-300 sm:max-w-none sm:gap-2 sm:px-4 sm:text-sm">
-            <span>{copy.navCta}</span>
-            <ArrowRight className="h-4 w-4" />
-          </a>
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded border border-white/25 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10 sm:gap-2 sm:px-4 sm:text-sm">
+              <LogIn className="h-4 w-4 shrink-0" />
+              <span>{copy.loginCta}</span>
+            </Link>
+            <a href="#contato" className="hidden min-h-10 items-center justify-center gap-1.5 rounded bg-emerald-400 px-3 py-2 text-center text-xs font-bold leading-tight text-slate-950 transition hover:bg-emerald-300 sm:inline-flex sm:max-w-none sm:gap-2 sm:px-4 sm:text-sm">
+              <span>{copy.navCta}</span>
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -342,6 +353,10 @@ export default function OikosLandingClient() {
                 {copy.secondaryCta}
                 <ArrowRight className="h-4 w-4 shrink-0" />
               </a>
+              <Link href="/login" className="inline-flex min-h-12 items-center justify-center gap-2 rounded border border-emerald-300/45 bg-white/5 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-white/10 sm:px-6 sm:text-base">
+                {copy.loginCta}
+                <LogIn className="h-4 w-4 shrink-0" />
+              </Link>
             </div>
 
             <div className="mt-6 grid gap-2 sm:hidden">
