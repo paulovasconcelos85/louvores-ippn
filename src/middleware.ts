@@ -3,9 +3,15 @@ import {
   getPreferredLocale,
   LOCALE_COOKIE_MAX_AGE,
   LOCALE_COOKIE_NAME,
-} from './src/i18n/config';
+} from './i18n/config';
 
 export function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')) {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = '/auth/callback';
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const locale = getPreferredLocale({
     queryLocale: request.nextUrl.searchParams.get('lang'),
     cookieLocale: request.cookies.get(LOCALE_COOKIE_NAME)?.value,

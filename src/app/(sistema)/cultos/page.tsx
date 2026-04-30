@@ -656,6 +656,13 @@ function createDraftId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
+function erroColunaNaoEncontrada(error: unknown, columnName: string) {
+  return (
+    typeof (error as { message?: unknown } | null)?.message === 'string' &&
+    (error as { message: string }).message.includes(`Could not find the '${columnName}' column`)
+  );
+}
+
 function getBoletimTipoConfig(tipo: string) {
   return TIPOS_SECOES_BOLETIM.find((item) => item.tipo === tipo) || TIPOS_SECOES_BOLETIM[TIPOS_SECOES_BOLETIM.length - 1];
 }
@@ -761,14 +768,14 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
     const titulo = texto.slice(0, separadorDuplo).trim();
     const corpo = texto.slice(separadorDuplo + 2).trim();
 
-  return {
-    id: createDraftId('aviso-item'),
-    titulo,
-    corpo,
-    destaque: false,
-    conteudo_i18n: createEmptyLocalizedTextMap(),
-  };
-}
+    return {
+      id: createDraftId('aviso-item'),
+      titulo,
+      corpo,
+      destaque: false,
+      conteudo_i18n: createEmptyLocalizedTextMap(),
+    };
+  }
 
   const [titulo, ...restante] = texto.split('\n');
 
@@ -777,6 +784,7 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
     titulo: titulo.trim(),
     corpo: restante.join('\n').trim(),
     destaque: false,
+    conteudo_i18n: createEmptyLocalizedTextMap(),
   };
 }
 
@@ -1270,6 +1278,55 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
   });
 
   return rows;
+}
+
+async function inserirLouvorItensComCompatibilidadeI18n<T extends { conteudo_publico_i18n?: unknown }>(
+  rows: T[]
+) {
+  if (rows.length === 0) return;
+
+  const insertResult = await supabase.from('louvor_itens').insert(rows);
+  if (!insertResult.error) return;
+
+  if (!erroColunaNaoEncontrada(insertResult.error, 'conteudo_publico_i18n')) {
+    throw insertResult.error;
+  }
+
+  const rowsSemI18n = rows.map(({ conteudo_publico_i18n, ...row }) => {
+    void conteudo_publico_i18n;
+    return row;
+  });
+  const fallbackResult = await supabase.from('louvor_itens').insert(rowsSemI18n);
+
+  if (fallbackResult.error) throw fallbackResult.error;
+}
+
+async function sincronizarBoletimFallbackLegado(
+  cultoIds: number[],
+  secoes: BoletimSecaoRascunho[]
+) {
+  if (cultoIds.length === 0) return;
+
+  try {
+    const { error: deleteFallbackError } = await supabase
+      .from('louvor_itens')
+      .delete()
+      .in('culto_id', cultoIds)
+      .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
+
+    if (deleteFallbackError) throw deleteFallbackError;
+
+    const fallbackRows = cultoIds.flatMap((cultoId) =>
+      buildBoletimFallbackRows(secoes, 1000).map((row) => ({
+        culto_id: cultoId,
+        ...row,
+      }))
+    );
+
+    await inserirLouvorItensComCompatibilidadeI18n(fallbackRows);
+  } catch (error) {
+    console.warn('Falha ao sincronizar fallback legado do boletim:', error);
+  }
 }
 
 function buildLiturgiaMetaRow(nomeLiturgia: string, nomeLiturgiaI18n: LocalizedTextMapForm) {
@@ -2778,25 +2835,7 @@ function EditorBoletimDoDiaModal({
         if (insertItensEstruturadosError) throw insertItensEstruturadosError;
       }
 
-      const { error: deleteFallbackError } = await supabase
-        .from('louvor_itens')
-        .delete()
-        .in('culto_id', cultoIds)
-        .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
-
-      if (deleteFallbackError) throw deleteFallbackError;
-
-      const fallbackRows = cultoIds.flatMap((cultoId) =>
-        buildBoletimFallbackRows(boletimSecoes, 1000).map((row) => ({
-          culto_id: cultoId,
-          ...row,
-        }))
-      );
-
-      if (fallbackRows.length > 0) {
-        const { error: fallbackInsertError } = await supabase.from('louvor_itens').insert(fallbackRows);
-        if (fallbackInsertError) throw fallbackInsertError;
-      }
+      await sincronizarBoletimFallbackLegado(cultoIds, boletimSecoes);
 
       alert('✅ Boletim do dia salvo com sucesso!');
       onSalvo();
@@ -3161,10 +3200,6 @@ function EditorLiturgia({
   const cultoAtualId = culto?.['Culto nr.'] || null;
   const cultoAtualNomeLiturgia = culto?.nome_liturgia || '';
 
-  const erroColunaNaoEncontrada = (error: any, columnName: string) =>
-    typeof error?.message === 'string' &&
-    error.message.includes(`Could not find the '${columnName}' column`);
-
   useEffect(() => {
     setNomeLiturgia(cultoAtualNomeLiturgia);
     setNomeLiturgiaI18n((current) =>
@@ -3518,25 +3553,7 @@ function EditorLiturgia({
       }
 
       if (HABILITAR_BOLETIM_SECOES_NEXT) {
-        const { error: deleteFallbackError } = await supabase
-          .from('louvor_itens')
-          .delete()
-          .in('culto_id', cultoIdsMesmoDia)
-          .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
-
-        if (deleteFallbackError) throw deleteFallbackError;
-
-        const fallbackRows = cultoIdsMesmoDia.flatMap((cultoIdMesmoDia) =>
-          buildBoletimFallbackRows(boletimSecoes, 1000).map((row) => ({
-            culto_id: cultoIdMesmoDia,
-            ...row,
-          }))
-        );
-
-        if (fallbackRows.length > 0) {
-          const { error: fallbackInsertError } = await supabase.from('louvor_itens').insert(fallbackRows);
-          if (fallbackInsertError) throw fallbackInsertError;
-        }
+        await sincronizarBoletimFallbackLegado(cultoIdsMesmoDia, boletimSecoes);
       }
 
       alert('✅ Salvo com sucesso!');

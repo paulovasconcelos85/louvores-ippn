@@ -11,9 +11,29 @@ import {
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  let authError =
+    requestUrl.searchParams.get('error_description') ||
+    requestUrl.searchParams.get('error');
   const locale = normalizeLocale(requestUrl.searchParams.get('lang'));
   // 1. Pegamos o parâmetro 'next' da URL, ou mandamos para /admin por padrão
   const next = requestUrl.searchParams.get('next') ?? '/admin';
+  const cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }> = [];
+
+  const applyResponseCookies = (response: NextResponse) => {
+    cookiesToSet.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+
+    if (locale) {
+      response.cookies.set(LOCALE_COOKIE_NAME, locale, {
+        path: '/',
+        maxAge: LOCALE_COOKIE_MAX_AGE,
+        sameSite: 'lax',
+      });
+    }
+
+    return response;
+  };
 
   if (code) {
     const cookieStore = await cookies();
@@ -27,9 +47,11 @@ export async function GET(request: Request) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
+            cookiesToSet.push({ name, value, options });
             cookieStore.set({ name, value, ...options });
           },
           remove(name: string, options: CookieOptions) {
+            cookiesToSet.push({ name, value: '', options });
             cookieStore.set({ name, value: '', ...options });
           },
         },
@@ -40,45 +62,61 @@ export async function GET(request: Request) {
     
     if (!error) {
       if (data.user) {
-        const syncResult = await syncApprovedUserAccess({
-          id: data.user.id,
-          email: data.user.email,
-        });
+        let syncResult;
 
-        if (syncResult.status !== 'granted') {
+        try {
+          syncResult = await syncApprovedUserAccess({
+            id: data.user.id,
+            email: data.user.email,
+          });
+        } catch (syncError) {
+          authError =
+            syncError instanceof Error
+              ? syncError.message
+              : 'Erro ao sincronizar acesso do usuário.';
+        }
+
+        if (authError) {
+          await supabase.auth.signOut();
+        }
+
+        if (syncResult && syncResult.status !== 'granted') {
+          await supabase.auth.signOut();
           const loginUrl = new URL('/login', request.url);
           loginUrl.searchParams.set('erro', syncResult.message);
           if (locale) {
             loginUrl.searchParams.set('lang', locale);
           }
-          return NextResponse.redirect(loginUrl);
+          return applyResponseCookies(NextResponse.redirect(loginUrl));
         }
       }
 
-      const response = NextResponse.redirect(new URL(next, request.url));
-
-      if (locale) {
-        response.cookies.set(LOCALE_COOKIE_NAME, locale, {
-          path: '/',
-          maxAge: LOCALE_COOKIE_MAX_AGE,
-          sameSite: 'lax',
-        });
+      if (authError) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('erro', authError);
+        if (locale) {
+          loginUrl.searchParams.set('lang', locale);
+        }
+        return applyResponseCookies(NextResponse.redirect(loginUrl));
       }
 
-      return response;
+      return applyResponseCookies(NextResponse.redirect(new URL(next, request.url)));
     }
+
+    authError = error.message;
   }
 
   // Em caso de erro, volta para o login
-  const fallbackResponse = NextResponse.redirect(new URL('/login', request.url));
-
-  if (locale) {
-    fallbackResponse.cookies.set(LOCALE_COOKIE_NAME, locale, {
-      path: '/',
-      maxAge: LOCALE_COOKIE_MAX_AGE,
-      sameSite: 'lax',
-    });
+  if (authError) {
+    const fallbackUrl = new URL('/login', request.url);
+    fallbackUrl.searchParams.set('erro', authError);
+    if (locale) {
+      fallbackUrl.searchParams.set('lang', locale);
+    }
+    return applyResponseCookies(NextResponse.redirect(fallbackUrl));
   }
 
-  return fallbackResponse;
+  const fallbackResponse = NextResponse.redirect(new URL('/login', request.url));
+
+  return applyResponseCookies(fallbackResponse);
 }
