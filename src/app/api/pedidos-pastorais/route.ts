@@ -15,12 +15,53 @@ const supabaseAdmin = createClient(
 
 const CATEGORIAS_VALIDAS = new Set(['oracao', 'aconselhamento', 'visita', 'outro']);
 
+type UsuarioAcessoPedido = {
+  id: string;
+  pessoa_id: string | null;
+  igreja_id: string | null;
+};
+
 function sanitizeString(value: unknown) {
   return typeof value === 'string' ? value.trim() || null : null;
 }
 
 function sanitizeBoolean(value: unknown, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+async function findUsuarioAcessoParaIgreja(authUserId: string, igrejaId: string) {
+  const { data: acessos, error: acessosError } = await supabaseAdmin
+    .from('usuarios_acesso')
+    .select('id, pessoa_id, igreja_id')
+    .eq('auth_user_id', authUserId);
+
+  if (acessosError) throw acessosError;
+
+  const acessosUsuario = (acessos || []) as UsuarioAcessoPedido[];
+
+  if (acessosUsuario.length === 0) {
+    return null;
+  }
+
+  const acessoDireto = acessosUsuario.find((acesso) => acesso.igreja_id === igrejaId);
+
+  if (acessoDireto) {
+    return acessoDireto;
+  }
+
+  const acessoIds = acessosUsuario.map((acesso) => acesso.id);
+  const { data: vinculo, error: vinculoError } = await supabaseAdmin
+    .from('usuarios_igrejas')
+    .select('usuario_id')
+    .in('usuario_id', acessoIds)
+    .eq('igreja_id', igrejaId)
+    .eq('ativo', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (vinculoError) throw vinculoError;
+
+  return acessosUsuario.find((acesso) => acesso.id === vinculo?.usuario_id) || null;
 }
 
 export async function POST(request: NextRequest) {
@@ -66,14 +107,7 @@ export async function POST(request: NextRequest) {
     let pessoaId: string | null = null;
 
     if (user?.id) {
-      const { data: acesso, error: acessoError } = await supabaseAdmin
-        .from('usuarios_acesso')
-        .select('id, pessoa_id, nome, email')
-        .eq('auth_user_id', user.id)
-        .limit(1)
-        .maybeSingle();
-
-      if (acessoError) throw acessoError;
+      const acesso = await findUsuarioAcessoParaIgreja(user.id, igrejaId);
 
       usuarioAcessoId = acesso?.id || null;
       pessoaId = acesso?.pessoa_id || null;

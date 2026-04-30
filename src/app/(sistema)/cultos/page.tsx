@@ -663,6 +663,24 @@ function erroColunaNaoEncontrada(error: unknown, columnName: string) {
   );
 }
 
+function erroBoletimEstruturadoIndisponivel(error: unknown) {
+  const typedError = error as { code?: unknown; message?: unknown; details?: unknown } | null;
+  const text = [typedError?.message, typedError?.details]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ');
+
+  return (
+    typedError?.code === 'PGRST205' ||
+    typedError?.code === '42P01' ||
+    typedError?.code === '42501' && /boletim_(secoes|itens)/i.test(text) ||
+    typedError?.code === '22P02' && /uuid/i.test(text) ||
+    typedError?.code === '23502' && /notifications/i.test(text) ||
+    typedError?.code === '23503' && /notifications/i.test(text) ||
+    /boletim_(secoes|itens)/i.test(text) &&
+      /(could not find|does not exist|schema cache|relation|row-level security)/i.test(text)
+  );
+}
+
 function getBoletimTipoConfig(tipo: string) {
   return TIPOS_SECOES_BOLETIM.find((item) => item.tipo === tipo) || TIPOS_SECOES_BOLETIM[TIPOS_SECOES_BOLETIM.length - 1];
 }
@@ -2735,107 +2753,119 @@ function EditorBoletimDoDiaModal({
 
       if (syncBoletimError) throw syncBoletimError;
 
-      const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
-        .from('boletim_secoes')
-        .select('id')
-        .eq('igreja_id', igrejaId)
-        .in('culto_id', cultoIds);
-
-      if (secoesExistentesError) throw secoesExistentesError;
-
-      const secaoIdsExistentes = (secoesExistentesRaw || [])
-        .map((item) => item.id)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0);
-
-      if (secaoIdsExistentes.length > 0) {
-        const { error: deleteItensEstruturadosError } = await supabase
-          .from('boletim_itens')
-          .delete()
-          .in('secao_id', secaoIdsExistentes);
-
-        if (deleteItensEstruturadosError) throw deleteItensEstruturadosError;
-      }
-
-      const { error: deleteSecoesEstruturadasError } = await supabase
-        .from('boletim_secoes')
-        .delete()
-        .eq('igreja_id', igrejaId)
-        .in('culto_id', cultoIds);
-
-      if (deleteSecoesEstruturadasError) throw deleteSecoesEstruturadasError;
-
       const secoesNormalizadas = normalizarSecoesBoletim(boletimSecoes);
-      const secoesEstruturadasPayload: Array<{
-        id: string;
-        igreja_id: string;
-        culto_id: number;
-        tipo: string;
-        titulo: string;
-        titulo_i18n: ReturnType<typeof compactLocalizedTextMap>;
-        icone: string | null;
-        ordem: number;
-        visivel: boolean;
-      }> = [];
-      const itensEstruturadosPayload: Array<{
-        id: string;
-        secao_id: string;
-        conteudo: string;
-        conteudo_i18n: ReturnType<typeof compactLocalizedTextMap>;
-        destaque: boolean;
-        ordem: number;
-      }> = [];
 
-      for (const cultoId of cultoIds) {
-        secoesNormalizadas.forEach((secao, secaoIndex) => {
-          const config = getBoletimTipoConfig(secao.tipo);
-          const secaoId = crypto.randomUUID();
-          const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
-
-          secoesEstruturadasPayload.push({
-            id: secaoId,
-            igreja_id: igrejaId,
-            culto_id: cultoId,
-            tipo: secao.tipo,
-            titulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
-            titulo_i18n: tituloI18n,
-            icone: secao.icone || config.icone,
-            ordem: secaoIndex,
-            visivel: secao.visivel,
-          });
-
-          secao.itens
-            .map((item, itemIndex) => ({ item, itemIndex }))
-            .filter(({ item }) => item.conteudo.trim().length > 0)
-            .forEach(({ item, itemIndex }) => {
-              itensEstruturadosPayload.push({
-                id: crypto.randomUUID(),
-                secao_id: secaoId,
-                conteudo: item.conteudo_i18n.pt || item.conteudo.trim(),
-                conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
-                destaque: item.destaque,
-                ordem: itemIndex,
-              });
-            });
-        });
-      }
-
-      if (secoesEstruturadasPayload.length > 0) {
-        const { error: insertSecoesEstruturadasError } = await supabase
+      try {
+        const { data: secoesExistentesRaw, error: secoesExistentesError } = await supabase
           .from('boletim_secoes')
-          .insert(secoesEstruturadasPayload);
+          .select('id')
+          .eq('igreja_id', igrejaId)
+          .in('culto_id', cultoIds);
 
-        if (insertSecoesEstruturadasError) throw insertSecoesEstruturadasError;
+        if (secoesExistentesError) throw secoesExistentesError;
+
+        const secaoIdsExistentes = (secoesExistentesRaw || [])
+          .map((item) => item.id)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+        if (secaoIdsExistentes.length > 0) {
+          const { error: deleteItensEstruturadosError } = await supabase
+            .from('boletim_itens')
+            .delete()
+            .in('secao_id', secaoIdsExistentes);
+
+          if (deleteItensEstruturadosError) throw deleteItensEstruturadosError;
+        }
+
+        const { error: deleteSecoesEstruturadasError } = await supabase
+          .from('boletim_secoes')
+          .delete()
+          .eq('igreja_id', igrejaId)
+          .in('culto_id', cultoIds);
+
+        if (deleteSecoesEstruturadasError) throw deleteSecoesEstruturadasError;
+
+        const secoesEstruturadasPayload: Array<{
+          id: string;
+          igreja_id: string;
+          culto_id: number;
+          tipo: string;
+          titulo: string;
+          titulo_i18n: ReturnType<typeof compactLocalizedTextMap>;
+          icone: string | null;
+          ordem: number;
+          visivel: boolean;
+        }> = [];
+        const itensEstruturadosPayload: Array<{
+          id: string;
+          secao_id: string;
+          conteudo: string;
+          conteudo_i18n: ReturnType<typeof compactLocalizedTextMap>;
+          destaque: boolean;
+          ordem: number;
+        }> = [];
+
+        for (const cultoId of cultoIds) {
+          secoesNormalizadas.forEach((secao, secaoIndex) => {
+            const config = getBoletimTipoConfig(secao.tipo);
+            const secaoId = crypto.randomUUID();
+            const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
+
+            secoesEstruturadasPayload.push({
+              id: secaoId,
+              igreja_id: igrejaId,
+              culto_id: cultoId,
+              tipo: secao.tipo,
+              titulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
+              titulo_i18n: tituloI18n,
+              icone: secao.icone || config.icone,
+              ordem: secaoIndex,
+              visivel: secao.visivel,
+            });
+
+            secao.itens
+              .map((item, itemIndex) => ({ item, itemIndex }))
+              .filter(({ item }) => item.conteudo.trim().length > 0)
+              .forEach(({ item, itemIndex }) => {
+                itensEstruturadosPayload.push({
+                  id: crypto.randomUUID(),
+                  secao_id: secaoId,
+                  conteudo: item.conteudo_i18n.pt || item.conteudo.trim(),
+                  conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
+                  destaque: item.destaque,
+                  ordem: itemIndex,
+                });
+              });
+          });
+        }
+
+        if (secoesEstruturadasPayload.length > 0) {
+          const { error: insertSecoesEstruturadasError } = await supabase
+            .from('boletim_secoes')
+            .insert(secoesEstruturadasPayload);
+
+          if (insertSecoesEstruturadasError) throw insertSecoesEstruturadasError;
+        }
+
+        if (itensEstruturadosPayload.length > 0) {
+          const { error: insertItensEstruturadosError } = await supabase
+            .from('boletim_itens')
+            .insert(itensEstruturadosPayload);
+
+          if (insertItensEstruturadosError) throw insertItensEstruturadosError;
+        }
+      } catch (structuredError) {
+        if (!erroBoletimEstruturadoIndisponivel(structuredError)) {
+          throw structuredError;
+        }
+
+        console.warn(
+          'Boletim estruturado indisponivel; salvando apenas no fallback legado.',
+          structuredError
+        );
       }
 
-      if (itensEstruturadosPayload.length > 0) {
-        const { error: insertItensEstruturadosError } = await supabase
-          .from('boletim_itens')
-          .insert(itensEstruturadosPayload);
-
-        if (insertItensEstruturadosError) throw insertItensEstruturadosError;
-      }
-
-      await sincronizarBoletimFallbackLegado(cultoIds, boletimSecoes);
+      await sincronizarBoletimFallbackLegado(cultoIds, secoesNormalizadas);
 
       alert('✅ Boletim do dia salvo com sucesso!');
       onSalvo();
@@ -3996,6 +4026,7 @@ export default function CultosPage() {
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<Culto[]>([]);
   const [configuracaoIgreja, setConfiguracaoIgreja] = useState<LiturgiaChurchConfig | null>(null);
+  const [igrejaPublicSlug, setIgrejaPublicSlug] = useState<string | null>(null);
   const [editando, setEditando] = useState<Culto | null | 'novo'>(null);
   const [novoDiaInicial, setNovoDiaInicial] = useState('');
   const [boletimDiaEditando, setBoletimDiaEditando] = useState<{ dia: string; cultos: Culto[] } | null>(null);
@@ -4020,6 +4051,7 @@ export default function CultosPage() {
         setCanticos([]);
         setCultos([]);
         setConfiguracaoIgreja(null);
+        setIgrejaPublicSlug(null);
         return;
       }
 
@@ -4046,7 +4078,7 @@ export default function CultosPage() {
           .order('Dia', { ascending: false }),
         supabase
           .from('igrejas')
-          .select('tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
+          .select('slug, tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
           .eq('id', igrejaId)
           .maybeSingle(),
         supabase
@@ -4059,6 +4091,7 @@ export default function CultosPage() {
       ]);
 
       const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
+      setIgrejaPublicSlug(typeof igrejaRaw?.slug === 'string' && igrejaRaw.slug.trim() ? igrejaRaw.slug.trim() : null);
       const canticosBaseNormalizados = (
         (canticosBaseRaw || []) as Array<{ id: string; nome: string; letra: string | null; igreja_id: string | null }>
       ).map((cantico) => ({
@@ -4228,10 +4261,65 @@ export default function CultosPage() {
       setCanticos([]);
       setCultos([]);
       setConfiguracaoIgreja(null);
+      setIgrejaPublicSlug(null);
     } finally {
       setLoading(false);
     }
   }, [locale]);
+
+  const getPublicBulletinUrl = useCallback(() => {
+    if (!igrejaPublicSlug) return null;
+
+    const path = `/${encodeURIComponent(igrejaPublicSlug)}`;
+    if (typeof window === 'undefined') return path;
+
+    return new URL(path, window.location.origin).toString();
+  }, [igrejaPublicSlug]);
+
+  const abrirBoletimPublico = useCallback(() => {
+    const url = getPublicBulletinUrl();
+
+    if (!url) {
+      alert('Esta igreja ainda não tem um slug público configurado.');
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, [getPublicBulletinUrl]);
+
+  const compartilharBoletimPublico = useCallback(async () => {
+    const url = getPublicBulletinUrl();
+
+    if (!url) {
+      alert('Esta igreja ainda não tem um slug público configurado.');
+      return;
+    }
+
+    const shareData = {
+      title: 'Boletim da igreja',
+      text: 'Boletim público da igreja',
+      url,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      alert('Link do boletim copiado.');
+    } catch (error) {
+      if ((error as { name?: string })?.name === 'AbortError') return;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Link do boletim copiado.');
+      } catch {
+        prompt('Copie o link do boletim:', url);
+      }
+    }
+  }, [getPublicBulletinUrl]);
 
   useEffect(() => {
     if (!permLoading && permissoes.podeGerenciarCultos) {
@@ -4613,21 +4701,39 @@ export default function CultosPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-4 mb-8 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Liturgias</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
               A interface já organiza os cultos por domingo/data. Assim fica mais natural trabalhar um boletim do domingo com uma ou várias liturgias dentro dele.
             </p>
           </div>
-          {isLideranca && (
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
             <button
-              onClick={() => { setNovoDiaInicial(''); setEditando('novo'); }}
-              className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
+              type="button"
+              onClick={abrirBoletimPublico}
+              disabled={!igrejaPublicSlug}
+              className="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
             >
-              + Nova
+              Abrir boletim
             </button>
-          )}
+            <button
+              type="button"
+              onClick={compartilharBoletimPublico}
+              disabled={!igrejaPublicSlug}
+              className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100 active:bg-sky-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-white disabled:text-slate-400"
+            >
+              Compartilhar link
+            </button>
+            {isLideranca && (
+              <button
+                onClick={() => { setNovoDiaInicial(''); setEditando('novo'); }}
+                className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
+              >
+                + Nova
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">
