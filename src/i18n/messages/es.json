@@ -107,10 +107,15 @@
     "loadAvailableChurchesError": "No fue posible cargar las iglesias.",
     "sendError": "Error al enviar la solicitud.",
     "success": "Solicitud enviada con éxito a {church}. El equipo te acompañará con cariño.",
+    "scripture": {
+      "text": "Ante todo, exhorto a que se hagan rogativas, oraciones, peticiones y acciones de gracias por todos los hombres; por los reyes y por todos los que ocupan altos puestos, para que vivamos con tranquilidad y reposo, y en toda piedad y honestidad. Porque esto es bueno y agradable delante de Dios nuestro Salvador, el cual quiere que todos los hombres sean salvos y lleguen a conocer la verdad.",
+      "reference": "1 Timoteo 2:1-4"
+    },
     "categories": {
       "oracao": "Oración",
       "aconselhamento": "Consejería",
       "visita": "Visita",
+      "pregacao": "Sobre lo predicado",
       "outro": "Otro"
     }
   },

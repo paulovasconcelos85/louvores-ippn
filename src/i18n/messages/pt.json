@@ -107,10 +107,15 @@
     "loadAvailableChurchesError": "Não foi possível carregar as igrejas.",
     "sendError": "Erro ao enviar pedido.",
     "success": "Pedido enviado com sucesso para {church}. A equipe vai acompanhar com carinho.",
+    "scripture": {
+      "text": "Antes de tudo, peço que se façam súplicas, orações, intercessões e ações de graças em favor de todas as pessoas. Orem em favor dos reis e de todos os que exercem autoridade, para que vivamos vida mansa e tranquila, com toda piedade e respeito. Isto é bom e aceitável diante de Deus, nosso Salvador, que deseja que todos sejam salvos e cheguem ao pleno conhecimento da verdade.",
+      "reference": "1 Timóteo 2:1-4"
+    },
     "categories": {
       "oracao": "Oração",
       "aconselhamento": "Aconselhamento",
       "visita": "Visita",
+      "pregacao": "Sobre a pregação",
       "outro": "Outro"
     }
   },

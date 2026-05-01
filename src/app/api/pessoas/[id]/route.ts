@@ -145,6 +145,14 @@ export async function GET(
 
     const temAcesso = await pessoaTemAcesso(pessoa.id, pessoa.usuario_id);
 
+    const { data: igrejaAtual, error: igrejaAtualError } = await supabaseAdmin
+      .from('igrejas')
+      .select('id, timezone_boletim, cidade, uf, pais, slug')
+      .eq('id', igrejaId)
+      .maybeSingle();
+
+    if (igrejaAtualError) throw igrejaAtualError;
+
     // Formatar tags
     const pessoaFormatada = {
       ...pessoa,
@@ -159,7 +167,18 @@ export async function GET(
     };
 
     return apiSuccess({
-      data: pessoaFormatada
+      data: pessoaFormatada,
+      igreja: {
+        id: igrejaId,
+        timezone:
+          typeof igrejaAtual?.timezone_boletim === 'string' && igrejaAtual.timezone_boletim.trim()
+            ? igrejaAtual.timezone_boletim.trim()
+            : null,
+        cidade: igrejaAtual?.cidade || null,
+        uf: igrejaAtual?.uf || null,
+        pais: igrejaAtual?.pais || null,
+        slug: igrejaAtual?.slug || null,
+      },
     });
 
   } catch (error: any) {

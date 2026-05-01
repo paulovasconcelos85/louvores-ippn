@@ -13,7 +13,7 @@ const supabaseAdmin = createClient(
   }
 );
 
-const CATEGORIAS_VALIDAS = new Set(['oracao', 'aconselhamento', 'visita', 'outro']);
+const CATEGORIAS_VALIDAS = new Set(['oracao', 'aconselhamento', 'visita', 'pregacao', 'outro']);
 
 type UsuarioAcessoPedido = {
   id: string;

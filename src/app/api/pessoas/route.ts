@@ -124,6 +124,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const { data: igrejaAtual, error: igrejaAtualError } = await supabaseAdmin
+      .from('igrejas')
+      .select('id, timezone_boletim, cidade, uf, pais, slug')
+      .eq('id', igrejaId)
+      .maybeSingle();
+
+    if (igrejaAtualError) throw igrejaAtualError;
+
     let query = supabaseAdmin
       .from('pessoas')
       .select(PESSOA_COM_VINCULO_SELECT)
@@ -240,6 +248,17 @@ export async function GET(request: NextRequest) {
     return apiSuccess({
       data: pessoasFormatadas,
       count: pessoasFormatadas?.length || 0,
+      igreja: {
+        id: igrejaId,
+        timezone:
+          typeof igrejaAtual?.timezone_boletim === 'string' && igrejaAtual.timezone_boletim.trim()
+            ? igrejaAtual.timezone_boletim.trim()
+            : null,
+        cidade: igrejaAtual?.cidade || null,
+        uf: igrejaAtual?.uf || null,
+        pais: igrejaAtual?.pais || null,
+        slug: igrejaAtual?.slug || null,
+      },
     });
 
   } catch (error: any) {

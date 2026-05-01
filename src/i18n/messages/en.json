@@ -107,10 +107,15 @@
     "loadAvailableChurchesError": "Could not load churches.",
     "sendError": "Error sending request.",
     "success": "Request sent successfully to {church}. The team will care for you with attention.",
+    "scripture": {
+      "text": "I exhort therefore, that, first of all, supplications, prayers, intercessions, and giving of thanks, be made for all men; for kings, and for all that are in authority; that we may lead a quiet and peaceable life in all godliness and honesty. For this is good and acceptable in the sight of God our Saviour; who will have all men to be saved, and to come unto the knowledge of the truth.",
+      "reference": "1 Timothy 2:1-4"
+    },
     "categories": {
       "oracao": "Prayer",
       "aconselhamento": "Counseling",
       "visita": "Visit",
+      "pregacao": "About the preaching",
       "outro": "Other"
     }
   },

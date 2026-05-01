@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, HeartHandshake, Mail, MapPin, Phone, SendHorizonal } from 'lucide-react';
+import { ArrowLeft, HeartHandshake, Mail, MapPin, Phone, Quote, SendHorizonal } from 'lucide-react';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslations } from '@/i18n/provider';
 
-type CategoriaPedido = 'oracao' | 'aconselhamento' | 'visita' | 'outro';
+type CategoriaPedido = 'oracao' | 'aconselhamento' | 'visita' | 'pregacao' | 'outro';
 
 async function lerJsonSeguro(response: Response, t: (key: string) => string) {
   const texto = await response.text();
@@ -46,12 +46,18 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
     [igrejas, igrejaAtualId]
   );
+  const backHref = forcedSlug
+    ? `/${forcedSlug}${igrejaAtualId ? `?igreja_id=${igrejaAtualId}` : ''}`
+    : igrejaAtualId
+      ? `/?igreja_id=${igrejaAtualId}`
+      : '/';
 
   const categorias = useMemo<Array<{ value: CategoriaPedido; label: string }>>(
     () => [
       { value: 'oracao', label: t('publicRequests.categories.oracao') },
       { value: 'aconselhamento', label: t('publicRequests.categories.aconselhamento') },
       { value: 'visita', label: t('publicRequests.categories.visita') },
+      { value: 'pregacao', label: t('publicRequests.categories.pregacao') },
       { value: 'outro', label: t('publicRequests.categories.outro') },
     ],
     [t]
@@ -196,7 +202,7 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="space-y-6">
           <Link
-            href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
+            href={backHref}
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -228,6 +234,22 @@ export function PublicPedidosPage({ forcedSlug }: { forcedSlug?: string | null }
           </section>
 
           <div className="mx-auto max-w-2xl">
+            <section className="mb-5 rounded-[22px] border border-emerald-100 bg-white/85 p-5 shadow-[0_12px_36px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 rounded-full bg-emerald-50 p-2 text-emerald-800">
+                  <Quote className="h-4 w-4" />
+                </div>
+                <blockquote className="space-y-3">
+                  <p className="text-sm leading-6 text-slate-700">
+                    {t('publicRequests.scripture.text')}
+                  </p>
+                  <footer className="text-sm font-semibold text-emerald-900">
+                    {t('publicRequests.scripture.reference')}
+                  </footer>
+                </blockquote>
+              </div>
+            </section>
+
             <section className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-7">
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{t('publicRequests.writeRequest')}</h2>

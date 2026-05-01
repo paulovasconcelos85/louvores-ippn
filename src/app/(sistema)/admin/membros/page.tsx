@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -14,7 +15,7 @@ import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import { 
   Users, Phone, MapPin, Calendar, Heart, AlertCircle, 
-  Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen
+  Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen, Printer
 } from 'lucide-react';
 
 interface Membro {
@@ -54,6 +55,48 @@ type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
 type FiltroStatus = 'todos' | 'ativo' | 'afastado' | 'visitante' | 'congregado' | 'falecido';
 type FiltroBatismo = 'todos' | 'batizado' | 'nao_batizado';
 type FiltroGrupo = string;
+type TipoListaImpressao = 'membros' | 'todos';
+
+interface IgrejaResumo {
+  timezone: string | null;
+  cidade: string | null;
+  uf: string | null;
+  pais: string | null;
+  slug: string | null;
+}
+
+const DEFAULT_TIMEZONE = 'America/Manaus';
+
+function parseDateOnly(data: string | null) {
+  if (!data) return null;
+  const match = data.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function getTodayInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  return {
+    year: Number(parts.find((part) => part.type === 'year')?.value),
+    month: Number(parts.find((part) => part.type === 'month')?.value),
+    day: Number(parts.find((part) => part.type === 'day')?.value),
+  };
+}
+
+function getBirthdayDateForYear(data: string | null, year: number) {
+  const parsed = parseDateOnly(data);
+  return parsed ? new Date(year, parsed.month - 1, parsed.day) : null;
+}
 
 // ─── Avatar do membro ─────────────────────────────────────────────────────────
 function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: string | null; size?: 'sm' | 'md' }) {
@@ -91,11 +134,13 @@ export default function PastorarMembrosPage() {
   const [mensagem, setMensagem] = useState('');
   const [visaoFamilia, setVisaoFamilia] = useState(false);
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
+  const [igrejaResumo, setIgrejaResumo] = useState<IgrejaResumo | null>(null);
+  const [tipoListaImpressao, setTipoListaImpressao] = useState<TipoListaImpressao>('membros');
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
   const [filtroAniversario, setFiltroAniversario] = useState<FiltroAniversario>('todos');
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('ativo');
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
   const [mostrarInativos, setMostrarInativos] = useState(false);
   const [filtroBatismo, setFiltroBatismo] = useState<FiltroBatismo>('todos');
   const [filtroGrupo, setFiltroGrupo] = useState<FiltroGrupo>('todos');
@@ -136,6 +181,7 @@ export default function PastorarMembrosPage() {
       }
 
       setMembros(payload.data || []);
+      setIgrejaResumo(payload.igreja || null);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
       setMensagem(
@@ -154,37 +200,48 @@ export default function PastorarMembrosPage() {
     if (user && podeAcessar) void carregarMembros();
   }, [user, podeAcessar, carregarMembros]);
 
+  const churchTimezone = igrejaResumo?.timezone || DEFAULT_TIMEZONE;
+
   // ── Helpers de data ──
   const calcularIdade = (dataNascimento: string | null) => {
     if (!dataNascimento) return null;
-    const hoje = new Date(); const nascimento = new Date(dataNascimento);
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-    const mes = hoje.getMonth() - nascimento.getMonth();
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) idade--;
+    const hoje = getTodayInTimeZone(churchTimezone);
+    const nascimento = parseDateOnly(dataNascimento);
+    if (!nascimento) return null;
+    let idade = hoje.year - nascimento.year;
+    const mes = hoje.month - nascimento.month;
+    if (mes < 0 || (mes === 0 && hoje.day < nascimento.day)) idade--;
     return idade;
   };
 
   const ehAniversarioHoje = (data: string | null) => {
     if (!data) return false;
-    const hoje = new Date(); const d = new Date(data);
-    return hoje.getMonth() === d.getMonth() && hoje.getDate() === d.getDate();
+    const hoje = getTodayInTimeZone(churchTimezone);
+    const d = parseDateOnly(data);
+    return !!d && hoje.month === d.month && hoje.day === d.day;
   };
 
   const ehAniversarioNesteMes = (data: string | null) =>
-    data ? new Date().getMonth() === new Date(data).getMonth() : false;
+    data ? getTodayInTimeZone(churchTimezone).month === parseDateOnly(data)?.month : false;
 
   const ehAniversarioProximos7Dias = (data: string | null) => {
     if (!data) return false;
-    const hoje = new Date(); const d = new Date(data);
-    const prox = new Date(); prox.setDate(prox.getDate() + 7);
-    const aniv = new Date(hoje.getFullYear(), d.getMonth(), d.getDate());
-    return aniv >= hoje && aniv <= prox;
+    const hojeParts = getTodayInTimeZone(churchTimezone);
+    const hoje = new Date(hojeParts.year, hojeParts.month - 1, hojeParts.day);
+    const prox = new Date(hoje);
+    prox.setDate(prox.getDate() + 7);
+    const anivEsteAno = getBirthdayDateForYear(data, hojeParts.year);
+    const anivProximoAno = getBirthdayDateForYear(data, hojeParts.year + 1);
+    return [anivEsteAno, anivProximoAno].some((aniv) => aniv && aniv >= hoje && aniv <= prox);
   };
 
   const formatarData = (data: string | null) =>
-    data
-      ? new Date(`${data}T00:00:00`).toLocaleDateString(intlLocale)
-      : tr('-', '-', '-');
+    (() => {
+      const parsed = parseDateOnly(data);
+      return parsed
+        ? new Date(parsed.year, parsed.month - 1, parsed.day).toLocaleDateString(intlLocale)
+        : tr('-', '-', '-');
+    })();
 
   const getStatusLabel = (status: string) =>
     ({
@@ -215,6 +272,19 @@ export default function PastorarMembrosPage() {
     if (m.bairro && m.cidade) return `${m.bairro}, ${m.cidade}/${m.uf || ''}`;
     if (m.endereco_completo) return m.endereco_completo;
     return null;
+  };
+
+  const camposIncompletos = (m: Membro) => {
+    const faltando: string[] = [];
+    if (!m.telefone) faltando.push(tr('telefone', 'teléfono', 'phone'));
+    if (!m.email) faltando.push('email');
+    if (!m.data_nascimento) faltando.push(tr('nascimento', 'nacimiento', 'birth date'));
+    if (!m.sexo) faltando.push(tr('sexo', 'sexo', 'sex'));
+    if (!m.estado_civil) faltando.push(tr('estado civil', 'estado civil', 'marital status'));
+    if (!m.logradouro && !m.endereco_completo) faltando.push(tr('endereço', 'dirección', 'address'));
+    if (!m.cidade) faltando.push(tr('cidade', 'ciudad', 'city'));
+    if (!m.uf) faltando.push(tr('UF', 'provincia/estado', 'state'));
+    return faltando;
   };
 
   const gruposUnicos = Array.from(
@@ -249,6 +319,27 @@ export default function PastorarMembrosPage() {
   const aniversariantesHoje = membros.filter(m =>
     m.ativo && m.status_membro === 'ativo' && ehAniversarioHoje(m.data_nascimento)
   );
+
+  const membrosParaVotacao = membros
+    .filter((m) => m.ativo && m.status_membro === 'ativo')
+    .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' }));
+  const todosParaImpressao = [...membros]
+    .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' }));
+  const pessoasParaImpressao = tipoListaImpressao === 'membros' ? membrosParaVotacao : todosParaImpressao;
+  const localizacaoIgreja = [igrejaResumo?.cidade, igrejaResumo?.uf, igrejaResumo?.pais].filter(Boolean).join(', ');
+  const tituloListaImpressao =
+    tipoListaImpressao === 'membros'
+      ? tr('Lista de Membros para Votação', 'Lista de Miembros para Votación', 'Voting Member List')
+      : tr('Lista Geral de Pessoas', 'Lista General de Personas', 'Full People List');
+  const descricaoListaImpressao =
+    tipoListaImpressao === 'membros'
+      ? tr('Somente membros ativos', 'Solo miembros activos', 'Active members only')
+      : tr('Todos os status', 'Todos los estados', 'All statuses');
+
+  const imprimirLista = (tipo: TipoListaImpressao) => {
+    flushSync(() => setTipoListaImpressao(tipo));
+    window.print();
+  };
 
   const abrirWhatsApp = (telefone: string | null, nome: string) => {
     if (!telefone) {
@@ -305,7 +396,87 @@ export default function PastorarMembrosPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <style>{`
+        @media print {
+          body {
+            background: #ffffff !important;
+          }
+
+          #membros-admin-screen {
+            display: none !important;
+          }
+
+          #lista-membros-impressao {
+            display: block !important;
+            position: static !important;
+            width: 100%;
+            padding: 0;
+          }
+
+          @page {
+            margin: 16mm;
+          }
+        }
+      `}</style>
+
+      <section
+        id="lista-membros-impressao"
+        className="hidden bg-white text-slate-900 print:block"
+        aria-hidden="true"
+      >
+        <header className="mb-6 border-b-2 border-slate-900 pb-3">
+          <h1 className="m-0 text-[22px] font-bold">
+            {tituloListaImpressao}
+          </h1>
+          <p className="m-0 mt-1 text-sm text-slate-600">
+            {localizacaoIgreja || igrejaResumo?.slug || ''}
+          </p>
+          <p className="m-0 mt-1 text-sm text-slate-600">
+            {descricaoListaImpressao} · {pessoasParaImpressao.length}
+          </p>
+        </header>
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              <th className="w-10 border border-slate-300 bg-slate-100 p-2 text-center text-slate-700">#</th>
+              <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                {tr('Nome', 'Nombre', 'Name')}
+              </th>
+              <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                {tr('Telefone', 'Teléfono', 'Phone')}
+              </th>
+              {tipoListaImpressao === 'todos' && (
+                <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                  {tr('Status', 'Estado', 'Status')}
+                </th>
+              )}
+              <th className="w-1/3 border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                {tr('Assinatura', 'Firma', 'Signature')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {pessoasParaImpressao.map((membro, index) => (
+              <tr key={membro.id}>
+                <td className="border border-slate-300 p-2 text-center">{index + 1}</td>
+                <td className="border border-slate-300 p-2">{membro.nome}</td>
+                <td className="border border-slate-300 p-2">
+                  {membro.telefone ? formatPhoneNumber(membro.telefone) : ''}
+                </td>
+                {tipoListaImpressao === 'todos' && (
+                  <td className="border border-slate-300 p-2">
+                    {getStatusLabel(membro.status_membro)}
+                    {!membro.ativo ? ` / ${tr('Inativo', 'Inactivo', 'Inactive')}` : ''}
+                  </td>
+                )}
+                <td className="border border-slate-300 p-2">&nbsp;</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <main id="membros-admin-screen" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -323,6 +494,20 @@ export default function PastorarMembrosPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => imprimirLista('membros')}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-semibold text-sm shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              {tr('Imprimir membros', 'Imprimir miembros', 'Print members')}
+            </button>
+            <button
+              onClick={() => imprimirLista('todos')}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-semibold text-sm shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              {tr('Imprimir todos', 'Imprimir todos', 'Print everyone')}
+            </button>
             <button onClick={() => router.push('/admin/membros/novo')}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm">
               <span className="text-lg leading-none">+</span>{' '}
@@ -549,6 +734,8 @@ export default function PastorarMembrosPage() {
                   const ehMembroCargo = membro.cargo === 'membro';
                   const temAlerta = membro.situacao_saude || membro.observacoes || ehAniversarioProximos7Dias(membro.data_nascimento);
                   const endereco = enderecoResumido(membro);
+                  const faltando = camposIncompletos(membro);
+                  const cadastroIncompleto = faltando.length > 0;
 
                   return (
                     <div key={membro.id}
@@ -556,6 +743,7 @@ export default function PastorarMembrosPage() {
                       className={`border-2 rounded-lg p-4 transition-all hover:shadow-md cursor-pointer ${
                         !membro.ativo ? 'opacity-60' :
                         ehAniversarioHoje(membro.data_nascimento) ? 'border-pink-300 bg-pink-50' :
+                        cadastroIncompleto ? 'border-orange-300 bg-orange-50/50' :
                         temAlerta ? 'border-amber-300 bg-amber-50/30' :
                         'border-slate-200 hover:border-blue-300'
                       }`}
@@ -586,6 +774,15 @@ export default function PastorarMembrosPage() {
                               {membro.batizado && (
                                 <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">
                                   {tr('Batizado', 'Bautizado', 'Baptized')}
+                                </span>
+                              )}
+                              {cadastroIncompleto && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300 flex items-center gap-1"
+                                  title={`${tr('Faltando:', 'Falta:', 'Missing:')} ${faltando.join(', ')}`}
+                                >
+                                  <AlertCircle className="w-3 h-3" />
+                                  {tr('Cadastro incompleto', 'Registro incompleto', 'Incomplete data')}
                                 </span>
                               )}
                             </div>

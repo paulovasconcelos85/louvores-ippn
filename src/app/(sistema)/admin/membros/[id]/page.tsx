@@ -78,6 +78,38 @@ interface NotaPastoral {
 
 type TipoNota = 'nota' | 'visita' | 'ligacao' | 'oracao' | 'aconselhamento' | 'urgente';
 
+interface IgrejaResumo {
+  timezone: string | null;
+}
+
+const DEFAULT_TIMEZONE = 'America/Manaus';
+
+function parseDateOnly(data: string | null) {
+  if (!data) return null;
+  const match = data.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+function getTodayInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  return {
+    year: Number(parts.find((part) => part.type === 'year')?.value),
+    month: Number(parts.find((part) => part.type === 'month')?.value),
+    day: Number(parts.find((part) => part.type === 'day')?.value),
+  };
+}
+
 // ─── Mini Mapa ────────────────────────────────────────────────────────────────
 function MapaMembro({ lat, lng, nome }: { lat: number; lng: number; nome: string }) {
   const locale = useLocale();
@@ -188,6 +220,7 @@ export default function MembroDetalhesPage() {
   const [mensagem, setMensagem] = useState('');
   const [modoEdicao, setModoEdicao] = useState(false);
   const [fotoError, setFotoError] = useState(false);
+  const [igrejaResumo, setIgrejaResumo] = useState<IgrejaResumo | null>(null);
 
   // ── Form states ──────────────────────────────────────────────────────────────
   const [nome, setNome] = useState('');
@@ -313,6 +346,7 @@ export default function MembroDetalhesPage() {
 
       const data = payload.data;
       setMembro(data);
+      setIgrejaResumo(payload.igreja || null);
       setFotoError(false);
       setNome(data.nome);
       setFotoUrl(data.foto_url || '');
@@ -567,23 +601,29 @@ export default function MembroDetalhesPage() {
     }
   };
 
+  const churchTimezone = igrejaResumo?.timezone || DEFAULT_TIMEZONE;
+
   const calcularIdade = (dataNasc: string | null) => {
-    if (!dataNasc) return null;
-    const hoje = new Date();
-    const nasc = new Date(dataNasc);
-    let idade = hoje.getFullYear() - nasc.getFullYear();
-    const mes = hoje.getMonth() - nasc.getMonth();
-    if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) idade--;
+    const nasc = parseDateOnly(dataNasc);
+    if (!nasc) return null;
+    const hoje = getTodayInTimeZone(churchTimezone);
+    let idade = hoje.year - nasc.year;
+    const mes = hoje.month - nasc.month;
+    if (mes < 0 || (mes === 0 && hoje.day < nasc.day)) idade--;
     return idade;
   };
 
   const formatarData = (data: string | null) =>
-    data
-      ? new Date(`${data}T00:00:00`).toLocaleDateString(intlLocale)
-      : '-';
+    (() => {
+      const parsed = parseDateOnly(data);
+      return parsed
+        ? new Date(parsed.year, parsed.month - 1, parsed.day).toLocaleDateString(intlLocale)
+        : '-';
+    })();
 
   const formatarDataHora = (data: string) =>
     new Date(data).toLocaleString(intlLocale, {
+      timeZone: churchTimezone,
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });

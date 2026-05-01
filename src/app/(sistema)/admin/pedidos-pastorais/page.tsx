@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BookHeart,
   CheckCircle2,
+  ClipboardCopy,
   Clock3,
   Mail,
+  MailPlus,
   MessageSquareHeart,
   Phone,
   RefreshCcw,
@@ -28,7 +30,7 @@ type PedidoPastoral = {
   nome_solicitante: string;
   email_solicitante: string | null;
   telefone_solicitante: string | null;
-  categoria: 'oracao' | 'aconselhamento' | 'visita' | 'outro';
+  categoria: 'oracao' | 'aconselhamento' | 'visita' | 'pregacao' | 'outro';
   assunto: string | null;
   mensagem: string;
   deseja_retorno: boolean;
@@ -63,6 +65,29 @@ const STATUS_BADGES: Record<PedidoPastoral['status'], string> = {
   concluido: 'bg-emerald-100 text-emerald-900 border border-emerald-200',
 };
 
+function copiarTextoComFallback(texto: string) {
+  const textarea = document.createElement('textarea');
+  textarea.value = texto;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '0';
+  textarea.style.left = '0';
+  textarea.style.width = '1px';
+  textarea.style.height = '1px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  const copiado = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copiado) {
+    throw new Error('COPY_FALLBACK_FAILED');
+  }
+}
+
 export default function AdminPedidosPastoraisPage() {
   const router = useRouter();
   const locale = useLocale();
@@ -83,7 +108,8 @@ export default function AdminPedidosPastoraisPage() {
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('novo');
   const [pedidoAtualizandoId, setPedidoAtualizandoId] = useState<string | null>(null);
-  const [marcandoNotificacoes, setMarcandoNotificacoes] = useState(false);
+  const [exportandoNovos, setExportandoNovos] = useState(false);
+  const notificacoesMarcadasRef = useRef<Set<string>>(new Set());
   const [contadores, setContadores] = useState({
     total: 0,
     novo: 0,
@@ -103,6 +129,7 @@ export default function AdminPedidosPastoraisPage() {
     oracao: tr('Oração', 'Oración', 'Prayer'),
     aconselhamento: tr('Aconselhamento', 'Consejería', 'Counseling'),
     visita: tr('Visita', 'Visita', 'Visit'),
+    pregacao: tr('Sobre a pregação', 'Sobre lo predicado', 'About the preaching'),
     outro: tr('Outro', 'Otro', 'Other'),
   };
   const formatarData = useCallback((value: string) => {
@@ -114,6 +141,19 @@ export default function AdminPedidosPastoraisPage() {
       minute: '2-digit',
     });
   }, [intlLocale]);
+  const formatarContato = useCallback(
+    (pedido: PedidoPastoral) => {
+      const contatos = [
+        pedido.email_solicitante || pedido.pessoa?.email,
+        pedido.telefone_solicitante || pedido.pessoa?.telefone,
+      ].filter(Boolean);
+
+      return contatos.length > 0
+        ? contatos.join(' | ')
+        : tr('Sem contato informado', 'Sin contacto informado', 'No contact provided');
+    },
+    [tr]
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -193,10 +233,10 @@ export default function AdminPedidosPastoraisPage() {
   }, [loading, user, podeAcessarPedidos, carregarPedidos]);
 
   const marcarResumoPastoralComoLido = useCallback(async () => {
-    if (!user || !podeAcessarPedidos || !igrejaId || marcandoNotificacoes) return;
+    if (!user || !podeAcessarPedidos || !igrejaId || notificacoesMarcadasRef.current.has(igrejaId)) return;
 
     try {
-      setMarcandoNotificacoes(true);
+      notificacoesMarcadasRef.current.add(igrejaId);
 
       await fetch('/api/admin/notifications', {
         method: 'PATCH',
@@ -207,11 +247,10 @@ export default function AdminPedidosPastoraisPage() {
         }),
       });
     } catch (error) {
+      notificacoesMarcadasRef.current.delete(igrejaId);
       console.error('Erro ao marcar notificações pastorais como lidas:', error);
-    } finally {
-      setMarcandoNotificacoes(false);
     }
-  }, [user, podeAcessarPedidos, igrejaId, marcandoNotificacoes]);
+  }, [user, podeAcessarPedidos, igrejaId]);
 
   useEffect(() => {
     if (!loading && user && podeAcessarPedidos && igrejaId) {
@@ -276,6 +315,149 @@ export default function AdminPedidosPastoraisPage() {
     }
   }
 
+  async function carregarPedidosNovosParaTexto() {
+    if (!user || !podeAcessarPedidos) return [];
+
+    const params = new URLSearchParams();
+    if (igrejaId) params.set('igreja_id', igrejaId);
+    params.set('status', 'novo');
+
+    const response = await fetch(`/api/admin/pedidos-pastorais?${params.toString()}`, {
+      headers: await buildAuthenticatedHeaders(),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        resolveApiErrorMessage(
+          locale,
+          data,
+          tr(
+            'Erro ao carregar pedidos novos.',
+            'Error al cargar solicitudes nuevas.',
+            'Error loading new requests.'
+          )
+        )
+      );
+    }
+
+    return (data.pedidos || []) as PedidoPastoral[];
+  }
+
+  function montarTextoPedidosNovos(pedidosNovos: PedidoPastoral[]) {
+    const titulo = tr(
+      `Pedidos pastorais novos - ${igrejaNome}`,
+      `Solicitudes pastorales nuevas - ${igrejaNome}`,
+      `New pastoral requests - ${igrejaNome}`
+    );
+    const geradoEm = tr('Gerado em', 'Generado el', 'Generated on');
+    const linha = '----------------------------------------';
+
+    return [
+      `*${titulo}*`,
+      `${geradoEm}: ${new Date().toLocaleString(intlLocale)}`,
+      '',
+      linha,
+      '',
+      ...pedidosNovos.flatMap((pedido, index) => [
+        `*Pedido ${index + 1}*`,
+        `${tr('Nome', 'Nombre', 'Name')}: ${pedido.nome_solicitante}`,
+        `${tr('Contato', 'Contacto', 'Contact')}: ${formatarContato(pedido)}`,
+        `${tr('Categoria', 'Categoría', 'Category')}: ${categoriaLabels[pedido.categoria]}`,
+        pedido.assunto?.trim()
+          ? `${tr('Assunto', 'Asunto', 'Subject')}: ${pedido.assunto.trim()}`
+          : null,
+        '',
+        `${tr('Mensagem', 'Mensaje', 'Message')}:`,
+        pedido.mensagem.trim(),
+        '',
+        linha,
+        '',
+      ].filter(Boolean) as string[]),
+    ].join('\n');
+  }
+
+  async function copiarTexto(texto: string) {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        copiarTextoComFallback(texto);
+        return;
+      }
+
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      copiarTextoComFallback(texto);
+    }
+  }
+
+  async function copiarTextoPedidosNovos() {
+    try {
+      setExportandoNovos(true);
+      setMensagem(null);
+      setErro(null);
+
+      const pedidosNovos =
+        statusFiltro === 'novo' && pedidos.length > 0
+          ? pedidos
+          : await carregarPedidosNovosParaTexto();
+
+      if (pedidosNovos.length === 0) {
+        setMensagem(tr('Não há pedidos novos para copiar.', 'No hay solicitudes nuevas para copiar.', 'There are no new requests to copy.'));
+        return;
+      }
+
+      const texto = montarTextoPedidosNovos(pedidosNovos);
+      await copiarTexto(texto);
+
+      setMensagem(
+        tr(
+          'Texto dos pedidos novos copiado para enviar no WhatsApp.',
+          'Texto de las solicitudes nuevas copiado para enviar por WhatsApp.',
+          'New requests text copied for WhatsApp.'
+        )
+      );
+    } catch (error: any) {
+      setErro(
+        error.message === 'COPY_FALLBACK_FAILED'
+          ? tr(
+              'Não foi possível copiar automaticamente neste navegador. Tente novamente na aba Novos ou use o botão de e-mail.',
+              'No fue posible copiar automáticamente en este navegador. Intenta de nuevo en la pestaña Nuevos o usa el botón de correo.',
+              'Could not copy automatically in this browser. Try again on the New tab or use the email button.'
+            )
+          : error.message || tr('Erro ao copiar pedidos.', 'Error al copiar solicitudes.', 'Error copying requests.')
+      );
+    } finally {
+      setExportandoNovos(false);
+    }
+  }
+
+  async function abrirEmailPedidosNovos() {
+    try {
+      setExportandoNovos(true);
+      setMensagem(null);
+      setErro(null);
+
+      const pedidosNovos = await carregarPedidosNovosParaTexto();
+
+      if (pedidosNovos.length === 0) {
+        setMensagem(tr('Não há pedidos novos para enviar.', 'No hay solicitudes nuevas para enviar.', 'There are no new requests to send.'));
+        return;
+      }
+
+      const subject = tr(
+        `Pedidos pastorais novos - ${igrejaNome}`,
+        `Solicitudes pastorales nuevas - ${igrejaNome}`,
+        `New pastoral requests - ${igrejaNome}`
+      );
+      const body = montarTextoPedidosNovos(pedidosNovos);
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    } catch (error: any) {
+      setErro(error.message || tr('Erro ao preparar e-mail.', 'Error al preparar el correo.', 'Error preparing email.'));
+    } finally {
+      setExportandoNovos(false);
+    }
+  }
+
   const igrejaNome = useMemo(
     () =>
       igreja?.nome_abreviado ||
@@ -306,14 +488,36 @@ export default function AdminPedidosPastoraisPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => carregarPedidos()}
-              className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              {tr('Atualizar', 'Actualizar', 'Refresh')}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={copiarTextoPedidosNovos}
+                disabled={exportandoNovos || contadores.novo === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-sky-900 shadow-sm hover:bg-sky-50 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/55"
+              >
+                <ClipboardCopy className="h-4 w-4" />
+                {tr('Copiar novos', 'Copiar nuevas', 'Copy new')}
+              </button>
+
+              <button
+                type="button"
+                onClick={abrirEmailPedidosNovos}
+                disabled={exportandoNovos || contadores.novo === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/55"
+              >
+                <MailPlus className="h-4 w-4" />
+                {tr('Enviar por e-mail', 'Enviar por correo', 'Email text')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => carregarPedidos()}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                {tr('Atualizar', 'Actualizar', 'Refresh')}
+              </button>
+            </div>
           </div>
         </div>
 
