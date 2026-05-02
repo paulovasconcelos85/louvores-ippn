@@ -45,18 +45,14 @@ const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 const LITURGIA_META_TIPO = '__liturgia__:nome';
 const TONS_MUSICAIS_VALIDOS = [
   'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B',
+  'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm',
 ] as const;
 
 function normalizeTomMusicalForSave(value: string | null | undefined) {
   const tom = value?.trim();
   if (!tom) return null;
 
-  if ((TONS_MUSICAIS_VALIDOS as readonly string[]).includes(tom)) {
-    return tom;
-  }
-
-  const tomSemMenor = tom.replace(/m$/i, '');
-  return (TONS_MUSICAIS_VALIDOS as readonly string[]).includes(tomSemMenor) ? tomSemMenor : null;
+  return (TONS_MUSICAIS_VALIDOS as readonly string[]).includes(tom) ? tom : null;
 }
 
 // --- TIPOS ---
@@ -1341,22 +1337,28 @@ async function sincronizarBoletimFallbackLegado(
   if (cultoIds.length === 0) return;
 
   try {
-    const { error: deleteFallbackError } = await supabase
-      .from('louvor_itens')
-      .delete()
-      .in('culto_id', cultoIds)
-      .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
-
-    if (deleteFallbackError) throw deleteFallbackError;
-
     const fallbackRows = cultoIds.flatMap((cultoId) =>
       buildBoletimFallbackRows(secoes, 1000).map((row) => ({
+        id: crypto.randomUUID(),
         culto_id: cultoId,
         ...row,
       }))
     );
 
     await inserirLouvorItensComCompatibilidadeI18n(fallbackRows);
+
+    const fallbackRowIds = fallbackRows.map((row) => row.id);
+    const deleteQuery = supabase
+      .from('louvor_itens')
+      .delete()
+      .in('culto_id', cultoIds)
+      .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
+
+    const { error: deleteFallbackError } = fallbackRowIds.length > 0
+      ? await deleteQuery.not('id', 'in', `(${fallbackRowIds.join(',')})`)
+      : await deleteQuery;
+
+    if (deleteFallbackError) throw deleteFallbackError;
   } catch (error) {
     console.warn('Falha ao sincronizar fallback legado do boletim:', error);
   }
@@ -2783,23 +2785,6 @@ function EditorBoletimDoDiaModal({
           .map((item) => item.id)
           .filter((value): value is string => typeof value === 'string' && value.length > 0);
 
-        if (secaoIdsExistentes.length > 0) {
-          const { error: deleteItensEstruturadosError } = await supabase
-            .from('boletim_itens')
-            .delete()
-            .in('secao_id', secaoIdsExistentes);
-
-          if (deleteItensEstruturadosError) throw deleteItensEstruturadosError;
-        }
-
-        const { error: deleteSecoesEstruturadasError } = await supabase
-          .from('boletim_secoes')
-          .delete()
-          .eq('igreja_id', igrejaId)
-          .in('culto_id', cultoIds);
-
-        if (deleteSecoesEstruturadasError) throw deleteSecoesEstruturadasError;
-
         const secoesEstruturadasPayload: Array<{
           id: string;
           igreja_id: string;
@@ -2869,6 +2854,28 @@ function EditorBoletimDoDiaModal({
 
           if (insertItensEstruturadosError) throw insertItensEstruturadosError;
         }
+
+        if (secaoIdsExistentes.length > 0) {
+          const { error: deleteItensEstruturadosError } = await supabase
+            .from('boletim_itens')
+            .delete()
+            .in('secao_id', secaoIdsExistentes);
+
+          if (deleteItensEstruturadosError) throw deleteItensEstruturadosError;
+        }
+
+        const secoesEstruturadasIds = secoesEstruturadasPayload.map((secao) => secao.id);
+        const deleteSecoesQuery = supabase
+          .from('boletim_secoes')
+          .delete()
+          .eq('igreja_id', igrejaId)
+          .in('culto_id', cultoIds);
+
+        const { error: deleteSecoesEstruturadasError } = secoesEstruturadasIds.length > 0
+          ? await deleteSecoesQuery.not('id', 'in', `(${secoesEstruturadasIds.join(',')})`)
+          : await deleteSecoesQuery;
+
+        if (deleteSecoesEstruturadasError) throw deleteSecoesEstruturadasError;
       } catch (structuredError) {
         if (!erroBoletimEstruturadoIndisponivel(structuredError)) {
           throw structuredError;
@@ -3551,8 +3558,6 @@ function EditorLiturgia({
         if (syncResult.error) throw syncResult.error;
       }
 
-      await supabase.from('louvor_itens').delete().eq('culto_id', cId);
-
       const rows: any[] = [];
       const metaNomeLiturgia = buildLiturgiaMetaRow(
         nomeLiturgia,
@@ -3561,6 +3566,7 @@ function EditorLiturgia({
 
       if (metaNomeLiturgia) {
         rows.push({
+          id: crypto.randomUUID(),
           culto_id: cId,
           ...metaNomeLiturgia,
         });
@@ -3571,6 +3577,7 @@ function EditorLiturgia({
         if (it.canticos_lista.length > 0) {
           it.canticos_lista.forEach(m => {
             rows.push({
+              id: crypto.randomUUID(),
               culto_id: cId, ordem: ord++, tipo: it.tipo,
               conteudo_publico: it.conteudo_publico || null,
               conteudo_publico_i18n: compactLocalizedTextMap(it.conteudo_publico_i18n),
@@ -3582,6 +3589,7 @@ function EditorLiturgia({
           });
         } else {
           rows.push({
+            id: crypto.randomUUID(),
             culto_id: cId, ordem: ord++, tipo: it.tipo,
             conteudo_publico: it.conteudo_publico || null,
             conteudo_publico_i18n: compactLocalizedTextMap(it.conteudo_publico_i18n),
@@ -3593,7 +3601,19 @@ function EditorLiturgia({
       });
 
       if (rows.length > 0) {
-        const { error } = await supabase.from('louvor_itens').insert(rows);
+        await inserirLouvorItensComCompatibilidadeI18n(rows);
+
+        const rowIds = rows.map((row) => row.id).filter(Boolean);
+        const deleteQuery = supabase
+          .from('louvor_itens')
+          .delete()
+          .eq('culto_id', cId)
+          .not('tipo', 'like', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`);
+
+        const { error } = rowIds.length > 0
+          ? await deleteQuery.not('id', 'in', `(${rowIds.join(',')})`)
+          : await deleteQuery;
+
         if (error) throw error;
       }
 
