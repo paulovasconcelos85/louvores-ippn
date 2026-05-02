@@ -43,6 +43,21 @@ const TIPOS_SECOES_BOLETIM = [
 const HABILITAR_BOLETIM_SECOES_NEXT = true;
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 const LITURGIA_META_TIPO = '__liturgia__:nome';
+const TONS_MUSICAIS_VALIDOS = [
+  'C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B',
+] as const;
+
+function normalizeTomMusicalForSave(value: string | null | undefined) {
+  const tom = value?.trim();
+  if (!tom) return null;
+
+  if ((TONS_MUSICAIS_VALIDOS as readonly string[]).includes(tom)) {
+    return tom;
+  }
+
+  const tomSemMenor = tom.replace(/m$/i, '');
+  return (TONS_MUSICAIS_VALIDOS as readonly string[]).includes(tomSemMenor) ? tomSemMenor : null;
+}
 
 // --- TIPOS ---
 interface Cantico {
@@ -1777,7 +1792,7 @@ function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreat
           className="border border-slate-200 rounded-xl px-2 py-3 text-base bg-white w-24 focus:outline-none focus:border-emerald-500 disabled:bg-slate-50 flex-shrink-0"
         >
           <option value="">Tom</option>
-          {['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb', 'Am', 'Em', 'Dm'].map(t => (
+          {TONS_MUSICAIS_VALIDOS.map(t => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
@@ -3562,7 +3577,7 @@ function EditorLiturgia({
               descricao: it.descricao || null,
               horario: it.horario || null,
               cantico_id: m.cantico_id || null,
-              tom: m.tom || null,
+              tom: normalizeTomMusicalForSave(m.tom),
             });
           });
         } else {
