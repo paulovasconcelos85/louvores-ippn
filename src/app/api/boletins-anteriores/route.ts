@@ -54,6 +54,7 @@ interface StructuredBoletimItemRow {
   conteudo_i18n?: unknown;
   destaque: boolean | null;
   ordem: number | null;
+  imagem_url?: string | null;
 }
 
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
@@ -268,7 +269,7 @@ export async function GET(request: NextRequest) {
       secaoIds.length > 0
         ? await supabaseAdmin
             .from('boletim_itens')
-            .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem')
+            .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem, imagem_url')
             .in('secao_id', secaoIds)
             .order('ordem', { ascending: true })
         : { data: [], error: null };

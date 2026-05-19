@@ -30,6 +30,7 @@ interface BoletimItem {
   id: string;
   secao_id: string | null;
   conteudo: string;
+  imagem_url?: string | null;
   destaque: boolean | null;
   ordem: number | null;
   criado_em: string | null;
@@ -786,7 +787,11 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     );
   };
 
-  const renderItemConteudo = (secao: BoletimSecao, conteudo: string) => {
+  const renderItemConteudo = (
+    secao: BoletimSecao,
+    conteudo: string,
+    imagemUrl?: string | null
+  ) => {
     if (isAgendaSection(secao)) {
       const agenda = parseAgendaBoletimItem(conteudo);
 
@@ -807,12 +812,23 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       const aviso = parseAvisoBoletimItem(conteudo);
 
       if (aviso) {
+        const imagem = imagemUrl?.trim();
         return (
           <div className="space-y-2">
             <p className="text-[15px] font-semibold leading-6 text-slate-900 sm:text-base">
               {aviso.titulo}
             </p>
             <div>{renderBlocoTexto(aviso.corpo)}</div>
+            {imagem ? (
+              <Image
+                src={imagem}
+                alt={aviso.titulo}
+                width={1200}
+                height={900}
+                unoptimized
+                className="mt-2 w-full max-h-96 rounded-[18px] border border-[#ece5d9] bg-white object-contain"
+              />
+            ) : null}
           </div>
         );
       }
@@ -1164,7 +1180,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
                                 />
                               ) : (
-                                renderItemConteudo(secao, item.conteudo)
+                                renderItemConteudo(secao, item.conteudo, item.imagem_url)
                               )}
                             </div>
                           ))}

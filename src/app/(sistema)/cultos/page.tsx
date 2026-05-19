@@ -212,6 +212,7 @@ interface BoletimItemRascunho {
   conteudo: string;
   conteudo_i18n: LocalizedTextMapForm;
   destaque: boolean;
+  imagem_url?: string | null;
 }
 
 interface AgendaItemRascunho {
@@ -228,6 +229,7 @@ interface AvisoItemRascunho {
   titulo: string;
   corpo: string;
   destaque: boolean;
+  imagem_url: string;
   conteudo_i18n: LocalizedTextMapForm;
 }
 
@@ -323,6 +325,7 @@ interface StructuredBoletimItemRow {
   conteudo_i18n?: unknown;
   destaque: boolean | null;
   ordem: number | null;
+  imagem_url?: string | null;
 }
 
 type ItemAgrupado = {
@@ -727,6 +730,7 @@ function createEmptyAvisoItem(): AvisoItemRascunho {
     titulo: '',
     corpo: '',
     destaque: false,
+    imagem_url: '',
     conteudo_i18n: createEmptyLocalizedTextMap(),
   };
 }
@@ -802,6 +806,7 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
       titulo,
       corpo,
       destaque: false,
+      imagem_url: '',
       conteudo_i18n: createEmptyLocalizedTextMap(),
     };
   }
@@ -813,6 +818,7 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
     titulo: titulo.trim(),
     corpo: restante.join('\n').trim(),
     destaque: false,
+    imagem_url: '',
     conteudo_i18n: createEmptyLocalizedTextMap(),
   };
 }
@@ -952,6 +958,7 @@ function buildBoletimSecoesEstruturadasPorCulto(
             conteudo: resolveLocalizedText(conteudoI18n, locale, item.conteudo || ''),
             conteudo_i18n: conteudoI18n,
             destaque: item.destaque === true,
+            imagem_url: item.imagem_url ?? null,
           };
         });
 
@@ -1006,7 +1013,7 @@ async function carregarBoletimSecoesEstruturadasPorCulto(
 
   const { data: itensRaw, error: itensError } = await supabase
     .from('boletim_itens')
-    .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem')
+    .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem, imagem_url')
     .in('secao_id', secaoIds)
     .order('ordem', { ascending: true });
 
@@ -2121,6 +2128,7 @@ function EditorSecaoBoletimModal({
           ...aviso,
           id: item.id || aviso.id,
           destaque: item.destaque,
+          imagem_url: item.imagem_url ?? '',
           conteudo_i18n: conteudoI18n,
         };
       });
@@ -2204,6 +2212,7 @@ function EditorSecaoBoletimModal({
                   conteudo: conteudoI18n.pt || conteudo,
                   conteudo_i18n: conteudoI18n,
                   destaque: item.destaque,
+                  imagem_url: item.imagem_url.trim() || null,
                 };
               })
         : itens
@@ -2399,6 +2408,31 @@ function EditorSecaoBoletimModal({
                         className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
                       />
                     </label>
+
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
+                      Imagem do aviso (opcional)
+                      <input
+                        type="url"
+                        value={item.imagem_url}
+                        onChange={(event) => {
+                          const atualizados = avisoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, imagem_url: event.target.value } : entry
+                          );
+                          setAvisoItens(garantirCampoAvisoExtra(atualizados));
+                        }}
+                        placeholder="https://..."
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    {item.imagem_url.trim() ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.imagem_url.trim()}
+                        alt={item.titulo.trim() || 'Pré-visualização do aviso'}
+                        className="mt-3 max-h-48 w-full rounded-xl border border-slate-200 object-contain"
+                      />
+                    ) : null}
 
                     {(item.titulo.trim() && item.corpo.trim()) ? (
                       <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
@@ -2803,6 +2837,7 @@ function EditorBoletimDoDiaModal({
           conteudo_i18n: ReturnType<typeof compactLocalizedTextMap>;
           destaque: boolean;
           ordem: number;
+          imagem_url: string | null;
         }> = [];
 
         for (const cultoId of cultoIds) {
@@ -2834,6 +2869,7 @@ function EditorBoletimDoDiaModal({
                   conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
                   destaque: item.destaque,
                   ordem: itemIndex,
+                  imagem_url: item.imagem_url ?? null,
                 });
               });
           });

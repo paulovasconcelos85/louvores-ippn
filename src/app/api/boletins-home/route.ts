@@ -124,6 +124,7 @@ interface BoletimItemRow {
   destaque: boolean | null;
   ordem: number | null;
   criado_em: string | null;
+  imagem_url?: string | null;
   liturgia_nome?: string | null;
   liturgia_titulo?: string | null;
   liturgia_publico?: string | null;
