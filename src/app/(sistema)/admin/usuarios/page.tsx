@@ -108,7 +108,8 @@ export default function GerenciarPessoas() {
       musico: tr('Músico', 'Músico', 'Musician'),
       admin: tr('Administrador', 'Administrador', 'Administrator'),
       superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
-    } satisfies Record<CargoTipo, string>)[cargo];
+    } satisfies Record<CargoTipo, string>)[cargo] ??
+    tr('Sem cargo', 'Sin cargo', 'No role');
 
   const totalLoading = authLoading || permLoading;
   const ehGestaoGlobal = permissoes.isSuperAdmin || usuarioPermitido?.cargo === 'admin';
@@ -187,7 +188,7 @@ export default function GerenciarPessoas() {
       if (filtroTexto === '') return true;
       const busca = filtroTexto.toLowerCase();
       return (
-        p.nome.toLowerCase().includes(busca) ||
+        (p.nome || '').toLowerCase().includes(busca) ||
         (p.email && p.email.toLowerCase().includes(busca)) ||
         getCargoLabel(p.cargo as CargoTipo).toLowerCase().includes(busca) ||
         (p.telefone && formatPhoneNumber(p.telefone).includes(busca))
