@@ -328,39 +328,80 @@ export async function syncApprovedUserAccess(
 
       const atualizado_em = new Date().toISOString();
 
-      const { data: novaPessoa, error: pessoaInsertError } = await supabaseAdmin
+      // Idempotente: reaproveita pessoa de tentativas anteriores em vez de duplicar
+      let novaPessoa: PessoaAcesso;
+      const { data: pessoaJa, error: pessoaJaError } = await supabaseAdmin
         .from('pessoas')
-        .insert({
-          nome: email.split('@')[0],
-          cargo: 'membro',
-          email,
-          ativo: true,
-          tem_acesso: true,
-          status_membro: 'ativo',
-          igreja_id: options.igreja_id,
-          criado_em: atualizado_em,
-          atualizado_em,
-        })
         .select('id, nome, cargo, email, telefone, ativo')
-        .single<PessoaAcesso>();
+        .eq('email', email)
+        .order('atualizado_em', { ascending: false })
+        .limit(1)
+        .maybeSingle<PessoaAcesso>();
 
-      if (pessoaInsertError) throw pessoaInsertError;
+      if (pessoaJaError) throw pessoaJaError;
 
-      const { error: vinculoError } = await supabaseAdmin
+      if (pessoaJa) {
+        novaPessoa = pessoaJa;
+        await supabaseAdmin
+          .from('pessoas')
+          .update({ usuario_id: user.id, ativo: true, atualizado_em })
+          .eq('id', novaPessoa.id);
+      } else {
+        const { data, error: pessoaInsertError } = await supabaseAdmin
+          .from('pessoas')
+          .insert({
+            nome: email.split('@')[0],
+            cargo: 'membro',
+            email,
+            ativo: true,
+            tem_acesso: true,
+            status_membro: 'ativo',
+            usuario_id: user.id,
+            igreja_id: options.igreja_id,
+            criado_em: atualizado_em,
+            atualizado_em,
+          })
+          .select('id, nome, cargo, email, telefone, ativo')
+          .single<PessoaAcesso>();
+
+        if (pessoaInsertError) throw pessoaInsertError;
+        novaPessoa = data;
+      }
+
+      // Vínculo com a igreja (idempotente). O trigger sincronizar_acesso_pessoas_igrejas_aiu
+      // cria usuarios_acesso + usuarios_igrejas automaticamente a partir daqui.
+      const { data: vinculoJa, error: vinculoJaError } = await supabaseAdmin
         .from('pessoas_igrejas')
-        .insert({
-          pessoa_id: novaPessoa.id,
-          igreja_id: options.igreja_id,
-          status_membro: 'ativo',
-          cargo: 'membro',
-          ativo: true,
-          criado_em: atualizado_em,
-          atualizado_em,
-        });
+        .select('id')
+        .eq('pessoa_id', novaPessoa.id)
+        .eq('igreja_id', options.igreja_id)
+        .maybeSingle<{ id: string }>();
 
-      if (vinculoError) throw vinculoError;
+      if (vinculoJaError) throw vinculoJaError;
 
-      const novoUsuarioAcesso = await ensureUsuarioAcesso(
+      if (vinculoJa) {
+        const { error: vinculoUpdateError } = await supabaseAdmin
+          .from('pessoas_igrejas')
+          .update({ ativo: true, atualizado_em })
+          .eq('id', vinculoJa.id);
+        if (vinculoUpdateError) throw vinculoUpdateError;
+      } else {
+        const { error: vinculoError } = await supabaseAdmin
+          .from('pessoas_igrejas')
+          .insert({
+            pessoa_id: novaPessoa.id,
+            igreja_id: options.igreja_id,
+            status_membro: 'ativo',
+            cargo: 'membro',
+            ativo: true,
+            criado_em: atualizado_em,
+            atualizado_em,
+          });
+        if (vinculoError) throw vinculoError;
+      }
+
+      // Garante auth_user_id correto no usuarios_acesso criado pelo trigger
+      await ensureUsuarioAcesso(
         supabaseAdmin,
         novaPessoa,
         user.id,
@@ -368,15 +409,6 @@ export async function syncApprovedUserAccess(
         true,
         atualizado_em
       );
-
-      const { error: igrejaError } = await supabaseAdmin
-        .from('usuarios_igrejas')
-        .upsert(
-          { usuario_id: novoUsuarioAcesso.id, igreja_id: options.igreja_id, cargo: 'membro', ativo: true },
-          { onConflict: 'usuario_id,igreja_id' }
-        );
-
-      if (igrejaError) throw igrejaError;
 
       return {
         status: 'granted',

@@ -96,7 +96,10 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Erro ao finalizar acesso:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao finalizar acesso.' },
+      {
+        error: error?.message || 'Erro ao finalizar acesso.',
+        details: error?.details || error?.hint || error?.code || null,
+      },
       { status: 500 }
     );
   }
