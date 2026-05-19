@@ -72,11 +72,18 @@ export async function POST(request: Request) {
     );
   }
 
+  let body: { igreja_id?: string } = {};
   try {
-    const result = await syncApprovedUserAccess({
-      id: user.id,
-      email: user.email,
-    });
+    body = await request.json();
+  } catch {
+    // body is optional
+  }
+
+  try {
+    const result = await syncApprovedUserAccess(
+      { id: user.id, email: user.email },
+      { igreja_id: body.igreja_id }
+    );
 
     const statusMap: Record<typeof result.status, number> = {
       granted: 200,

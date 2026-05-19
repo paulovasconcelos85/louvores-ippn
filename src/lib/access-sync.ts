@@ -282,7 +282,10 @@ async function ensureUsuarioAcesso(
   return criado;
 }
 
-export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAccessResult> {
+export async function syncApprovedUserAccess(
+  user: AuthLikeUser,
+  options?: { igreja_id?: string }
+): Promise<SyncAccessResult> {
   const email = normalizeEmail(user.email);
 
   if (!email) {
@@ -305,9 +308,131 @@ export async function syncApprovedUserAccess(user: AuthLikeUser): Promise<SyncAc
   if (acessoError) throw acessoError;
 
   if (!acessoExistente) {
+    // Sem usuarios_acesso: verifica se a pessoa foi pré-cadastrada pelo admin
+    const { data: pessoaDireta, error: pessoaDiretaError } = await supabaseAdmin
+      .from('pessoas')
+      .select('id, nome, cargo, email, telefone, ativo')
+      .eq('email', email)
+      .maybeSingle<PessoaAcesso>();
+
+    if (pessoaDiretaError) throw pessoaDiretaError;
+
+    // Usuário completamente novo: não existe em nenhuma tabela
+    if (!pessoaDireta) {
+      if (!options?.igreja_id) {
+        return {
+          status: 'not_found',
+          message: 'Selecione uma igreja para criar sua conta.',
+        };
+      }
+
+      const atualizado_em = new Date().toISOString();
+
+      const { data: novaPessoa, error: pessoaInsertError } = await supabaseAdmin
+        .from('pessoas')
+        .insert({
+          nome: email.split('@')[0],
+          cargo: 'membro',
+          email,
+          ativo: true,
+          tem_acesso: true,
+          status_membro: 'ativo',
+          igreja_id: options.igreja_id,
+          criado_em: atualizado_em,
+          atualizado_em,
+        })
+        .select('id, nome, cargo, email, telefone, ativo')
+        .single<PessoaAcesso>();
+
+      if (pessoaInsertError) throw pessoaInsertError;
+
+      const { error: vinculoError } = await supabaseAdmin
+        .from('pessoas_igrejas')
+        .insert({
+          pessoa_id: novaPessoa.id,
+          igreja_id: options.igreja_id,
+          status_membro: 'ativo',
+          cargo: 'membro',
+          ativo: true,
+          criado_em: atualizado_em,
+          atualizado_em,
+        });
+
+      if (vinculoError) throw vinculoError;
+
+      const novoUsuarioAcesso = await ensureUsuarioAcesso(
+        supabaseAdmin,
+        novaPessoa,
+        user.id,
+        email,
+        true,
+        atualizado_em
+      );
+
+      const { error: igrejaError } = await supabaseAdmin
+        .from('usuarios_igrejas')
+        .upsert(
+          { usuario_id: novoUsuarioAcesso.id, igreja_id: options.igreja_id, cargo: 'membro', ativo: true },
+          { onConflict: 'usuario_id,igreja_id' }
+        );
+
+      if (igrejaError) throw igrejaError;
+
+      return {
+        status: 'granted',
+        message: 'Conta criada com sucesso.',
+        pessoaId: novaPessoa.id,
+      };
+    }
+
+    if (!pessoaDireta.ativo) {
+      return {
+        status: 'pending_approval',
+        message: 'Seu acesso ainda não foi liberado pela administração.',
+      };
+    }
+
+    // Pessoa pré-cadastrada sem usuarios_acesso ainda: criar e sincronizar
+    const atualizado_em = new Date().toISOString();
+
+    await supabaseAdmin
+      .from('pessoas')
+      .update({ email, atualizado_em })
+      .eq('id', pessoaDireta.id);
+
+    const usuarioAcesso = await ensureUsuarioAcesso(
+      supabaseAdmin,
+      pessoaDireta,
+      user.id,
+      email,
+      pessoaDireta.ativo ?? true,
+      atualizado_em
+    );
+
+    const vinculosPessoa = await getPessoaChurchLinks(supabaseAdmin, pessoaDireta.id, {
+      cargo: pessoaDireta.cargo,
+      ativo: true,
+    });
+
+    for (const vinculo of vinculosPessoa) {
+      const { error: igrejaError } = await supabaseAdmin
+        .from('usuarios_igrejas')
+        .upsert(
+          {
+            usuario_id: usuarioAcesso.id,
+            igreja_id: vinculo.igreja_id,
+            cargo: vinculo.cargo || pessoaDireta.cargo,
+            ativo: vinculo.ativo ?? true,
+          },
+          { onConflict: 'usuario_id,igreja_id' }
+        );
+      if (igrejaError) throw igrejaError;
+    }
+
     return {
-      status: 'not_found',
-      message: 'Nenhum cadastro de acesso foi encontrado para este e-mail.',
+      status: 'granted',
+      message: 'Acesso sincronizado com sucesso.',
+      pessoaId: pessoaDireta.id,
     };
   }
 

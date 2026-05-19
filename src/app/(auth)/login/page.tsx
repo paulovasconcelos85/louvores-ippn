@@ -20,8 +20,20 @@ export default function LoginPage() {
   const [modo, setModo] = useState<'entrar' | 'primeiro_acesso'>('entrar');
   const [sincronizandoAcesso, setSincronizandoAcesso] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
+  const [igrejas, setIgrejas] = useState<{ id: string; nome: string }[]>([]);
+  const [igrejaId, setIgrejaId] = useState('');
 
-  const finalizarAcesso = useCallback(async () => {
+  useEffect(() => {
+    if (modo !== 'primeiro_acesso') return;
+    supabase
+      .from('igrejas')
+      .select('id, nome')
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => setIgrejas(data || []));
+  }, [modo]);
+
+  const finalizarAcesso = useCallback(async (opts?: { igrejaId?: string }) => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -34,7 +46,9 @@ export default function LoginPage() {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ igreja_id: opts?.igrejaId }),
     });
 
     const data = await response.json();
@@ -158,11 +172,15 @@ export default function LoginPage() {
         throw new Error(t('login.passwordMismatch'));
       }
 
+      if (!igrejaId) {
+        throw new Error('Selecione uma igreja para continuar.');
+      }
+
       const { data, error: signUpError } = await signUp(email, password);
       if (signUpError) throw signUpError;
 
       if (data.session) {
-        await finalizarAcesso();
+        await finalizarAcesso({ igrejaId });
         router.push('/admin');
         return;
       }
@@ -313,20 +331,38 @@ export default function LoginPage() {
             </div>
 
             {modo === 'primeiro_acesso' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  {t('login.confirmPassword')}
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
-                  placeholder="••••••••"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    {t('login.confirmPassword')}
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Igreja
+                  </label>
+                  <select
+                    value={igrejaId}
+                    onChange={(e) => setIgrejaId(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900 bg-white"
+                  >
+                    <option value="">Selecione sua igreja...</option>
+                    {igrejas.map((ig) => (
+                      <option key={ig.id} value={ig.id}>{ig.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             <button
