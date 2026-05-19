@@ -354,12 +354,8 @@ export async function syncApprovedUserAccess(
             cargo: 'membro',
             email,
             ativo: true,
-            tem_acesso: true,
             status_membro: 'ativo',
             usuario_id: user.id,
-            igreja_id: options.igreja_id,
-            criado_em: atualizado_em,
-            atualizado_em,
           })
           .select('id, nome, cargo, email, telefone, ativo')
           .single<PessoaAcesso>();
