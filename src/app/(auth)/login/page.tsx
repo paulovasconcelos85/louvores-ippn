@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocale, useTranslations } from '@/i18n/provider';
@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [mensagemSucesso, setMensagemSucesso] = useState('');
   const [igrejas, setIgrejas] = useState<{ id: string; nome: string }[]>([]);
   const [igrejaId, setIgrejaId] = useState('');
+  const skipSyncRef = useRef(false);
 
   useEffect(() => {
     if (modo !== 'primeiro_acesso') return;
@@ -73,7 +74,7 @@ export default function LoginPage() {
   }, [t]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || skipSyncRef.current) return;
 
     let ativo = true;
 
@@ -176,6 +177,7 @@ export default function LoginPage() {
         throw new Error('Selecione uma igreja para continuar.');
       }
 
+      skipSyncRef.current = true;
       const { data, error: signUpError } = await signUp(email, password);
       if (signUpError) throw signUpError;
 
@@ -185,9 +187,11 @@ export default function LoginPage() {
         return;
       }
 
+      skipSyncRef.current = false;
       setMensagemSucesso(t('login.signUpSuccess'));
       setModo('entrar');
     } catch (err: any) {
+      skipSyncRef.current = false;
       setError(err.message || t('login.signUpError'));
       setLoading(false);
       return;
