@@ -1016,7 +1016,7 @@ async function carregarBoletimSecoesEstruturadasPorCulto(
 
   const { data: itensRaw, error: itensError } = await supabase
     .from('boletim_itens')
-    .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem, imagem_url')
+    .select('*')
     .in('secao_id', secaoIds)
     .order('ordem', { ascending: true });
 
@@ -2840,7 +2840,7 @@ function EditorBoletimDoDiaModal({
           conteudo_i18n: ReturnType<typeof compactLocalizedTextMap>;
           destaque: boolean;
           ordem: number;
-          imagem_url: string | null;
+          imagem_url?: string;
         }> = [];
 
         for (const cultoId of cultoIds) {
@@ -2865,6 +2865,7 @@ function EditorBoletimDoDiaModal({
               .map((item, itemIndex) => ({ item, itemIndex }))
               .filter(({ item }) => item.conteudo.trim().length > 0)
               .forEach(({ item, itemIndex }) => {
+                const imagemUrl = item.imagem_url ?? null;
                 itensEstruturadosPayload.push({
                   id: crypto.randomUUID(),
                   secao_id: secaoId,
@@ -2872,7 +2873,8 @@ function EditorBoletimDoDiaModal({
                   conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
                   destaque: item.destaque,
                   ordem: itemIndex,
-                  imagem_url: item.imagem_url ?? null,
+                  // Omite o campo quando nulo para não quebrar em bancos sem a coluna
+                  ...(imagemUrl !== null ? { imagem_url: imagemUrl } : {}),
                 });
               });
           });

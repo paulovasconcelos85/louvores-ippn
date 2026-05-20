@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
       secaoIds.length > 0
         ? await supabaseAdmin
             .from('boletim_itens')
-            .select('id, secao_id, conteudo, conteudo_i18n, destaque, ordem, imagem_url')
+            .select('*')
             .in('secao_id', secaoIds)
             .order('ordem', { ascending: true })
         : { data: [], error: null };
