@@ -100,30 +100,26 @@ function repairMojibake(value: string) {
   return getMojibakeScore(repaired) < getMojibakeScore(value) ? repaired : value;
 }
 
-function extrairMensagemDoTexto(textoPagina: string) {
-  const linhas = textoPagina
+function isolarPrimeiroBlockquoteAposAncora(html: string) {
+  const ancora = html.search(/leia abaixo a mensagem de hoje/i);
+  if (ancora < 0) return null;
+
+  const trecho = html.slice(ancora);
+  const match = trecho.match(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/i);
+
+  return match?.[1] ?? null;
+}
+
+function extrairMensagemDeTextoBlockquote(textoBlockquote: string) {
+  const linhas = textoBlockquote
     .split('\n')
     .map((linha) => linha.trim())
     .filter(Boolean);
 
-  const inicio = linhas.findIndex((linha) =>
-    /leia abaixo a mensagem de hoje/i.test(linha)
-  );
+  if (linhas.length === 0) return null;
 
-  if (inicio < 0) return null;
-
-  const fim = linhas.findIndex(
-    (linha, index) =>
-      index > inicio &&
-      (/^pre[cç]os$/i.test(linha) || /receba o cada dia mensalmente/i.test(linha))
-  );
-  const mensagem = linhas.slice(inicio + 1, fim > inicio ? fim : undefined);
-  const primeiraLinha = mensagem.findIndex((linha) => linha.length > 0);
-
-  if (primeiraLinha < 0) return null;
-
-  const titulo = mensagem[primeiraLinha];
-  const corpo = mensagem.slice(primeiraLinha + 1).join('\n\n').trim();
+  const titulo = linhas[0];
+  const corpo = linhas.slice(1).join('\n\n').trim();
 
   if (!titulo || !corpo) return null;
 
@@ -150,7 +146,11 @@ export async function buscarDevocionalCadaDia(): Promise<CadaDiaDevocional | nul
   }
 
   const html = await readHtmlWithCharset(response);
-  const mensagem = extrairMensagemDoTexto(htmlToText(html));
+  const blockquoteHtml = isolarPrimeiroBlockquoteAposAncora(html);
+
+  if (!blockquoteHtml) return null;
+
+  const mensagem = extrairMensagemDeTextoBlockquote(htmlToText(blockquoteHtml));
 
   if (!mensagem) return null;
 
