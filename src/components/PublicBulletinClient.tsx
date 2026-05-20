@@ -755,10 +755,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     rotulo: cantico.rotulo,
                   })
                 }
-                className="inline-flex items-center gap-2 rounded-full border border-[#d8d1c4] bg-[#faf7f0] px-3 py-1.5 text-left text-sm font-medium text-[#365c4d] transition-colors hover:border-[#365c4d] hover:bg-[#f4eee1]"
+                className="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl sm:rounded-full border border-[#d8d1c4] bg-[#faf7f0] px-3 py-1.5 text-left text-sm font-medium text-[#365c4d] transition-colors hover:border-[#365c4d] hover:bg-[#f4eee1]"
               >
                 <span>{cantico.rotulo}:</span>
-                <span className="underline underline-offset-2">{cantico.nome}</span>
+                <span className="underline underline-offset-2 break-words">{cantico.nome}</span>
                 {cantico.numero ? <span className="text-slate-500">({cantico.numero})</span> : null}
                 {cantico.tom ? <span className="text-slate-500">({cantico.tom})</span> : null}
               </button>
@@ -770,10 +770,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             return (
               <p
                 key={`${itemLista}-${index}`}
-                className={`${textoClassName} flex items-start gap-2 text-[15px] leading-7 sm:text-base`}
+                className={`${textoClassName} flex items-start gap-2 text-[15px] leading-7 sm:text-base break-words`}
               >
                 <span className="pt-[0.12rem] text-[#365c4d]">•</span>
-                <span className="flex-1">{itemLista}</span>
+                <span className="flex-1 min-w-0 break-words">{itemLista}</span>
               </p>
             );
           }
@@ -781,7 +781,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           return (
             <p
               key={`${valor}-${index}`}
-              className={`${textoClassName} text-[15px] whitespace-pre-line leading-7 sm:text-base`}
+              className={`${textoClassName} text-[15px] whitespace-pre-line leading-7 sm:text-base break-words`}
             >
               {valor}
             </p>
@@ -803,18 +803,18 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     return (
       <div className="space-y-5">
         {renderBlocoTexto(texto)}
-        <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3">
+        <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-3">
           <a
             href={fonteUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#365c4d] underline underline-offset-4"
+            className="inline-flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-[#365c4d] underline underline-offset-4 break-all"
           >
-            Fonte: {fonteUrl}
-            <ExternalLink className="h-4 w-4" />
+            <span className="break-all">Fonte: {fonteUrl}</span>
+            <ExternalLink className="h-4 w-4 flex-shrink-0" />
           </a>
           {credito ? (
-            <p className="mt-3 text-sm leading-6 text-slate-600">{credito}</p>
+            <p className="mt-3 text-xs sm:text-sm leading-6 text-slate-600 break-words">{credito}</p>
           ) : null}
         </div>
       </div>
@@ -897,24 +897,24 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
+    <div className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
       <header className="bg-[#17352b] text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-emerald-200/80 text-[11px] font-semibold uppercase tracking-[0.28em] mb-1">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-emerald-200/80 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] mb-1">
               OIKOS Hub
             </p>
-            <h1 className="text-xl font-bold text-white">{t('home.bulletinTitle')}</h1>
+            <h1 className="text-base sm:text-xl font-bold text-white truncate">{t('home.bulletinTitle')}</h1>
             {igrejaSelecionada && (
-              <p className="text-sm text-emerald-50/90 mt-1 truncate">{nomeExibicaoIgreja}</p>
+              <p className="text-xs sm:text-sm text-emerald-50/90 mt-1 truncate">{nomeExibicaoIgreja}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {user ? (
               <>
                 <button
                   onClick={() => router.push('/admin')}
-                  className="text-sm font-medium text-emerald-200 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+                  className="text-xs sm:text-sm font-medium text-emerald-200 hover:text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
                   {t('home.panel')}
                 </button>
@@ -923,7 +923,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     await signOut();
                     window.location.reload();
                   }}
-                  className="text-sm font-medium text-emerald-300/70 hover:text-white px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+                  className="text-xs sm:text-sm font-medium text-emerald-300/70 hover:text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
                 >
                   {t('home.signOut')}
                 </button>
@@ -931,7 +931,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-md transition-colors"
+                className="text-xs sm:text-sm font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3 sm:px-4 py-2 rounded-md transition-colors whitespace-nowrap"
               >
                 {t('home.signIn')}
               </button>
@@ -940,63 +940,63 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pb-16 sm:px-6 sm:pt-8">
-        <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-[30px] border-b sm:border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-4 py-6 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:mt-6 sm:px-7 sm:py-8">
-          <div className="space-y-5">
-            <div className="space-y-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">{t('home.publicEdition')}</p>
+      <main className="max-w-6xl mx-auto px-3 pb-16 sm:px-6 sm:pt-8">
+        <section className="-mx-3 sm:mx-0 rounded-none sm:rounded-[30px] border-b sm:border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-4 py-5 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:mt-6 sm:px-7 sm:py-8">
+          <div className="space-y-4 sm:space-y-5">
+            <div className="space-y-4 sm:space-y-5">
+              <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-[#365c4d]">{t('home.publicEdition')}</p>
               <div className="space-y-2">
-                <h2 className="font-['Georgia','Times_New_Roman',serif] text-3xl sm:text-4xl leading-tight font-semibold text-slate-900">
+                <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl sm:text-3xl lg:text-4xl leading-tight font-semibold text-slate-900 break-words">
                   {nomeExibicaoIgreja}
                 </h2>
-                <p className="text-sm uppercase tracking-[0.22em] text-slate-500">
+                <p className="text-xs sm:text-sm uppercase tracking-[0.18em] sm:tracking-[0.22em] text-slate-500 break-words">
                   {dataEdicao ? t('home.editionOf', { date: dataEdicao }) : t('home.publicBulletin')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-slate-600">
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#ded7cb] bg-[#faf7f0] px-3 py-1.5 text-[#365c4d]">
-                  <MapPin className="w-3.5 h-3.5" />
-                  {enderecoFormatado || localizacao || t('home.locationUnknown')}
+                <span className="inline-flex items-start gap-2 rounded-2xl sm:rounded-full border border-[#ded7cb] bg-[#faf7f0] px-3 py-1.5 text-[#365c4d] break-words">
+                  <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <span className="break-words">{enderecoFormatado || localizacao || t('home.locationUnknown')}</span>
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-wrap sm:gap-3">
                 <button
                   onClick={compartilharWhatsApp}
                   disabled={!igrejaSelecionada}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-sm font-semibold px-3 py-3 sm:px-4 sm:min-w-[160px] transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] transition-colors text-center"
                 >
-                  <Share2 className="w-4 h-4" />
-                  {t('home.shareBulletin')}
+                  <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">{t('home.shareBulletin')}</span>
                 </button>
                 <Link
                   href={boletinsAnterioresHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d] text-center"
                 >
-                  {t('home.pastBulletins')}
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="truncate">{t('home.pastBulletins')}</span>
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 </Link>
                 <Link
                   href={recursosHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d] text-center"
                 >
-                  <Library className="w-4 h-4" />
-                  {t('home.resources')}
+                  <Library className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">{t('home.resources')}</span>
                 </Link>
                 <Link
                   href={pedidosPastoraisHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100 text-center"
                 >
-                  Pedidos
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="truncate">Pedidos</span>
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 </Link>
                 {temApresentacaoIgreja ? (
                   <button
                     type="button"
                     onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
-                    className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29]"
+                    className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29] text-center"
                   >
-                    {sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}
-                    <ArrowRight className={`w-4 h-4 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
+                    <span className="truncate">{sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}</span>
+                    <ArrowRight className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
                   </button>
                 ) : null}
               </div>
@@ -1005,9 +1005,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </section>
 
         {user && (
-          <div className="mt-3 sm:mt-5 -mx-4 sm:mx-0 flex items-center gap-3 border-y sm:border border-blue-200 bg-[#f8fbff] px-4 py-3 sm:rounded-xl">
-            <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
-            <p className="text-sm text-blue-700">
+          <div className="mt-3 sm:mt-5 -mx-3 sm:mx-0 flex items-start gap-3 border-y sm:border border-blue-200 bg-[#f8fbff] px-4 py-3 sm:rounded-xl">
+            <Eye className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs sm:text-sm text-blue-700">
               Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
             </p>
           </div>
@@ -1017,27 +1017,27 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <section
             ref={sobreIgrejaRef}
             id="sobre-igreja"
-            className="-mx-4 sm:mx-0 mt-4 sm:mt-8 overflow-hidden rounded-none sm:rounded-[32px] border-y sm:border border-[#dfd1bf] bg-[linear-gradient(135deg,#fffaf2_0%,#f7efe1_55%,#f2e6d2_100%)] shadow-[0_18px_48px_rgba(101,72,31,0.08)]"
+            className="-mx-3 sm:mx-0 mt-4 sm:mt-8 overflow-hidden rounded-none sm:rounded-[32px] border-y sm:border border-[#dfd1bf] bg-[linear-gradient(135deg,#fffaf2_0%,#f7efe1_55%,#f2e6d2_100%)] shadow-[0_18px_48px_rgba(101,72,31,0.08)]"
           >
-            <div className="grid gap-8 px-5 py-6 sm:px-7 sm:py-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:items-start">
-              <div className="space-y-5">
+            <div className="grid gap-6 sm:gap-8 px-4 py-5 sm:px-7 sm:py-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:items-start">
+              <div className="space-y-4 sm:space-y-5 min-w-0">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9a6a34]">
+                  <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-[#9a6a34]">
                     Sobre a igreja
                   </p>
-                  <h3 className="font-['Georgia','Times_New_Roman',serif] text-3xl font-semibold leading-tight text-slate-900">
+                  <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl sm:text-3xl font-semibold leading-tight text-slate-900 break-words">
                     {apresentacaoTitulo || nomeExibicaoIgreja}
                   </h3>
                 </div>
 
-                <div className="space-y-4 text-[15px] leading-8 text-slate-700 sm:text-base">
+                <div className="space-y-4 text-[15px] leading-7 sm:leading-8 text-slate-700 sm:text-base break-words">
                   {paragrafosApresentacao.map((paragrafo, index) => (
                     <p key={`apresentacao-${index}`}>{paragrafo}</p>
                   ))}
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 min-w-0">
                 {galeriaApresentacao[0] ? (
                   <Image
                     src={galeriaApresentacao[0]}
@@ -1045,12 +1045,12 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     width={1600}
                     height={1100}
                     unoptimized
-                    className="h-[18rem] w-full rounded-[28px] border border-[#eadfce] object-cover shadow-[0_12px_30px_rgba(74,53,28,0.12)] sm:h-[22rem]"
+                    className="h-56 sm:h-[22rem] w-full rounded-[22px] sm:rounded-[28px] border border-[#eadfce] object-cover shadow-[0_12px_30px_rgba(74,53,28,0.12)]"
                   />
                 ) : null}
 
                 {youtubeApresentacaoId ? (
-                  <div className="overflow-hidden rounded-[28px] border border-[#eadfce] bg-black shadow-[0_12px_30px_rgba(74,53,28,0.12)]">
+                  <div className="overflow-hidden rounded-[22px] sm:rounded-[28px] border border-[#eadfce] bg-black shadow-[0_12px_30px_rgba(74,53,28,0.12)]">
                     <div className="aspect-video">
                       <iframe
                         title={`Apresentação de ${nomeExibicaoIgreja}`}
@@ -1066,8 +1066,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             </div>
 
             {galeriaApresentacao.length > 1 ? (
-              <div className="border-t border-[#e8dccb] px-5 py-5 sm:px-7 sm:py-6">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="border-t border-[#e8dccb] px-4 py-4 sm:px-7 sm:py-6">
+                <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
                   {galeriaApresentacao.slice(1).map((foto, index) => (
                     <Image
                       key={`${foto}-${index}`}
@@ -1076,7 +1076,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       width={1200}
                       height={800}
                       unoptimized
-                      className="h-40 w-full rounded-[22px] border border-[#eadfce] object-cover shadow-[0_10px_24px_rgba(74,53,28,0.08)]"
+                      className="h-28 sm:h-40 w-full rounded-[18px] sm:rounded-[22px] border border-[#eadfce] object-cover shadow-[0_10px_24px_rgba(74,53,28,0.08)]"
                     />
                   ))}
                 </div>
@@ -1093,25 +1093,25 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         )}
 
         {!loading && (
-          <div className="mt-6 sm:mt-8 grid gap-10 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
-            <section className="space-y-10">
+          <div className="mt-5 sm:mt-8 grid gap-6 sm:gap-10 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
+            <section className="space-y-8 sm:space-y-10 min-w-0">
               {boletimSecoes.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] py-24">
+                <div className="flex flex-col items-center gap-3 rounded-[22px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] py-16 sm:py-24 px-4 text-center">
                   <Music className="w-10 h-10 text-slate-300" />
-                  <p className="text-slate-400">Nenhuma seção de boletim publicada para esta igreja.</p>
+                  <p className="text-sm text-slate-400">Nenhuma seção de boletim publicada para esta igreja.</p>
                 </div>
               ) : (
                 boletimSecoes.map((secao) => (
                   <article
                     key={secao.id}
-                    className="space-y-5"
+                    className="space-y-4 sm:space-y-5"
                   >
                     {!isImageSection(secao) && (
                       <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
-                        <p className="text-[#365c4d] text-[11px] font-semibold uppercase tracking-[0.28em] mb-2">
+                        <p className="text-[#365c4d] text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] mb-1 sm:mb-2">
                           Seção {numeracaoSecoesVisiveis.get(secao.id)}
                         </p>
-                        <h3 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold tracking-tight text-slate-900">
+                        <h3 className="font-['Georgia','Times_New_Roman',serif] text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 break-words">
                           {getTituloSecao(secao)}
                         </h3>
                       </div>
@@ -1124,7 +1124,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                         {agruparCardsLiturgia(secao.itens).map((card) => (
                           <div
                             key={card.id}
-                            className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] px-5 py-4 shadow-[0_10px_32px_rgba(77,58,32,0.05)] sm:px-6 sm:py-5"
+                            className="rounded-[22px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] px-4 py-4 shadow-[0_10px_32px_rgba(77,58,32,0.05)] sm:px-6 sm:py-5"
                           >
                             <div className="space-y-0">
                               <div className="border-b border-[#ece5d9] pb-4">
@@ -1196,7 +1196,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       </div>
                     ) : (
                       <div
-                        className={`rounded-[28px] border px-5 py-4 sm:px-6 sm:py-5 ${
+                        className={`rounded-[22px] sm:rounded-[28px] border px-4 py-4 sm:px-6 sm:py-5 ${
                           isPastoralSection(secao)
                             ? 'border-[#d9d2c1] bg-[linear-gradient(180deg,#fffaf0_0%,#f8f0dc_100%)] shadow-[0_10px_30px_rgba(95,74,35,0.08)]'
                             : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
@@ -1206,7 +1206,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                           {secao.itens.map((item, itemIndex) => (
                             <div
                               key={item.id}
-                              className={`py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                              className={`py-3 sm:py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
                             >
                               {isImageSection(secao) ? (
                                 <Image
@@ -1215,7 +1215,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   width={1600}
                                   height={1200}
                                   unoptimized
-                                  className="w-full max-h-[28rem] rounded-[22px] object-contain border border-[#ece5d9] bg-white"
+                                  className="w-full max-h-72 sm:max-h-[28rem] rounded-[18px] sm:rounded-[22px] object-contain border border-[#ece5d9] bg-white"
                                 />
                               ) : (
                                 renderItemConteudo(secao, item.conteudo, item.imagem_url)
@@ -1230,8 +1230,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               )}
             </section>
 
-            <aside className="space-y-6 xl:sticky xl:top-6">
-              <section className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-5 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
+            <aside className="space-y-5 sm:space-y-6 min-w-0 xl:sticky xl:top-6">
+              <section className="rounded-[22px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-4 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <CalendarDays className="w-4 h-4 text-[#365c4d]" />
                   <h3 className="font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">Agenda</h3>
@@ -1259,7 +1259,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 )}
               </section>
 
-              <section className="rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-5 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
+              <section className="rounded-[22px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] p-4 shadow-[0_10px_28px_rgba(77,58,32,0.05)] sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Globe className="w-4 h-4 text-[#365c4d]" />
                   <h3 className="font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">Canais</h3>
@@ -1271,28 +1271,28 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       href={igrejaDetalhes.site}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                      className="flex items-center justify-between gap-3 rounded-[18px] sm:rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
-                      <span>Site oficial</span>
-                      <ExternalLink className="w-4 h-4" />
+                      <span className="truncate">Site oficial</span>
+                      <ExternalLink className="w-4 h-4 flex-shrink-0" />
                     </a>
                   )}
                   {igrejaDetalhes?.email && (
                     <a
                       href={`mailto:${igrejaDetalhes.email}`}
-                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                      className="flex items-center justify-between gap-3 rounded-[18px] sm:rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
-                      <span>{igrejaDetalhes.email}</span>
-                      <ExternalLink className="w-4 h-4" />
+                      <span className="truncate min-w-0">{igrejaDetalhes.email}</span>
+                      <ExternalLink className="w-4 h-4 flex-shrink-0" />
                     </a>
                   )}
                   {igrejaDetalhes?.telefone && (
                     <a
                       href={`tel:${igrejaDetalhes.telefone}`}
-                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                      className="flex items-center justify-between gap-3 rounded-[18px] sm:rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
-                      <span>{igrejaDetalhes.telefone}</span>
-                      <Phone className="w-4 h-4" />
+                      <span className="truncate min-w-0">{igrejaDetalhes.telefone}</span>
+                      <Phone className="w-4 h-4 flex-shrink-0" />
                     </a>
                   )}
                   {redesSociais.map((rede) => (
@@ -1301,10 +1301,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       href={rede.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                      className="flex items-center justify-between gap-3 rounded-[18px] sm:rounded-[20px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                     >
-                      <span className="capitalize">{rede.tipo}</span>
-                      <ExternalLink className="w-4 h-4" />
+                      <span className="capitalize truncate min-w-0">{rede.tipo}</span>
+                      <ExternalLink className="w-4 h-4 flex-shrink-0" />
                     </a>
                   ))}
                   {!igrejaDetalhes?.site &&
@@ -1316,8 +1316,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 </div>
               </section>
 
-              <section className="rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,#f6fdf9_0%,#eef8f1_100%)] p-5 shadow-[0_10px_28px_rgba(54,92,77,0.08)] sm:p-6">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
+              <section className="rounded-[22px] sm:rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,#f6fdf9_0%,#eef8f1_100%)] p-4 shadow-[0_10px_28px_rgba(54,92,77,0.08)] sm:p-6">
+                <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-emerald-700">
                   Atendimento
                 </p>
                 <h3 className="mt-3 font-['Georgia','Times_New_Roman',serif] text-lg font-semibold text-slate-900">
@@ -1339,10 +1339,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         )}
       </main>
 
-      <footer className="mt-16">
-        <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <footer className="mt-12 sm:mt-16">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 space-y-8">
           <div className="text-center">
-          <p className="text-[11px] text-slate-400 uppercase tracking-[0.28em] font-medium">
+          <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-[0.18em] sm:tracking-[0.28em] font-medium break-words">
             OIKOS Hub
             {igrejaSelecionada ? ` · ${igrejaSelecionada.nome}` : ''}
           </p>
@@ -1351,44 +1351,44 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       </footer>
 
       {canticoAbertoRef && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
-            <div className="flex items-start justify-between gap-4 border-b border-[#ece5d9] px-5 py-4 sm:px-6">
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4 backdrop-blur-sm">
+          <div className="max-h-[95vh] sm:max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[20px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
+            <div className="flex items-start justify-between gap-3 border-b border-[#ece5d9] px-4 py-3 sm:px-6 sm:py-4">
+              <div className="space-y-1 min-w-0 flex-1">
+                <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-[#365c4d]">
                   {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
                 </p>
-                <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl font-semibold text-slate-900">
+                <h2 className="font-['Georgia','Times_New_Roman',serif] text-lg sm:text-2xl font-semibold text-slate-900 break-words">
                   {canticoAberto?.nome || canticoAbertoRef.nome}
                 </h2>
                 {canticoAberto?.referencia ? (
-                  <p className="text-sm text-slate-500">{canticoAberto.referencia}</p>
+                  <p className="text-xs sm:text-sm text-slate-500 break-words">{canticoAberto.referencia}</p>
                 ) : null}
               </div>
               <button
                 type="button"
                 onClick={() => setCanticoAbertoRef(null)}
-                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 flex-shrink-0"
                 aria-label="Fechar letra"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="max-h-[calc(90vh-88px)] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+            <div className="max-h-[calc(95vh-80px)] sm:max-h-[calc(90vh-88px)] overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
               {loadingCantico ? (
                 <p className="text-sm text-slate-500">Carregando letra...</p>
               ) : !canticoAberto?.letra ? (
                 <p className="text-sm text-slate-500">A letra deste cântico não está disponível no momento.</p>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6">
                   {(canticoAberto.autor_letra || canticoAberto.compositor) && (
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-600">
                       {canticoAberto.autor_letra ? <p>Letra: {canticoAberto.autor_letra}</p> : null}
                       {canticoAberto.compositor ? <p>Música: {canticoAberto.compositor}</p> : null}
                     </div>
                   )}
-                  <div className="whitespace-pre-wrap font-['Georgia','Times_New_Roman',serif] text-lg leading-9 text-slate-800 sm:text-[1.35rem]">
+                  <div className="whitespace-pre-wrap break-words font-['Georgia','Times_New_Roman',serif] text-base leading-7 text-slate-800 sm:text-lg sm:leading-9 lg:text-[1.35rem]">
                     {canticoAberto.letra}
                   </div>
                 </div>
