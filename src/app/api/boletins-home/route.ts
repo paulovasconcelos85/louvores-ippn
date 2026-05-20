@@ -175,6 +175,7 @@ interface BoletimFallbackMeta {
   secaoOrdem: number;
   itemDestaque: boolean;
   itemOrdem: number;
+  itemImagemUrl?: string | null;
 }
 
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
@@ -222,6 +223,7 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
       secaoOrdem: parsed.secaoOrdem,
       itemDestaque: parsed.itemDestaque === true,
       itemOrdem: parsed.itemOrdem,
+      itemImagemUrl: typeof parsed.itemImagemUrl === 'string' ? parsed.itemImagemUrl : null,
     };
   } catch {
     return null;
@@ -276,6 +278,7 @@ function buildExtraSectionsFromFallbackRows(
       destaque: meta.itemDestaque,
       ordem: meta.itemOrdem,
       criado_em: null,
+      imagem_url: meta.itemImagemUrl ?? null,
     });
     itemOrders.set(row.id, meta.itemOrdem);
   });

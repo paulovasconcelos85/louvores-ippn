@@ -304,6 +304,7 @@ interface BoletimFallbackMeta {
   secaoOrdem: number;
   itemDestaque: boolean;
   itemOrdem: number;
+  itemImagemUrl?: string | null;
 }
 
 interface StructuredBoletimSecaoRow {
@@ -853,6 +854,7 @@ function parseBoletimFallbackMeta(raw: string | null | undefined): BoletimFallba
       secaoOrdem: parsed.secaoOrdem,
       itemDestaque: parsed.itemDestaque === true,
       itemOrdem: parsed.itemOrdem,
+      itemImagemUrl: typeof parsed.itemImagemUrl === 'string' ? parsed.itemImagemUrl : null,
     };
   } catch {
     return null;
@@ -897,6 +899,7 @@ function buildBoletimSecoesFromFallbackRows(rows: LouvorItemRow[], locale: Local
       conteudo,
       conteudo_i18n: conteudoI18n,
       destaque: meta.itemDestaque,
+      imagem_url: meta.itemImagemUrl ?? null,
     });
     itemOrders.set(row.id, meta.itemOrdem);
   });
@@ -1301,6 +1304,7 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
           secaoOrdem: secao.ordem,
           itemDestaque: item.destaque,
           itemOrdem: index,
+          ...(item.imagem_url ? { itemImagemUrl: item.imagem_url } : {}),
         };
 
         rows.push({
