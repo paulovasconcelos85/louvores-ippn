@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import https from 'node:https';
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
+import { buscarDevocionalCadaDia, formatarConteudoCadaDia } from '@/lib/cada-dia';
 import { resolveLocalizedText } from '@/lib/church-i18n';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
@@ -180,6 +181,7 @@ interface BoletimFallbackMeta {
 
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 const LITURGIA_META_TIPO = '__liturgia__:nome';
+const CADA_DIA_SECTION_ID = 'cada-dia-devocional';
 
 function getRequestedLocale(request: NextRequest): Locale {
   const locale = request.nextUrl.searchParams.get('locale');
@@ -534,6 +536,58 @@ function getCultoDateKey(dateValue: string) {
 
 function hasPublicSectionContent(secao: LegacyBoletimSecao) {
   return secao.itens.some((item) => item.conteudo.trim().length > 0);
+}
+
+function getNextSectionOrder(secoes: LegacyBoletimSecao[]) {
+  const ordens = secoes
+    .map((secao) => secao.ordem)
+    .filter((ordem): ordem is number => typeof ordem === 'number');
+
+  return ordens.length > 0 ? Math.max(...ordens) + 1 : 99;
+}
+
+function isCadaDiaSection(secao: LegacyBoletimSecao) {
+  return (
+    secao.id === CADA_DIA_SECTION_ID ||
+    secao.titulo.trim().toLowerCase() === 'cada dia'
+  );
+}
+
+async function buildCadaDiaSection(
+  secoesAtuais: LegacyBoletimSecao[]
+): Promise<LegacyBoletimSecao | null> {
+  try {
+    const devocional = await buscarDevocionalCadaDia();
+
+    if (!devocional) return null;
+
+    const secaoExistente = secoesAtuais.find(isCadaDiaSection);
+
+    return {
+      id: CADA_DIA_SECTION_ID,
+      igreja_id: null,
+      culto_id: secaoExistente?.culto_id || null,
+      tipo: 'outro',
+      titulo: 'Cada dia',
+      icone: null,
+      ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
+      visivel: true,
+      criado_em: null,
+      itens: [
+        {
+          id: `${CADA_DIA_SECTION_ID}-item`,
+          secao_id: CADA_DIA_SECTION_ID,
+          conteudo: formatarConteudoCadaDia(devocional),
+          destaque: false,
+          ordem: 0,
+          criado_em: null,
+        },
+      ],
+    };
+  } catch (error) {
+    console.warn('Falha ao carregar devocional Cada Dia:', error);
+    return null;
+  }
 }
 
 async function buscarUltimasSecoesPorTipo(
@@ -1017,6 +1071,16 @@ export async function GET(request: NextRequest) {
           };
         });
       }
+    }
+
+    etapa = 'cada-dia';
+    const cadaDiaSection = await buildCadaDiaSection(boletimSecoes);
+    if (cadaDiaSection) {
+      boletimSecoes = [
+        ...boletimSecoes.filter((secao) => !isCadaDiaSection(secao)),
+        cadaDiaSection,
+      ]
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
     }
 
     etapa = 'resposta';

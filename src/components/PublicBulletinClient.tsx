@@ -682,6 +682,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
   const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
   const isAvisosSection = (secao: BoletimSecao) => secao.tipo === 'avisos';
+  const isCadaDiaSection = (secao: BoletimSecao) =>
+    secao.tipo === 'cada_dia' ||
+    secao.id === 'cada-dia-devocional' ||
+    secao.titulo.trim().toLowerCase() === 'cada dia';
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
 
@@ -787,11 +791,45 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     );
   };
 
+  const renderCadaDiaConteudo = (conteudo: string) => {
+    const fonteMatch = conteudo.match(/\n\nFonte:\s*(https?:\/\/\S+)/);
+    const creditoMatch = conteudo.match(/\n\nCr(?:e|\u00e9|Ã©)dito:\s*([\s\S]+)$/i);
+    const fonteUrl = fonteMatch?.[1] || 'https://www.lpc.org.br/cadadia/site/';
+    const credito = creditoMatch?.[1]?.trim() || '';
+    const texto = conteudo
+      .replace(/\n\nFonte:\s*https?:\/\/\S+[\s\S]*$/i, '')
+      .trim();
+
+    return (
+      <div className="space-y-5">
+        {renderBlocoTexto(texto)}
+        <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-4 py-3">
+          <a
+            href={fonteUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#365c4d] underline underline-offset-4"
+          >
+            Fonte: {fonteUrl}
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          {credito ? (
+            <p className="mt-3 text-sm leading-6 text-slate-600">{credito}</p>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   const renderItemConteudo = (
     secao: BoletimSecao,
     conteudo: string,
     imagemUrl?: string | null
   ) => {
+    if (isCadaDiaSection(secao)) {
+      return renderCadaDiaConteudo(conteudo);
+    }
+
     if (isAgendaSection(secao)) {
       const agenda = parseAgendaBoletimItem(conteudo);
 

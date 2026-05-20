@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeIgreja } from '@/lib/church-utils';
 import { apiError, apiSuccess } from '@/lib/api-response';
+import { resilientServerFetch } from '@/lib/resilient-server-fetch';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,6 +11,9 @@ const supabaseAdmin = createClient(
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: resilientServerFetch,
     },
   }
 );
