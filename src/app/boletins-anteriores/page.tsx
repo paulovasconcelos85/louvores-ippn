@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, Clock3, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, ChevronRight, Clock3, MapPin, FileText } from 'lucide-react';
 import type { Locale } from '@/i18n/config';
 import { formatDateByLocale } from '@/i18n/format';
 import { useLocale, useTranslations } from '@/i18n/provider';
@@ -195,28 +195,29 @@ export default function BoletinsAnterioresPage() {
   }, [igrejaAtualId, t, locale]);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbf9_0%,#f4f4f1_45%,#fbfbf9_100%)]">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/30 to-slate-50">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="space-y-8">
           <Link
             href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
-            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-800"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition-colors hover:text-emerald-900"
           >
             <ArrowLeft className="w-4 h-4" />
             {t('history.backToCurrent')}
           </Link>
 
-          <header className="rounded-[28px] border border-white/70 bg-white/90 px-5 py-6 shadow-[0_20px_60px_rgba(23,53,43,0.08)] sm:px-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
+          <header className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wide">
+              <FileText className="w-3.5 h-3.5" />
               {t('history.eyebrow')}
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight">
               {t('history.title')}
             </h1>
             {igrejaSelecionada && (
-              <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-600">
-                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-800">
-                  <MapPin className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-emerald-200 shadow-sm">
+                <MapPin className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span className="text-sm font-semibold text-slate-700">
                   {formatIgrejaLocalizacao(igrejaSelecionada) || igrejaSelecionada.nome}
                 </span>
               </div>
@@ -224,34 +225,35 @@ export default function BoletinsAnterioresPage() {
           </header>
 
           {loading ? (
-            <div className="flex flex-col items-center py-24 gap-3">
-              <div className="w-8 h-8 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm">{t('history.loading')}</p>
+            <div className="flex flex-col items-center justify-center py-32 gap-4">
+              <div className="w-10 h-10 border-3 border-emerald-200 border-t-emerald-700 rounded-full animate-spin" />
+              <p className="text-slate-500 font-medium">{t('history.loading')}</p>
             </div>
           ) : erro ? (
-            <div className="rounded-[28px] border border-rose-200 bg-white/85 px-6 py-12 text-center text-rose-700">
-              {erro}
+            <div className="rounded-xl border border-red-200 bg-red-50 px-8 py-12 text-center">
+              <p className="text-red-800 font-semibold">{erro}</p>
             </div>
           ) : boletins.length === 0 ? (
-            <div className="rounded-[28px] border border-slate-200 bg-white/85 px-6 py-12 text-center text-slate-500">
-              {t('history.empty')}
+            <div className="rounded-xl border border-slate-200 bg-white/60 backdrop-blur px-8 py-16 text-center">
+              <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-500 font-semibold">{t('history.empty')}</p>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
-              <aside className="rounded-[28px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:p-5">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
+            <div className="grid gap-8 lg:grid-cols-[280px_1fr] lg:items-start">
+              <aside className="rounded-xl border border-slate-200 bg-white/80 backdrop-blur-sm p-5 shadow-sm h-fit sticky top-24">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4 mb-4">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-600">
                     {t('history.editions')}
                   </h2>
                   <Link
                     href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
-                    className="text-sm font-medium text-emerald-800 hover:text-emerald-900"
+                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition"
                   >
                     {t('history.current')}
                   </Link>
                 </div>
 
-                <div className="mt-3 space-y-2">
+                <div className="space-y-2">
                   {boletins.map((boletim) => {
                     const ativo = boletimSelecionado?.id === boletim.id;
 
@@ -260,19 +262,21 @@ export default function BoletinsAnterioresPage() {
                         key={boletim.id}
                         type="button"
                         onClick={() => setBoletimSelecionadoId(boletim.id)}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
+                        className={`w-full rounded-lg px-4 py-3 text-left transition-all duration-200 border ${
                           ativo
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                            : 'border-slate-200 bg-slate-50/70 text-slate-700 hover:border-slate-300 hover:bg-white'
+                            ? 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-emerald-50/50 text-emerald-950 shadow-sm'
+                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                         }`}
                       >
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold">{formatarDataExtenso(boletim.data, locale)}</p>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                            {t('history.pastBulletin')}
-                          </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-slate-900">{formatarDataExtenso(boletim.data, locale)}</p>
+                            <p className="text-xs uppercase tracking-[0.1em] text-slate-400 mt-0.5">
+                              {t('history.pastBulletin')}
+                            </p>
+                          </div>
+                          {ativo && <ChevronRight className="h-4 w-4 text-emerald-700 shrink-0" />}
                         </div>
-                        <ChevronRight className="h-4 w-4" />
                       </button>
                     );
                   })}
@@ -280,15 +284,20 @@ export default function BoletinsAnterioresPage() {
               </aside>
 
               {boletimSelecionado && (
-                <article className="rounded-[28px] border border-slate-200/80 bg-white/85 px-5 py-5 shadow-[0_12px_40px_rgba(15,23,42,0.05)] sm:px-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-600">
-                      <Clock3 className="w-3.5 h-3.5" />
-                      {formatarDataExtenso(boletimSelecionado.data, locale)}
-                    </span>
+                <article className="rounded-xl border border-slate-200 bg-white/90 backdrop-blur-sm shadow-sm overflow-hidden">
+                  <div className="px-6 sm:px-8 py-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
+                        <Calendar className="w-5 h-5 text-emerald-700" />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Boletim</p>
+                        <p className="text-lg font-bold text-slate-900">{formatarDataExtenso(boletimSelecionado.data, locale)}</p>
+                      </div>
+                    </div>
                     <Link
                       href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-emerald-200 hover:text-emerald-800"
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-800"
                     >
                       <ArrowLeft className="h-4 w-4" />
                       {t('history.backToCurrentShort')}
@@ -296,28 +305,35 @@ export default function BoletinsAnterioresPage() {
                   </div>
 
                   {boletimSelecionado.imagemUrl && (
-                    <img
-                      src={boletimSelecionado.imagemUrl}
-                      alt={t('history.imageAlt', {
-                        date: formatarDataExtenso(boletimSelecionado.data, locale),
-                      })}
-                      className="mt-4 w-full max-h-[24rem] rounded-2xl object-contain bg-slate-50"
-                    />
+                    <div className="px-6 sm:px-8 py-6 border-b border-slate-100">
+                      <div className="relative rounded-xl overflow-hidden bg-slate-100 shadow-sm">
+                        <img
+                          src={boletimSelecionado.imagemUrl}
+                          alt={t('history.imageAlt', {
+                            date: formatarDataExtenso(boletimSelecionado.data, locale),
+                          })}
+                          className="w-full max-h-96 object-contain"
+                        />
+                      </div>
+                    </div>
                   )}
 
-                  <div className="mt-5 space-y-0">
+                  <div className="px-6 sm:px-8 py-8 space-y-0">
                     {itensAgrupadosBoletimSelecionado.map((item, index) => (
                       <div
                         key={item.id}
-                        className={`py-4 ${index > 0 ? 'border-t border-slate-100' : ''}`}
+                        className={`py-6 ${index > 0 ? 'border-t border-slate-100' : ''}`}
                       >
-                        <p className="text-[15px] font-semibold text-slate-900 leading-6">{item.titulo}</p>
-                        <div className="space-y-1.5 mt-1.5">
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="flex items-center justify-center w-2 h-2 rounded-full bg-emerald-600 mt-2 flex-shrink-0" />
+                          <h3 className="text-lg font-black text-slate-900">{item.titulo}</h3>
+                        </div>
+                        <div className="space-y-2 ml-5">
                           {item.corpos.map((corpo, corpoIndex) =>
                             corpo ? (
                               <p
                                 key={`${item.id}-${corpoIndex}`}
-                                className="whitespace-pre-line text-[15px] leading-7 text-slate-600"
+                                className="whitespace-pre-line text-sm leading-7 text-slate-600"
                               >
                                 {corpo}
                               </p>
