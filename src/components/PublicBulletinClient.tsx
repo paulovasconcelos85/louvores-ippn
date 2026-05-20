@@ -818,7 +818,6 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             <p className="text-[15px] font-semibold leading-6 text-slate-900 sm:text-base">
               {aviso.titulo}
             </p>
-            <div>{renderBlocoTexto(aviso.corpo)}</div>
             {imagem ? (
               <Image
                 src={imagem}
@@ -826,9 +825,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 width={1200}
                 height={900}
                 unoptimized
-                className="mt-2 w-full max-h-96 rounded-[18px] border border-[#ece5d9] bg-white object-contain"
+                className="w-full max-h-96 rounded-[18px] border border-[#ece5d9] bg-white object-contain"
               />
             ) : null}
+            <div>{renderBlocoTexto(aviso.corpo)}</div>
           </div>
         );
       }
@@ -861,14 +861,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
       <header className="bg-[#17352b] text-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-6 py-5 flex items-center justify-between gap-4">
-          <div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-emerald-200/80 text-[11px] font-semibold uppercase tracking-[0.28em] mb-1">
               OIKOS Hub
             </p>
             <h1 className="text-xl font-bold text-white">{t('home.bulletinTitle')}</h1>
             {igrejaSelecionada && (
-              <p className="text-sm text-emerald-50/90 mt-1">{nomeExibicaoIgreja}</p>
+              <p className="text-sm text-emerald-50/90 mt-1 truncate">{nomeExibicaoIgreja}</p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -902,8 +902,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pt-6 sm:px-6 sm:pt-8 pb-16">
-        <section className="rounded-[30px] border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-5 py-6 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:px-7 sm:py-8">
+      <main className="max-w-6xl mx-auto px-4 pb-16 sm:px-6 sm:pt-8">
+        <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-[30px] border-b sm:border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-4 py-6 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:mt-6 sm:px-7 sm:py-8">
           <div className="space-y-5">
             <div className="space-y-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#365c4d]">{t('home.publicEdition')}</p>
@@ -921,32 +921,32 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   {enderecoFormatado || localizacao || t('home.locationUnknown')}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-wrap sm:gap-3">
                 <button
                   onClick={compartilharWhatsApp}
                   disabled={!igrejaSelecionada}
-                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-sm font-semibold px-4 py-3 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-sm font-semibold px-3 py-3 sm:px-4 sm:min-w-[160px] transition-colors"
                 >
                   <Share2 className="w-4 h-4" />
                   {t('home.shareBulletin')}
                 </button>
                 <Link
                   href={boletinsAnterioresHref}
-                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                 >
                   {t('home.pastBulletins')}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   href={recursosHref}
-                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d]"
                 >
                   <Library className="w-4 h-4" />
                   {t('home.resources')}
                 </Link>
                 <Link
                   href={pedidosPastoraisHref}
-                  className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100"
                 >
                   Pedidos
                   <ArrowRight className="w-4 h-4" />
@@ -955,7 +955,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   <button
                     type="button"
                     onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
-                    className="inline-flex items-center justify-center gap-2 min-w-[180px] rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-4 py-3 text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29]"
+                    className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-3 py-3 sm:px-4 sm:min-w-[160px] text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29]"
                   >
                     {sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}
                     <ArrowRight className={`w-4 h-4 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
@@ -967,7 +967,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </section>
 
         {user && (
-          <div className="mt-5 flex items-center gap-3 border border-blue-200 bg-[#f8fbff] px-4 py-3">
+          <div className="mt-3 sm:mt-5 -mx-4 sm:mx-0 flex items-center gap-3 border-y sm:border border-blue-200 bg-[#f8fbff] px-4 py-3 sm:rounded-xl">
             <Eye className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <p className="text-sm text-blue-700">
               Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
@@ -979,7 +979,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <section
             ref={sobreIgrejaRef}
             id="sobre-igreja"
-            className="mt-8 overflow-hidden rounded-[32px] border border-[#dfd1bf] bg-[linear-gradient(135deg,#fffaf2_0%,#f7efe1_55%,#f2e6d2_100%)] shadow-[0_18px_48px_rgba(101,72,31,0.08)]"
+            className="-mx-4 sm:mx-0 mt-4 sm:mt-8 overflow-hidden rounded-none sm:rounded-[32px] border-y sm:border border-[#dfd1bf] bg-[linear-gradient(135deg,#fffaf2_0%,#f7efe1_55%,#f2e6d2_100%)] shadow-[0_18px_48px_rgba(101,72,31,0.08)]"
           >
             <div className="grid gap-8 px-5 py-6 sm:px-7 sm:py-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:items-start">
               <div className="space-y-5">
@@ -1055,7 +1055,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         )}
 
         {!loading && (
-          <div className="mt-8 grid gap-10 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
+          <div className="mt-6 sm:mt-8 grid gap-10 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
             <section className="space-y-10">
               {boletimSecoes.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] py-24">
@@ -1302,7 +1302,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       </main>
 
       <footer className="mt-16">
-        <div className="max-w-6xl mx-auto px-5 py-8 space-y-8">
+        <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
           <div className="text-center">
           <p className="text-[11px] text-slate-400 uppercase tracking-[0.28em] font-medium">
             OIKOS Hub
