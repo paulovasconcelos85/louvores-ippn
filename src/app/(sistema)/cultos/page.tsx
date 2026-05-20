@@ -683,6 +683,9 @@ function erroBoletimEstruturadoIndisponivel(error: unknown) {
     .filter((value): value is string => typeof value === 'string')
     .join(' ');
 
+  // Erros de coluna não encontrada indicam migration pendente — não devem ser silenciados
+  if (/\bcolumn\b/i.test(text)) return false;
+
   return (
     typedError?.code === 'PGRST205' ||
     typedError?.code === '42P01' ||
@@ -691,7 +694,7 @@ function erroBoletimEstruturadoIndisponivel(error: unknown) {
     typedError?.code === '23502' && /notifications/i.test(text) ||
     typedError?.code === '23503' && /notifications/i.test(text) ||
     /boletim_(secoes|itens)/i.test(text) &&
-      /(could not find|does not exist|schema cache|relation|row-level security)/i.test(text)
+      /(does not exist|schema cache|relation|row-level security)/i.test(text)
   );
 }
 
