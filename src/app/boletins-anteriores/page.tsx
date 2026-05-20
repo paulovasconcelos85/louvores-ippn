@@ -62,6 +62,44 @@ function extrairPartesLiturgicas(conteudo: string) {
   };
 }
 
+const TIPOS_BOLETIM: Record<string, string> = {
+  avisos: 'Avisos',
+  oracao: 'Pedidos de Oração',
+  agenda: 'Agenda',
+  informativo: 'Informativo',
+  outro: 'Outros',
+};
+
+type TipoSecao = 'liturgia' | 'avisos' | 'oracao' | 'agenda' | 'informativo' | 'outro' | 'default';
+
+function classificarSecao(titulo: string): TipoSecao {
+  if (titulo === '__liturgia__:nome') return 'liturgia';
+  if (titulo.startsWith('__boletim__:')) {
+    const subtipo = titulo.slice('__boletim__:'.length);
+    if (subtipo in TIPOS_BOLETIM) return subtipo as TipoSecao;
+  }
+  return 'default';
+}
+
+function formatarTituloSecao(titulo: string): string {
+  if (titulo === '__liturgia__:nome') return 'Liturgia';
+  if (titulo.startsWith('__boletim__:')) {
+    const subtipo = titulo.slice('__boletim__:'.length);
+    return TIPOS_BOLETIM[subtipo] ?? subtipo;
+  }
+  return titulo;
+}
+
+const CORES_SECAO: Record<TipoSecao, { badge: string; dot: string; border: string }> = {
+  liturgia:    { badge: 'bg-violet-100 text-violet-700',  dot: 'bg-violet-500',  border: 'border-l-violet-400' },
+  avisos:      { badge: 'bg-amber-100 text-amber-700',    dot: 'bg-amber-500',   border: 'border-l-amber-400' },
+  oracao:      { badge: 'bg-blue-100 text-blue-700',      dot: 'bg-blue-500',    border: 'border-l-blue-400' },
+  agenda:      { badge: 'bg-teal-100 text-teal-700',      dot: 'bg-teal-500',    border: 'border-l-teal-400' },
+  informativo: { badge: 'bg-indigo-100 text-indigo-700',  dot: 'bg-indigo-500',  border: 'border-l-indigo-400' },
+  outro:       { badge: 'bg-slate-100 text-slate-600',    dot: 'bg-slate-400',   border: 'border-l-slate-300' },
+  default:     { badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-600', border: 'border-l-emerald-400' },
+};
+
 export default function BoletinsAnterioresPage() {
   const locale = useLocale();
   const t = useTranslations();
@@ -319,29 +357,36 @@ export default function BoletinsAnterioresPage() {
                   )}
 
                   <div className="px-6 sm:px-8 py-8 space-y-0">
-                    {itensAgrupadosBoletimSelecionado.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className={`py-6 ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                      >
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className="flex items-center justify-center w-2 h-2 rounded-full bg-emerald-600 mt-2 flex-shrink-0" />
-                          <h3 className="text-lg font-black text-slate-900">{item.titulo}</h3>
+                    {itensAgrupadosBoletimSelecionado.map((item, index) => {
+                      const tipo = classificarSecao(item.titulo);
+                      const cores = CORES_SECAO[tipo];
+                      const tituloFormatado = formatarTituloSecao(item.titulo);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`py-6 pl-4 border-l-4 ${cores.border} ${index > 0 ? 'mt-6 border-t border-slate-100 pt-6' : ''}`}
+                        >
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${cores.badge}`}>
+                              {tituloFormatado}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {item.corpos.map((corpo, corpoIndex) =>
+                              corpo ? (
+                                <p
+                                  key={`${item.id}-${corpoIndex}`}
+                                  className="whitespace-pre-line text-sm leading-7 text-slate-600"
+                                >
+                                  {corpo}
+                                </p>
+                              ) : null
+                            )}
+                          </div>
                         </div>
-                        <div className="space-y-2 ml-5">
-                          {item.corpos.map((corpo, corpoIndex) =>
-                            corpo ? (
-                              <p
-                                key={`${item.id}-${corpoIndex}`}
-                                className="whitespace-pre-line text-sm leading-7 text-slate-600"
-                              >
-                                {corpo}
-                              </p>
-                            ) : null
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </article>
               )}
