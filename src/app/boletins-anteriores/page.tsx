@@ -237,7 +237,7 @@ export default function BoletinsAnterioresPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="space-y-8">
           <Link
-            href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
+            href={igrejaSelecionada?.slug ? `/${igrejaSelecionada.slug}` : (igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/')}
             className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition-colors hover:text-emerald-900"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -284,7 +284,7 @@ export default function BoletinsAnterioresPage() {
                     {t('history.editions')}
                   </h2>
                   <Link
-                    href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
+                    href={igrejaSelecionada?.slug ? `/${igrejaSelecionada.slug}` : (igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/')}
                     className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition"
                   >
                     {t('history.current')}
@@ -334,7 +334,7 @@ export default function BoletinsAnterioresPage() {
                       </div>
                     </div>
                     <Link
-                      href={igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/'}
+                      href={igrejaSelecionada?.slug ? `/${igrejaSelecionada.slug}` : (igrejaAtualId ? `/?igreja_id=${igrejaAtualId}` : '/')}
                       className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-800"
                     >
                       <ArrowLeft className="h-4 w-4" />
