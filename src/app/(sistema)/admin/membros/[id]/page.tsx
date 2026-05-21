@@ -25,6 +25,7 @@ import {
 interface Membro {
   id: string;
   nome: string;
+  apelido: string | null;
   cargo: string;
   email: string | null;
   telefone: string | null;
@@ -230,6 +231,7 @@ export default function MembroDetalhesPage() {
 
   // ── Form states ──────────────────────────────────────────────────────────────
   const [nome, setNome] = useState('');
+  const [apelido, setApelido] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
   const [telefone, setTelefone] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
@@ -355,6 +357,7 @@ export default function MembroDetalhesPage() {
       setIgrejaResumo(payload.igreja || null);
       setFotoError(false);
       setNome(data.nome);
+      setApelido(data.apelido || '');
       setFotoUrl(data.foto_url || '');
       setTelefone(data.telefone ? formatPhoneNumber(data.telefone) : '');
       setDataNascimento(data.data_nascimento || '');
@@ -451,6 +454,7 @@ export default function MembroDetalhesPage() {
         headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           nome: nome.trim(),
+          apelido: apelido.trim() || null,
           foto_url: fotoUrl.trim() || null,
           telefone: telefone ? unformatPhoneNumber(telefone) : null,
           data_nascimento: dataNascimento || null,
@@ -756,7 +760,12 @@ export default function MembroDetalhesPage() {
                 )}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">{membro.nome}</h1>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  {membro.nome}
+                  {membro.apelido && (
+                    <span className="ml-2 text-xl font-medium text-slate-400">"{membro.apelido}"</span>
+                  )}
+                </h1>
                 <div className="flex items-center gap-2 mt-1 text-slate-500 text-sm">
                   {membro.sexo && (
                     <span>
@@ -877,9 +886,13 @@ export default function MembroDetalhesPage() {
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nome Completo', 'Nombre Completo', 'Full Name')} *</label>
                       <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Apelido', 'Apodo', 'Nickname')}</label>
+                      <input type="text" value={apelido} onChange={(e) => setApelido(e.target.value)} placeholder={tr('Como é conhecido(a)...', 'Cómo se le conoce...', 'Known as...')} className={inputCls} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Telefone', 'Teléfono', 'Phone')}</label>

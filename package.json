@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
@@ -28,6 +28,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.16",
+    "cross-env": "^10.1.0",
     "eslint": "^8.56.0",
     "eslint-config-next": "15.1.3",
     "postcss": "^8.4.32",

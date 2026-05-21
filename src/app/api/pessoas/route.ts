@@ -25,7 +25,7 @@ type AcessoPessoa = {
 };
 
 const PESSOA_SELECT = `
-  id, nome, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
+  id, nome, apelido, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
   criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
   endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
@@ -40,7 +40,7 @@ const PESSOA_SELECT = `
 `;
 
 const PESSOA_COM_VINCULO_SELECT = `
-  id, nome, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
+  id, nome, apelido, cargo, email, telefone, ativo, usuario_id, foto_url, observacoes,
   criado_em, atualizado_em, data_nascimento, data_casamento, data_batismo, situacao_saude,
   endereco_completo, status_membro, sexo, estado_civil, conjuge_nome, conjuge_religiao,
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,

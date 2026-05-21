@@ -21,6 +21,7 @@ import {
 interface Membro {
   id: string;
   nome: string;
+  apelido: string | null;
   cargo: string;
   email: string | null;
   telefone: string | null;
@@ -572,7 +573,10 @@ export default function PastorarMembrosPage() {
                     <div className="flex items-center gap-3">
                       <MembroAvatar nome={membro.nome} fotoUrl={membro.foto_url} />
                       <div>
-                        <p className="font-bold text-slate-900">{membro.nome}</p>
+                        <p className="font-bold text-slate-900">
+                          {membro.nome}
+                          {membro.apelido && <span className="ml-1.5 font-normal text-slate-400 text-sm">"{membro.apelido}"</span>}
+                        </p>
                         <p className="text-sm text-slate-600">
                           {calcularIdade(membro.data_nascimento)}{' '}
                           {tr('anos', 'años', 'years')}
@@ -762,7 +766,10 @@ export default function PastorarMembrosPage() {
                           <div className="flex-1 min-w-0">
                             {/* Nome e badges */}
                             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                              <h4 className="text-lg font-bold text-slate-900">{membro.nome}</h4>
+                              <h4 className="text-lg font-bold text-slate-900">
+                                {membro.nome}
+                                {membro.apelido && <span className="ml-1.5 text-base font-normal text-slate-400">"{membro.apelido}"</span>}
+                              </h4>
                               {membro.sexo && <span className="text-xs text-slate-500">{membro.sexo === 'M' ? '♂' : '♀'}</span>}
                               {ehAniversarioHoje(membro.data_nascimento) && (
                                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-pink-100 text-pink-800 border border-pink-300 flex items-center gap-1">
