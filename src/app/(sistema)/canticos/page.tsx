@@ -229,7 +229,17 @@ export default function CanticosPage() {
       permite_cadastro_canticos: data?.permite_cadastro_canticos ?? true,
     };
 
-    setConfiguracaoRepertorio(configuracao);
+    // Usa forma funcional para evitar re-render desnecessário quando valores não mudaram
+    setConfiguracaoRepertorio(prev => {
+      if (
+        prev &&
+        prev.modo_repertorio === configuracao.modo_repertorio &&
+        prev.permite_cadastro_canticos === configuracao.permite_cadastro_canticos
+      ) {
+        return prev;
+      }
+      return configuracao;
+    });
     return configuracao;
   }, []);
 
@@ -464,17 +474,14 @@ export default function CanticosPage() {
       .eq('igreja_id', igrejaId);
 
     if (!error) {
-      await fetchCanticos();
-      const canticoAtualizado = canticos.find(c => c.id === modalHolyrics.id);
-      if (canticoAtualizado) {
-        setModalHolyrics({
-          ...canticoAtualizado,
-          holyrics_paragraphs: slides,
-          holyrics_artist: holyForm.artist,
-          holyrics_key: holyForm.key,
-          holyrics_bpm: holyForm.bpm || null
-        });
-      }
+      const holyricsUpdate = {
+        holyrics_paragraphs: slides,
+        holyrics_artist: holyForm.artist,
+        holyrics_key: holyForm.key,
+        holyrics_bpm: holyForm.bpm || null,
+      };
+      setCanticos(prev => prev.map(c => c.id === modalHolyrics.id ? { ...c, ...holyricsUpdate } : c));
+      setModalHolyrics(prev => prev ? { ...prev, ...holyricsUpdate } : prev);
       alert('✅ Configuração Holyrics salva!');
     } else {
       console.error('Erro ao salvar:', error);
@@ -605,30 +612,27 @@ export default function CanticosPage() {
     }
   }, [permLoading, permissoes.podeGerenciarCanticos, router]);
 
+  // Carregamento inicial: roda apenas quando permissões ficam prontas
   useEffect(() => {
     if (permLoading || !permissoes.podeGerenciarCanticos) return;
-    let active = true;
 
     const carregar = async () => {
       const configuracao = await fetchConfiguracaoRepertorio();
-      if (!active) return;
       await fetchCanticos(configuracao);
-      if (!active) return;
       await fetchHistoricoCanticos();
     };
 
     carregar();
+    // fetchCanticos intencionalmente fora dos deps para não re-rodar ao mudar busca/filtro
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permLoading, permissoes.podeGerenciarCanticos, fetchConfiguracaoRepertorio, fetchHistoricoCanticos]);
 
-    return () => {
-      active = false;
-    };
-  }, [
-    permLoading,
-    permissoes.podeGerenciarCanticos,
-    fetchCanticos,
-    fetchConfiguracaoRepertorio,
-    fetchHistoricoCanticos,
-  ]);
+  // Re-busca apenas cânticos ao mudar busca ou filtros (sem re-carregar histórico)
+  useEffect(() => {
+    if (permLoading || !permissoes.podeGerenciarCanticos || !configuracaoRepertorio) return;
+    fetchCanticos(configuracaoRepertorio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca, filtroTags]);
 
   useEffect(() => {
     if (criandoNovo && form.nome.length > 2) {
@@ -719,16 +723,18 @@ export default function CanticosPage() {
     if (editando) {
       const { error } = await supabase.from('canticos').update(payload).eq('id', editando).eq('igreja_id', igrejaId);
       if (!error) {
-        await fetchCanticos();
+        setCanticos(prev => prev.map(c => c.id === editando ? { ...c, ...payload } : c));
         setEditando(null);
         alert('✅ Cântico atualizado!');
       } else alert('❌ Erro ao salvar.');
       return;
     }
 
-    const { error } = await supabase.from('canticos').insert(payload);
-    if (!error) {
-      await fetchCanticos();
+    const { data: novoCantico, error } = await supabase.from('canticos').insert(payload).select().single();
+    if (!error && novoCantico) {
+      setCanticos(prev =>
+        [...prev, novoCantico as Cantico].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      );
       setCriandoNovo(false);
       alert('✅ Cântico criado!');
     } else alert('❌ Erro ao criar.');
@@ -751,9 +757,9 @@ export default function CanticosPage() {
     }
 
     const { error } = await supabase.from('canticos').delete().eq('id', id).eq('igreja_id', igrejaId);
-    
+
     if (!error) {
-      await fetchCanticos();
+      setCanticos(prev => prev.filter(c => c.id !== id));
       if (editando === id) setEditando(null);
       if (expandido === id) setExpandido(null);
       alert('✅ Cântico deletado!');
