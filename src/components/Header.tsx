@@ -100,6 +100,11 @@ export default function Header() {
   const mostrarVoltar = pathname !== '/admin';
   const mostrarSeletorIgreja = igrejas.length > 1;
   const igrejaAtual = igrejas.find((igreja) => igreja.id === igrejaAtualId) || null;
+  const boletimHref = igrejaAtual?.slug
+    ? `/${igrejaAtual.slug}`
+    : igrejaAtualId
+      ? `/?igreja_id=${encodeURIComponent(igrejaAtualId)}`
+      : '/';
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-white border-b shadow-sm z-50">
@@ -131,14 +136,14 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Direita: Home + Usuário */}
+        {/* Direita: Boletim + Usuário */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push(boletimHref)}
             className="flex items-center gap-2 px-3 py-2 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium transition-colors"
           >
             <Home className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('header.home')}</span>
+            <span className="hidden sm:inline">Boletim</span>
           </button>
 
           <div className="relative">
