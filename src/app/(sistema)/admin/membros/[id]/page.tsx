@@ -198,6 +198,12 @@ function CampoInfo({
   );
 }
 
+const CURSOS_DISCIPULADO: Record<string, string> = {
+  apostila_01: 'Apostila 01 — Conhecendo a Jesus',
+  apostila_02: 'Apostila 02 — Conhecendo a Nova Vida',
+  apostila_03: 'Apostila 03 — Conhecendo a Nossa Fé',
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function MembroDetalhesPage() {
   const router = useRouter();
@@ -1192,7 +1198,10 @@ export default function MembroDetalhesPage() {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {membro.cursos_discipulado.map((curso) => (
-                          <span key={curso} className="px-3 py-1 rounded-full bg-purple-50 text-purple-800 text-xs font-medium border border-purple-200">{curso}</span>
+                          <span key={curso} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-800 text-xs font-medium border border-purple-200">
+                            <svg className="w-3 h-3 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            {CURSOS_DISCIPULADO[curso.toLowerCase()] ?? curso}
+                          </span>
                         ))}
                       </div>
                     </div>
