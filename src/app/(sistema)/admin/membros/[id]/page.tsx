@@ -267,7 +267,7 @@ export default function MembroDetalhesPage() {
   const [batizado, setBatizado] = useState(false);
   const [transferidoIpb, setTransferidoIpb] = useState(false);
   const [transferidoOutra, setTransferidoOutra] = useState('');
-  const [cursosDiscipulado, setCursosDiscipulado] = useState('');
+  const [cursosDiscipulado, setCursosDiscipulado] = useState<string[]>([]);
   const [grupoFamiliarNome, setGrupoFamiliarNome] = useState('');
   const [grupoFamiliarLider, setGrupoFamiliarLider] = useState('');
 
@@ -388,7 +388,7 @@ export default function MembroDetalhesPage() {
       setBatizado(data.batizado ?? false);
       setTransferidoIpb(data.transferido_ipb ?? false);
       setTransferidoOutra(data.transferido_outra_denominacao || '');
-      setCursosDiscipulado((data.cursos_discipulado || []).join(', '));
+      setCursosDiscipulado(data.cursos_discipulado || []);
       setGrupoFamiliarNome(data.grupo_familiar_nome || '');
       setGrupoFamiliarLider(data.grupo_familiar_lider || '');
     } catch (error) {
@@ -445,10 +445,7 @@ export default function MembroDetalhesPage() {
     setSalvando(true);
     setMensagem('');
     try {
-      const cursosArray = cursosDiscipulado
-        .split(',')
-        .map((c) => c.trim())
-        .filter(Boolean);
+      const cursosArray = cursosDiscipulado;
       const response = await fetch(`/api/pessoas/${membroId}`, {
         method: 'PATCH',
         headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
@@ -1070,8 +1067,29 @@ export default function MembroDetalhesPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Cursos de Discipulado (separados por vírgula)', 'Cursos de Discipulado (separados por coma)', 'Discipleship Courses (comma-separated)')}</label>
-                    <input type="text" value={cursosDiscipulado} onChange={(e) => setCursosDiscipulado(e.target.value)} className={inputCls} placeholder="apostila_01, apostila_02, apostila_03" />
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{tr('Cursos de Discipulado', 'Cursos de Discipulado', 'Discipleship Courses')}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(CURSOS_DISCIPULADO).map(([id, label]) => {
+                        const marcado = cursosDiscipulado.includes(id);
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setCursosDiscipulado(prev => marcado ? prev.filter(c => c !== id) : [...prev, id])}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                              marcado
+                                ? 'bg-purple-100 border-purple-400 text-purple-800'
+                                : 'bg-white border-slate-300 text-slate-600 hover:border-purple-300'
+                            }`}
+                          >
+                            {marcado && (
+                              <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            )}
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">

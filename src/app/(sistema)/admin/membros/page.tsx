@@ -98,6 +98,12 @@ function getBirthdayDateForYear(data: string | null, year: number) {
   return parsed ? new Date(year, parsed.month - 1, parsed.day) : null;
 }
 
+const CURSOS_DISCIPULADO: Record<string, string> = {
+  apostila_01: 'Ap. 01 — Conhecendo a Jesus',
+  apostila_02: 'Ap. 02 — Conhecendo a Nova Vida',
+  apostila_03: 'Ap. 03 — Conhecendo a Nossa Fé',
+};
+
 // ─── Avatar do membro ─────────────────────────────────────────────────────────
 function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: string | null; size?: 'sm' | 'md' }) {
   const [error, setError] = useState(false);
@@ -858,7 +864,10 @@ export default function PastorarMembrosPage() {
                               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                                 <BookOpen className="w-3.5 h-3.5 text-slate-400" />
                                 {membro.cursos_discipulado.map(c => (
-                                  <span key={c} className="px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200">{c}</span>
+                                  <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                                    <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    {CURSOS_DISCIPULADO[c.toLowerCase()] ?? c}
+                                  </span>
                                 ))}
                               </div>
                             )}
