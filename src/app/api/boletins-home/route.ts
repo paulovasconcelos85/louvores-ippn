@@ -182,6 +182,8 @@ interface BoletimFallbackMeta {
 const BOLETIM_FALLBACK_TIPO_PREFIX = '__boletim__:';
 const LITURGIA_META_TIPO = '__liturgia__:nome';
 const CADA_DIA_SECTION_ID = 'cada-dia-devocional';
+const ANIVERSARIANTES_SECTION_ID = 'aniversariantes-do-mes';
+const ANIVERSARIANTES_DEFAULT_TIMEZONE = 'America/Manaus';
 
 function getRequestedLocale(request: NextRequest): Locale {
   const locale = request.nextUrl.searchParams.get('locale');
@@ -586,6 +588,108 @@ async function buildCadaDiaSection(
     };
   } catch (error) {
     console.warn('Falha ao carregar devocional Cada Dia:', error);
+    return null;
+  }
+}
+
+function isAniversariantesSection(secao: LegacyBoletimSecao) {
+  return (
+    secao.id === ANIVERSARIANTES_SECTION_ID ||
+    secao.titulo.trim().toLowerCase() === 'aniversariantes do mês' ||
+    secao.titulo.trim().toLowerCase() === 'aniversariantes do mes'
+  );
+}
+
+function getCurrentMonthInTimeZone(timeZone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const month = Number(parts.find((p) => p.type === 'month')?.value);
+    if (Number.isFinite(month) && month >= 1 && month <= 12) return month;
+  } catch {
+    // fall through to default
+  }
+  return new Date().getMonth() + 1;
+}
+
+function parseMesDiaNascimento(value: string | null | undefined) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { month, day };
+}
+
+async function buildAniversariantesSection(
+  igrejaId: string,
+  timezoneBoletim: string | null | undefined,
+  secoesAtuais: LegacyBoletimSecao[]
+): Promise<LegacyBoletimSecao | null> {
+  try {
+    const timezone = timezoneBoletim?.trim() || ANIVERSARIANTES_DEFAULT_TIMEZONE;
+    const mesAtual = getCurrentMonthInTimeZone(timezone);
+
+    const { data: pessoasRaw, error } = await supabaseAdmin
+      .from('pessoas')
+      .select('nome, data_nascimento, pessoas_igrejas!inner(igreja_id, ativo, status_membro)')
+      .eq('pessoas_igrejas.igreja_id', igrejaId)
+      .eq('pessoas_igrejas.ativo', true)
+      .neq('pessoas_igrejas.status_membro', 'falecido')
+      .not('data_nascimento', 'is', null);
+
+    if (error) throw error;
+
+    const aniversariantes = (
+      (pessoasRaw || []) as Array<{ nome: string | null; data_nascimento: string | null }>
+    )
+      .map((pessoa) => {
+        const partes = parseMesDiaNascimento(pessoa.data_nascimento);
+        const nome = pessoa.nome?.trim();
+        if (!partes || !nome) return null;
+        if (partes.month !== mesAtual) return null;
+        return { dia: partes.day, nome };
+      })
+      .filter((item): item is { dia: number; nome: string } => item !== null)
+      .sort((a, b) => a.dia - b.dia || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+
+    if (aniversariantes.length === 0) return null;
+
+    const conteudo = aniversariantes
+      .map((item) => `${String(item.dia).padStart(2, '0')} · ${item.nome}`)
+      .join('\n');
+
+    const secaoExistente = secoesAtuais.find(isAniversariantesSection);
+
+    return {
+      id: ANIVERSARIANTES_SECTION_ID,
+      igreja_id: igrejaId,
+      culto_id: secaoExistente?.culto_id || null,
+      tipo: 'outro',
+      titulo: 'Aniversariantes do mês',
+      icone: null,
+      ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
+      visivel: true,
+      criado_em: null,
+      itens: [
+        {
+          id: `${ANIVERSARIANTES_SECTION_ID}-item`,
+          secao_id: ANIVERSARIANTES_SECTION_ID,
+          conteudo,
+          destaque: false,
+          ordem: 0,
+          criado_em: null,
+        },
+      ],
+    };
+  } catch (error) {
+    console.warn('Falha ao montar aniversariantes do mês:', error);
     return null;
   }
 }
@@ -1080,6 +1184,18 @@ export async function GET(request: NextRequest) {
         ...boletimSecoes.filter((secao) => !isCadaDiaSection(secao)),
         cadaDiaSection,
       ]
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+    }
+
+    etapa = 'aniversariantes-mes';
+    const aniversariantesSection = await buildAniversariantesSection(
+      igrejaId,
+      igrejaDetalhes?.timezone_boletim,
+      boletimSecoes
+    );
+    boletimSecoes = boletimSecoes.filter((secao) => !isAniversariantesSection(secao));
+    if (aniversariantesSection) {
+      boletimSecoes = [...boletimSecoes, aniversariantesSection]
         .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
     }
 
