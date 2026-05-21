@@ -18,5 +18,8 @@ export async function GET(request: NextRequest) {
 
   const res = await fetch(url.toString());
   const data = await res.json();
+  if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    console.error('[places/autocomplete] Google status:', data.status, data.error_message);
+  }
   return NextResponse.json(data);
 }
