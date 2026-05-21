@@ -994,6 +994,7 @@ export default function MembroDetalhesPage() {
                       )}
                     </p>
                     <EnderecoAutocomplete
+                      initialValue={enderecoCompletoEdit}
                       onSelect={(e: EnderecoGoogle) => {
                         setLogradouro(e.logradouro);
                         setBairro(e.bairro);
