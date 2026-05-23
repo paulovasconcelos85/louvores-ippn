@@ -58,6 +58,16 @@ export function compactLocalizedTextMap(
   return Object.keys(compacted).length > 0 ? compacted : null;
 }
 
+export function withPtFallback(
+  map: LocalizedTextMapForm,
+  fallback: string
+): LocalizedTextMapForm {
+  if (map.pt?.trim()) return map;
+  const trimmed = fallback.trim();
+  if (!trimmed) return map;
+  return { ...map, pt: trimmed };
+}
+
 export function resolveLocalizedText(
   value: unknown,
   locale: Locale,
