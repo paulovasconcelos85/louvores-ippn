@@ -12,6 +12,7 @@ import {
   createEmptyLocalizedTextMap,
   normalizeLocalizedTextMap,
   resolveLocalizedText,
+  withPtFallback,
   type LocalizedTextMapForm,
 } from '@/lib/church-i18n';
 import { jsPDF } from 'jspdf';
@@ -1305,7 +1306,8 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
       .filter(({ item }) => item.conteudo.trim().length > 0)
       .forEach(({ item, index }) => {
         const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
-        const conteudoI18n = compactLocalizedTextMap(item.conteudo_i18n);
+        const conteudoComPt = withPtFallback(item.conteudo_i18n, item.conteudo.trim());
+        const conteudoI18n = compactLocalizedTextMap(conteudoComPt);
         const meta: BoletimFallbackMeta = {
           secaoTitulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
           secaoTituloI18n: tituloI18n,
@@ -1320,7 +1322,7 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
         rows.push({
           ordem: ordem++,
           tipo: `${BOLETIM_FALLBACK_TIPO_PREFIX}${secao.tipo}`,
-          conteudo_publico: item.conteudo_i18n.pt || item.conteudo.trim(),
+          conteudo_publico: conteudoComPt.pt || item.conteudo.trim(),
           conteudo_publico_i18n: conteudoI18n,
           descricao: JSON.stringify(meta),
           horario: null,
@@ -2880,14 +2882,14 @@ function EditorBoletimDoDiaModal({
               .filter(({ item }) => item.conteudo.trim().length > 0)
               .forEach(({ item, itemIndex }) => {
                 const imagemUrl = item.imagem_url ?? null;
+                const conteudoComPt = withPtFallback(item.conteudo_i18n, item.conteudo.trim());
                 itensEstruturadosPayload.push({
                   id: crypto.randomUUID(),
                   secao_id: secaoId,
-                  conteudo: item.conteudo_i18n.pt || item.conteudo.trim(),
-                  conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
+                  conteudo: conteudoComPt.pt || item.conteudo.trim(),
+                  conteudo_i18n: compactLocalizedTextMap(conteudoComPt),
                   destaque: item.destaque,
                   ordem: itemIndex,
-                  // Omite o campo quando nulo para não quebrar em bancos sem a coluna
                   ...(imagemUrl !== null ? { imagem_url: imagemUrl } : {}),
                 });
               });
