@@ -762,6 +762,14 @@ function updateLocalizedDraftValue(
   return next;
 }
 
+function replicateLocalizedDraftValue(value: string): LocalizedTextMapForm {
+  return {
+    pt: value,
+    es: value,
+    en: value,
+  };
+}
+
 function normalizarSecoesBoletim(secoes: BoletimSecaoRascunho[]) {
   return secoes.map((secao, index) => ({
     ...secao,
@@ -2212,7 +2220,7 @@ function EditorSecaoBoletimModal({
             .filter((item) => item.descricao.trim().length > 0)
             .map((item) => {
               const conteudo = serializeAgendaConteudo(item);
-              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              const conteudoI18n = replicateLocalizedDraftValue(conteudo);
               return {
                 id: item.id,
                 conteudo: conteudoI18n.pt || conteudo,
@@ -2225,7 +2233,7 @@ function EditorSecaoBoletimModal({
               .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
               .map((item) => {
                 const conteudo = serializeAvisoConteudo(item);
-                const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+                const conteudoI18n = replicateLocalizedDraftValue(conteudo);
                 return {
                   id: item.id,
                   conteudo: conteudoI18n.pt || conteudo,
@@ -2238,7 +2246,7 @@ function EditorSecaoBoletimModal({
             .filter((item) => item.conteudo.trim().length > 0)
             .map((item) => {
               const conteudo = item.conteudo.trim();
-              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              const conteudoI18n = replicateLocalizedDraftValue(conteudo);
               return {
                 id: item.id,
                 conteudo: conteudoI18n.pt || conteudo,
@@ -2509,11 +2517,7 @@ function EditorSecaoBoletimModal({
                             ? {
                                 ...entry,
                                 conteudo: event.target.value,
-                                conteudo_i18n: updateLocalizedDraftValue(
-                                  entry.conteudo_i18n,
-                                  locale,
-                                  event.target.value
-                                ),
+                                conteudo_i18n: replicateLocalizedDraftValue(event.target.value),
                               }
                             : entry
                         );
