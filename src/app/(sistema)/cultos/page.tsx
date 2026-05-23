@@ -744,11 +744,21 @@ function updateLocalizedDraftValue(
   locale: Locale,
   value: string
 ) {
-  return {
+  const next: LocalizedTextMapForm = {
     ...createEmptyLocalizedTextMap(),
     ...(current || {}),
     [locale]: value,
   };
+
+  // A coluna legada plana (`conteudo`, `titulo`, ...) é sempre derivada do
+  // slot `pt`. Se ainda não houver texto em PT, espelhamos o que o usuário
+  // está digitando no locale atual para manter as duas colunas em sincronia
+  // — caso contrário a coluna plana acabaria contendo texto em EN/ES.
+  if (locale !== 'pt' && !next.pt.trim()) {
+    next.pt = value;
+  }
+
+  return next;
 }
 
 function normalizarSecoesBoletim(secoes: BoletimSecaoRascunho[]) {
