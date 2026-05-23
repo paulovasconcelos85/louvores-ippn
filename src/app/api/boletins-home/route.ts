@@ -1226,6 +1226,29 @@ export async function GET(request: NextRequest) {
       );
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
+    } else if (cultoAtualId !== null) {
+      etapa = 'mesclar-fallback-legado';
+      const { data: fallbackRowsRaw, error: fallbackRowsError } = await supabaseAdmin
+        .from('louvor_itens')
+        .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
+        .eq('culto_id', cultoAtualId)
+        .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`)
+        .order('ordem', { ascending: true });
+
+      if (fallbackRowsError) throw fallbackRowsError;
+
+      const tiposEstruturados = new Set(boletimSecoes.map((secao) => secao.tipo));
+      const secoesFallback = buildExtraSectionsFromFallbackRows(
+        (fallbackRowsRaw || []) as LegacyLouvorItemRow[],
+        cultoAtualId,
+        locale
+      ).filter((secao) => !tiposEstruturados.has(secao.tipo));
+
+      if (secoesFallback.length > 0) {
+        boletimSecoes = [...boletimSecoes, ...secoesFallback].sort(
+          (a, b) => (a.ordem || 0) - (b.ordem || 0)
+        );
+      }
     }
 
     etapa = 'sincronizar-liturgia';
