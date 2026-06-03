@@ -1244,8 +1244,76 @@ export async function GET(request: NextRequest) {
         locale
       ).filter((secao) => !tiposEstruturados.has(secao.tipo));
 
-      if (secoesFallback.length > 0) {
-        boletimSecoes = [...boletimSecoes, ...secoesFallback].sort(
+      // imagem_url e palavra_pastoral ficam em Louvores IPPN, não em louvor_itens.
+      // Quando existem seções estruturadas, o fallback legacy não é chamado, então
+      // precisamos injetar esses campos manualmente se ainda não houver seção desses tipos.
+      const cultoRef =
+        cultosBoletimDisponiveis.find((c) => c.palavra_pastoral?.trim() || c.imagem_url) ||
+        cultosBoletimDisponiveis[0];
+
+      const secoesFromCulto: any[] = [];
+
+      if (cultoRef?.imagem_url && !tiposEstruturados.has('imagem_tema')) {
+        secoesFromCulto.push({
+          id: `legacy-imagem-${cultoRef['Culto nr.']}`,
+          igreja_id: null,
+          culto_id: cultoRef['Culto nr.'],
+          tipo: 'imagem_tema',
+          titulo: 'Imagem do Boletim',
+          icone: null,
+          ordem: 0,
+          visivel: true,
+          criado_em: null,
+          itens: [
+            {
+              id: `legacy-imagem-conteudo-${cultoRef['Culto nr.']}`,
+              secao_id: `legacy-imagem-${cultoRef['Culto nr.']}`,
+              conteudo: cultoRef.imagem_url,
+              destaque: false,
+              ordem: 0,
+              criado_em: null,
+            },
+          ],
+        });
+      }
+
+      if (cultoRef?.palavra_pastoral?.trim() && !tiposEstruturados.has('palavra_pastoral')) {
+        const palavraPastoral = resolveLocalizedText(
+          cultoRef.palavra_pastoral_i18n,
+          locale,
+          cultoRef.palavra_pastoral || ''
+        );
+        secoesFromCulto.push({
+          id: `legacy-pastoral-${cultoRef['Culto nr.']}`,
+          igreja_id: null,
+          culto_id: cultoRef['Culto nr.'],
+          tipo: 'palavra_pastoral',
+          titulo: 'Palavra Pastoral',
+          icone: null,
+          ordem: 1,
+          visivel: true,
+          criado_em: null,
+          itens: [
+            {
+              id: `legacy-pastoral-conteudo-${cultoRef['Culto nr.']}`,
+              secao_id: `legacy-pastoral-${cultoRef['Culto nr.']}`,
+              conteudo: `${palavraPastoral.trim()}${
+                cultoRef.palavra_pastoral_autor?.trim()
+                  ? `\n\n${cultoRef.palavra_pastoral_autor.trim()}`
+                  : ''
+              }`,
+              destaque: true,
+              ordem: 0,
+              criado_em: null,
+            },
+          ],
+        });
+      }
+
+      const todasExtras = [...secoesFallback, ...secoesFromCulto];
+
+      if (todasExtras.length > 0) {
+        boletimSecoes = [...boletimSecoes, ...todasExtras].sort(
           (a, b) => (a.ordem || 0) - (b.ordem || 0)
         );
       }
