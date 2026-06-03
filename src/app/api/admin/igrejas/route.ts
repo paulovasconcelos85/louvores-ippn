@@ -68,6 +68,44 @@ type IgrejaPayload = {
   apresentacao_galeria?: string[] | null;
 };
 
+function sanitizeString(value: unknown) {
+  return typeof value === 'string' ? value.trim() || null : null;
+}
+
+function sanitizeBoolean(value: unknown, fallback = true) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function sanitizeNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeCultos(igrejaId: string, rawItems: unknown) {
+  if (!Array.isArray(rawItems)) return [];
+
+  return rawItems
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const nome = sanitizeString(row.nome);
+      const dia_semana = sanitizeString(row.dia_semana);
+      const horario = sanitizeString(row.horario);
+
+      if (!nome || !dia_semana || !horario) return null;
+
+      return {
+        id: crypto.randomUUID(),
+        igreja_id: igrejaId,
+        nome,
+        dia_semana,
+        horario,
+        descricao: sanitizeString(row.descricao),
+        ativo: sanitizeBoolean(row.ativo, true),
+        ordem: sanitizeNumber(row.ordem) ?? index + 1,
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizePais(value?: string | null) {
   const normalized = value?.trim().toUpperCase();
   if (!normalized) return 'BR';
@@ -189,8 +227,14 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
+    const cultos = normalizeCultos(data.id, body.cultos);
+    if (cultos.length > 0) {
+      const { error: cultosError } = await supabaseAdmin.from('igreja_cultos').insert(cultos);
+      if (cultosError) throw cultosError;
+    }
+
     return apiSuccess(
-      { igreja: data },
+      { igreja: data, cultos },
       {
         status: 201,
         message: 'Igreja criada com sucesso.',

@@ -124,6 +124,7 @@ function normalizeCultos(igrejaId: string, rawItems: unknown) {
       if (!nome || !dia_semana || !horario) return null;
 
       return {
+        id: crypto.randomUUID(),
         igreja_id: igrejaId,
         nome,
         dia_semana,

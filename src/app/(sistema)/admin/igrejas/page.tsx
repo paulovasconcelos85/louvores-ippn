@@ -1006,6 +1006,18 @@ export default function AdminIgrejasPage() {
       setMensagem(null);
       setErro(null);
 
+      const cultosInvalidos = form.cultos.filter((c) => !c.nome.trim());
+      if (cultosInvalidos.length > 0) {
+        setErro(
+          tr(
+            'Preencha o campo "Nome" de todos os cultos antes de salvar.',
+            'Complete el campo "Nombre" de todos los cultos antes de guardar.',
+            'Fill in the "Name" field for all services before saving.'
+          )
+        );
+        return;
+      }
+
       const payload = payloadFromForm();
       const isNew = igrejaSelecionadaId === 'new';
 
@@ -1036,6 +1048,8 @@ export default function AdminIgrejasPage() {
       if (novaIgrejaId && novaIgrejaId !== 'new') {
         setIgrejaSelecionadaId(novaIgrejaId);
       }
+
+      setForm(mapDetailToForm(data));
 
       setMensagem(
         resolveApiSuccessMessage(
