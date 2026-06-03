@@ -2988,6 +2988,21 @@ function EditorBoletimDoDiaModal({
             <p className="mt-2 text-sm leading-7 text-emerald-950/75">
               Mensagem pastoral, estudo, editorial ou reflexão do boletim deste dia.
             </p>
+
+            <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/70 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 mb-2">Formatação disponível</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] text-slate-500 font-mono">
+                <span><span className="text-emerald-700"># Título</span> → Título grande</span>
+                <span><span className="text-emerald-700">## Subtítulo</span> → Subtítulo</span>
+                <span><span className="text-emerald-700">### Menor</span> → Título menor</span>
+                <span><span className="text-emerald-700">&gt; Texto</span> → Citação/versículo</span>
+                <span><span className="text-emerald-700">**texto**</span> → <strong>Negrito</strong></span>
+                <span><span className="text-emerald-700">*texto*</span> → <em>Itálico</em></span>
+                <span><span className="text-emerald-700">__texto__</span> → <u>Sublinhado</u></span>
+                <span className="text-slate-400">Linha em branco = parágrafo</span>
+              </div>
+            </div>
+
             <AutoResizeTextarea
               value={palavraPastoral}
               onChange={e => {

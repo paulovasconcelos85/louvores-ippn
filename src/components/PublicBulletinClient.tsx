@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -721,6 +721,92 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     };
   };
 
+  const parseInlinePastoral = (text: string): React.ReactNode => {
+    // Order matters: ** before *, __ before _
+    const regex = /(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      if (match[1])      parts.push(<strong key={match.index} className="font-bold">{match[2]}</strong>);
+      else if (match[3]) parts.push(<u key={match.index} className="underline underline-offset-2">{match[4]}</u>);
+      else if (match[5]) parts.push(<em key={match.index} className="italic">{match[6]}</em>);
+      else if (match[7]) parts.push(<em key={match.index} className="italic">{match[8]}</em>);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    if (parts.length === 0) return text;
+    if (parts.length === 1) return parts[0];
+    return <>{parts}</>;
+  };
+
+  const renderPastoralContent = (texto: string): React.ReactNode => {
+    const blocos = texto.split('\n\n');
+    const last = blocos[blocos.length - 1]?.trim() ?? '';
+    const isAutor =
+      blocos.length > 1 &&
+      last.length <= 80 &&
+      !last.includes('\n') &&
+      !last.startsWith('#') &&
+      !last.startsWith('>') &&
+      !/\*\*/.test(last);
+
+    const mainText = isAutor ? blocos.slice(0, -1).join('\n\n') : texto;
+    const autor = isAutor ? last : '';
+
+    const serifBase = "font-['Georgia','Times_New_Roman',serif]";
+
+    return (
+      <div className="space-y-3">
+        {mainText.split('\n').map((linha, i) => {
+          const v = linha.trim();
+
+          if (!v) return <div key={i} className="h-2" />;
+
+          if (v.startsWith('# ')) return (
+            <h2 key={i} className={`${serifBase} font-bold text-[21px] sm:text-[23px] leading-snug tracking-tight text-[#1e1208]`}>
+              {parseInlinePastoral(v.slice(2))}
+            </h2>
+          );
+          if (v.startsWith('## ')) return (
+            <h3 key={i} className={`${serifBase} font-bold text-[18px] sm:text-[20px] leading-snug text-[#2a1a0e]`}>
+              {parseInlinePastoral(v.slice(3))}
+            </h3>
+          );
+          if (v.startsWith('### ')) return (
+            <h4 key={i} className={`${serifBase} font-semibold text-[16px] sm:text-[18px] leading-snug text-[#3a2a1e]`}>
+              {parseInlinePastoral(v.slice(4))}
+            </h4>
+          );
+          if (v.startsWith('> ')) return (
+            <blockquote key={i} className="border-l-[3px] border-[#a07040] pl-4 py-0.5 my-1">
+              <p className={`${serifBase} italic text-[17px] sm:text-[18px] leading-8 text-[#4a3020]`}>
+                {parseInlinePastoral(v.slice(2))}
+              </p>
+            </blockquote>
+          );
+
+          return (
+            <p key={i} className={`${serifBase} text-[17px] sm:text-[18px] leading-[1.9] text-[#2a1a0e] whitespace-pre-line`}>
+              {parseInlinePastoral(v)}
+            </p>
+          );
+        })}
+
+        {autor && (
+          <div className="mt-2 pt-3 border-t border-[#d5c8b0] flex items-center justify-end gap-2">
+            <p className={`${serifBase} italic text-[14px] sm:text-[15px] text-[#7a5c40]`}>
+              — {autor}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderBlocoTexto = (
     texto: string,
     tone: 'default' | 'emphasis' | 'muted' = 'default'
@@ -872,11 +958,12 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       }
     }
 
+    if (isPastoralSection(secao)) {
+      return renderPastoralContent(conteudo);
+    }
+
     if (!isLiturgiaSection(secao)) {
-      return renderBlocoTexto(
-        conteudo,
-        isPastoralSection(secao) ? 'emphasis' : 'default'
-      );
+      return renderBlocoTexto(conteudo);
     }
 
     const [titulo, ...restante] = conteudo.split('\n');
@@ -1196,17 +1283,17 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       </div>
                     ) : (
                       <div
-                        className={`rounded-[22px] sm:rounded-[28px] border px-4 py-4 sm:px-6 sm:py-5 ${
+                        className={`rounded-[22px] sm:rounded-[28px] border ${
                           isPastoralSection(secao)
-                            ? 'border-[#d9d2c1] bg-[linear-gradient(180deg,#fffaf0_0%,#f8f0dc_100%)] shadow-[0_10px_30px_rgba(95,74,35,0.08)]'
+                            ? 'border-[#cfc4a8] bg-[linear-gradient(160deg,#fffef8_0%,#fdf5e0_60%,#f9edcc_100%)] shadow-[0_12px_36px_rgba(90,60,20,0.10)]'
                             : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
-                        }`}
+                        } ${isPastoralSection(secao) ? 'px-5 py-6 sm:px-8 sm:py-7' : 'px-4 py-4 sm:px-6 sm:py-5'}`}
                       >
                         <div className="space-y-0">
                           {secao.itens.map((item, itemIndex) => (
                             <div
                               key={item.id}
-                              className={`py-3 sm:py-4 ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                              className={`${isPastoralSection(secao) ? 'py-0' : 'py-3 sm:py-4'} ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
                             >
                               {isImageSection(secao) ? (
                                 <Image
