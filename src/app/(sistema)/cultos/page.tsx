@@ -1414,11 +1414,11 @@ function buildLiturgiaMetaRow(nomeLiturgia: string, nomeLiturgiaI18n: LocalizedT
   };
 }
 
-async function uploadImagemTema(file: File, cultoNr: number): Promise<string | null> {
+async function uploadImagemTema(file: File, cultoNr: number): Promise<string> {
   const ext = file.name.split('.').pop();
   const nome = `culto-${cultoNr}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from('liturgias_thumbnails').upload(nome, file, { upsert: false });
-  if (error) return null;
+  if (error) throw new Error(`Falha ao fazer upload da imagem: ${error.message}`);
   const { data } = supabase.storage.from('liturgias_thumbnails').getPublicUrl(nome);
   return data.publicUrl;
 }
@@ -2804,10 +2804,7 @@ function EditorBoletimDoDiaModal({
           : referencia?.imagem_url || null;
 
       if (imagemUpload) {
-        const url = await uploadImagemTema(imagemUpload, cultoIds[0]);
-        if (url) {
-          imagemUrlFinal = url;
-        }
+        imagemUrlFinal = await uploadImagemTema(imagemUpload, cultoIds[0]);
       } else if (typeof imagemPreview === 'string' && !imagemPreview.startsWith('data:')) {
         imagemUrlFinal = imagemPreview;
       }
@@ -3579,10 +3576,7 @@ function EditorLiturgia({
       }
 
       if (imagemUpload) {
-        const url = await uploadImagemTema(imagemUpload, cId);
-        if (url) {
-          imagemUrl = url;
-        }
+        imagemUrl = await uploadImagemTema(imagemUpload, cId);
       }
 
       const cultoIdsMesmoDia = Array.from(
