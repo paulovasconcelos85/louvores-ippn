@@ -12,6 +12,7 @@ import {
   createEmptyLocalizedTextMap,
   normalizeLocalizedTextMap,
   resolveLocalizedText,
+  withPtFallback,
   type LocalizedTextMapForm,
 } from '@/lib/church-i18n';
 import { jsPDF } from 'jspdf';
@@ -744,10 +745,28 @@ function updateLocalizedDraftValue(
   locale: Locale,
   value: string
 ) {
-  return {
+  const next: LocalizedTextMapForm = {
     ...createEmptyLocalizedTextMap(),
     ...(current || {}),
     [locale]: value,
+  };
+
+  // A coluna legada plana (`conteudo`, `titulo`, ...) é sempre derivada do
+  // slot `pt`. Se ainda não houver texto em PT, espelhamos o que o usuário
+  // está digitando no locale atual para manter as duas colunas em sincronia
+  // — caso contrário a coluna plana acabaria contendo texto em EN/ES.
+  if (locale !== 'pt' && !next.pt.trim()) {
+    next.pt = value;
+  }
+
+  return next;
+}
+
+function replicateLocalizedDraftValue(value: string): LocalizedTextMapForm {
+  return {
+    pt: value,
+    es: value,
+    en: value,
   };
 }
 
@@ -1295,7 +1314,8 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
       .filter(({ item }) => item.conteudo.trim().length > 0)
       .forEach(({ item, index }) => {
         const tituloI18n = compactLocalizedTextMap(secao.titulo_i18n);
-        const conteudoI18n = compactLocalizedTextMap(item.conteudo_i18n);
+        const conteudoComPt = withPtFallback(item.conteudo_i18n, item.conteudo.trim());
+        const conteudoI18n = compactLocalizedTextMap(conteudoComPt);
         const meta: BoletimFallbackMeta = {
           secaoTitulo: secao.titulo_i18n.pt || secao.titulo.trim() || config.titulo,
           secaoTituloI18n: tituloI18n,
@@ -1310,7 +1330,7 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
         rows.push({
           ordem: ordem++,
           tipo: `${BOLETIM_FALLBACK_TIPO_PREFIX}${secao.tipo}`,
-          conteudo_publico: item.conteudo_i18n.pt || item.conteudo.trim(),
+          conteudo_publico: conteudoComPt.pt || item.conteudo.trim(),
           conteudo_publico_i18n: conteudoI18n,
           descricao: JSON.stringify(meta),
           horario: null,
@@ -2200,7 +2220,7 @@ function EditorSecaoBoletimModal({
             .filter((item) => item.descricao.trim().length > 0)
             .map((item) => {
               const conteudo = serializeAgendaConteudo(item);
-              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              const conteudoI18n = replicateLocalizedDraftValue(conteudo);
               return {
                 id: item.id,
                 conteudo: conteudoI18n.pt || conteudo,
@@ -2213,7 +2233,7 @@ function EditorSecaoBoletimModal({
               .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
               .map((item) => {
                 const conteudo = serializeAvisoConteudo(item);
-                const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+                const conteudoI18n = replicateLocalizedDraftValue(conteudo);
                 return {
                   id: item.id,
                   conteudo: conteudoI18n.pt || conteudo,
@@ -2226,7 +2246,7 @@ function EditorSecaoBoletimModal({
             .filter((item) => item.conteudo.trim().length > 0)
             .map((item) => {
               const conteudo = item.conteudo.trim();
-              const conteudoI18n = updateLocalizedDraftValue(item.conteudo_i18n, locale, conteudo);
+              const conteudoI18n = replicateLocalizedDraftValue(conteudo);
               return {
                 id: item.id,
                 conteudo: conteudoI18n.pt || conteudo,
@@ -2497,11 +2517,7 @@ function EditorSecaoBoletimModal({
                             ? {
                                 ...entry,
                                 conteudo: event.target.value,
-                                conteudo_i18n: updateLocalizedDraftValue(
-                                  entry.conteudo_i18n,
-                                  locale,
-                                  event.target.value
-                                ),
+                                conteudo_i18n: replicateLocalizedDraftValue(event.target.value),
                               }
                             : entry
                         );
@@ -2870,14 +2886,14 @@ function EditorBoletimDoDiaModal({
               .filter(({ item }) => item.conteudo.trim().length > 0)
               .forEach(({ item, itemIndex }) => {
                 const imagemUrl = item.imagem_url ?? null;
+                const conteudoComPt = withPtFallback(item.conteudo_i18n, item.conteudo.trim());
                 itensEstruturadosPayload.push({
                   id: crypto.randomUUID(),
                   secao_id: secaoId,
-                  conteudo: item.conteudo_i18n.pt || item.conteudo.trim(),
-                  conteudo_i18n: compactLocalizedTextMap(item.conteudo_i18n),
+                  conteudo: conteudoComPt.pt || item.conteudo.trim(),
+                  conteudo_i18n: compactLocalizedTextMap(conteudoComPt),
                   destaque: item.destaque,
                   ordem: itemIndex,
-                  // Omite o campo quando nulo para não quebrar em bancos sem a coluna
                   ...(imagemUrl !== null ? { imagem_url: imagemUrl } : {}),
                 });
               });
