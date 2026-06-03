@@ -1261,7 +1261,7 @@ export async function GET(request: NextRequest) {
           tipo: 'imagem_tema',
           titulo: 'Imagem do Boletim',
           icone: null,
-          ordem: 0,
+          ordem: -2,
           visivel: true,
           criado_em: null,
           itens: [
@@ -1290,7 +1290,7 @@ export async function GET(request: NextRequest) {
           tipo: 'palavra_pastoral',
           titulo: 'Palavra Pastoral',
           icone: null,
-          ordem: 1,
+          ordem: -1,
           visivel: true,
           criado_em: null,
           itens: [
