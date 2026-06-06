@@ -1439,8 +1439,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
       {canticoAbertoRef && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4 backdrop-blur-sm">
-          <div className="max-h-[95vh] sm:max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[20px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
-            <div className="flex items-start justify-between gap-3 border-b border-[#ece5d9] px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex max-h-[95vh] sm:max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[20px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
+            <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-[#ece5d9] px-4 py-3 sm:px-6 sm:py-4">
               <div className="space-y-1 min-w-0 flex-1">
                 <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-[#365c4d]">
                   {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
@@ -1462,7 +1462,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               </button>
             </div>
 
-            <div className="max-h-[calc(95vh-80px)] sm:max-h-[calc(90vh-88px)] overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6">
               {loadingCantico ? (
                 <p className="text-sm text-slate-500">Carregando letra...</p>
               ) : !canticoAberto?.letra ? (

@@ -41,6 +41,8 @@ function htmlToText(html: string) {
       .replace(/<[^>]+>/g, ' ')
   )
     .replace(/\r/g, '')
+    .replace(/\u2028/g, ' ')
+    .replace(/\u2029/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n[ \t]+/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
