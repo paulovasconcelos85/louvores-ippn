@@ -177,13 +177,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!telefone || telefone.length < 10) {
-      return NextResponse.json(
-        { error: 'Preencha um telefone válido com DDD.' },
-        { status: 400 }
-      );
-    }
-
     let pessoaExistente:
       | {
           id: string;
@@ -191,15 +184,17 @@ export async function POST(request: NextRequest) {
         }
       | null = null;
 
-    const porTelefone = await supabaseAdmin
-      .from('pessoas')
-      .select('id, usuario_id')
-      .eq('telefone', telefone)
-      .maybeSingle();
+    if (telefone) {
+      const porTelefone = await supabaseAdmin
+        .from('pessoas')
+        .select('id, usuario_id')
+        .eq('telefone', telefone)
+        .maybeSingle();
 
-    if (porTelefone.error) throw porTelefone.error;
-    if (porTelefone.data) {
-      pessoaExistente = porTelefone.data;
+      if (porTelefone.error) throw porTelefone.error;
+      if (porTelefone.data) {
+        pessoaExistente = porTelefone.data;
+      }
     }
 
     if (!pessoaExistente && email) {
@@ -215,23 +210,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!pessoaExistente) {
-      const porNome = await supabaseAdmin
-        .from('pessoas')
-        .select('id, usuario_id')
-        .ilike('nome', nome)
-        .maybeSingle();
-
-      if (porNome.error) throw porNome.error;
-      if (porNome.data) {
-        pessoaExistente = porNome.data;
-      }
-    }
-
     const now = new Date().toISOString();
     const payloadPessoa: Record<string, unknown> = {
       nome,
-      telefone,
+      telefone: telefone || null,
       sexo: nullableString(body.sexo),
       status_membro: statusMembro,
       data_nascimento: nullableString(body.data_nascimento),

@@ -13,7 +13,7 @@ import type { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import {
   User, MapPin, Heart, Church, BookOpen, Home,
   Briefcase, GraduationCap, Users, Check, ChevronRight,
-  ChevronLeft, AlertCircle, Shield, Info, UserCheck,
+  ChevronLeft, AlertCircle, Shield, Info, UserCheck, Plus, X,
 } from 'lucide-react';
 
 type IgrejaCadastro = {
@@ -31,6 +31,38 @@ type IgrejaCadastro = {
 
 type StatusMembro = 'ativo' | 'congregado' | 'visitante';
 type OpcaoCongregado = 'batizado_outra' | 'transferencia_ipb' | 'interesse_batismo' | '';
+
+type FilhoForm = {
+  id: string;
+  nome: string;
+  statusMembro: StatusMembro | '';
+  sexo: string;
+  dataNascimento: string;
+  naturalidadeCidade: string;
+  naturalidadeUf: string;
+  escolaridade: string;
+  dataBatismo: string;
+  dataProfissaoFe: string;
+  grupoFamiliarNome: string;
+  cursosSelecionados: string[];
+};
+
+function criarFilhoVazio(): FilhoForm {
+  return {
+    id: Math.random().toString(36).slice(2),
+    nome: '',
+    statusMembro: '',
+    sexo: '',
+    dataNascimento: '',
+    naturalidadeCidade: '',
+    naturalidadeUf: '',
+    escolaridade: '',
+    dataBatismo: '',
+    dataProfissaoFe: '',
+    grupoFamiliarNome: '',
+    cursosSelecionados: [],
+  };
+}
 
 const inputCls = 'w-full px-4 py-3.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent transition-colors text-slate-900 placeholder:text-slate-400 bg-white text-base';
 const selectCls = 'w-full px-4 py-3.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent transition-colors text-slate-900 bg-white text-base';
@@ -83,6 +115,7 @@ function CadastroPublicoContent() {
   const [nomeEnviado, setNomeEnviado] = useState('');
   const [igrejaSelecionada, setIgrejaSelecionada] = useState<IgrejaCadastro | null>(null);
   const [loadingIgreja, setLoadingIgreja] = useState(true);
+  const [apresentacaoAberta, setApresentacaoAberta] = useState(false);
 
   // Etapa 1
   const [nome, setNome] = useState('');
@@ -121,6 +154,16 @@ function CadastroPublicoContent() {
   // Etapa 5
   const [situacaoSaude, setSituacaoSaude] = useState('');
   const [observacoes, setObservacoes] = useState('');
+
+  // Cadastro de filhos (após sucesso)
+  const [enderecoSalvo, setEnderecoSalvo] = useState<EnderecoGoogle | null>(null);
+  const [complementoSalvo, setComplementoSalvo] = useState('');
+  const [cadastrandoFilhos, setCadastrandoFilhos] = useState(false);
+  const [filhos, setFilhos] = useState<FilhoForm[]>([criarFilhoVazio()]);
+  const [salvandoFilhos, setSalvandoFilhos] = useState(false);
+  const [erroFilhos, setErroFilhos] = useState('');
+  const [filhosConcluidos, setFilhosConcluidos] = useState(false);
+  const [qtdFilhosSalvos, setQtdFilhosSalvos] = useState(0);
 
   const ehVisitante = statusMembro === 'visitante';
   const etapasVisiveis = ehVisitante
@@ -279,16 +322,6 @@ function CadastroPublicoContent() {
         setErro(tr('Preencha seu nome completo.', 'Completa tu nombre completo.', 'Please fill in your full name.'));
         return;
       }
-      if (!telefone || unformatPhoneNumber(telefone).length < 10) {
-        setErro(
-          tr(
-            'Preencha um telefone válido com DDD.',
-            'Completa un teléfono válido con código de área.',
-            'Please provide a valid phone number with area code.'
-          )
-        );
-        return;
-      }
       if (!statusMembro) {
         setErro(
           tr(
@@ -312,6 +345,93 @@ function CadastroPublicoContent() {
 
   const toggleCurso = (id: string) =>
     setCursosSelecionados(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+
+  const atualizarFilho = (idx: number, campo: keyof FilhoForm, valor: string | string[]) =>
+    setFilhos(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
+
+  const toggleCursoFilho = (idx: number, cursoId: string) =>
+    setFilhos(prev => prev.map((f, i) => {
+      if (i !== idx) return f;
+      const novos = f.cursosSelecionados.includes(cursoId)
+        ? f.cursosSelecionados.filter(c => c !== cursoId)
+        : [...f.cursosSelecionados, cursoId];
+      return { ...f, cursosSelecionados: novos };
+    }));
+
+  const removerFilho = (idx: number) =>
+    setFilhos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
+
+  const adicionarFilho = () => setFilhos(prev => [...prev, criarFilhoVazio()]);
+
+  const salvarFilhos = async () => {
+    setSalvandoFilhos(true);
+    setErroFilhos('');
+    try {
+      if (!igrejaSelecionada?.id) {
+        setErroFilhos(tr('Igreja não encontrada.', 'Iglesia no encontrada.', 'Church not found.'));
+        return;
+      }
+      const filhosValidos = filhos.filter(f => f.nome.trim());
+      if (filhosValidos.length === 0) {
+        setErroFilhos(tr('Preencha o nome de pelo menos um filho(a).', 'Completa el nombre de al menos un hijo(a).', 'Fill in the name of at least one child.'));
+        return;
+      }
+      const nomeResponsavel = nome.trim();
+      for (const filho of filhosValidos) {
+        const payload = {
+          igreja_id: igrejaSelecionada.id,
+          nome: filho.nome.trim(),
+          telefone: null,
+          sexo: filho.sexo || null,
+          status_membro: filho.statusMembro || 'visitante',
+          data_nascimento: filho.dataNascimento || null,
+          email: null,
+          logradouro: enderecoSalvo?.logradouro || null,
+          bairro: enderecoSalvo?.bairro || null,
+          cep: enderecoSalvo?.cep || null,
+          cidade: enderecoSalvo?.cidade || igrejaSelecionada.cidade || 'Manaus',
+          uf: enderecoSalvo?.uf || igrejaSelecionada.uf || 'AM',
+          latitude: enderecoSalvo?.latitude || null,
+          longitude: enderecoSalvo?.longitude || null,
+          google_place_id: enderecoSalvo?.google_place_id || null,
+          endereco_completo: complementoSalvo
+            ? `${enderecoSalvo?.endereco_completo || ''}, ${complementoSalvo}`.replace(/^,\s*/, '')
+            : enderecoSalvo?.endereco_completo || null,
+          nome_pai: sexo === 'M' ? nomeResponsavel : null,
+          nome_mae: sexo === 'F' ? nomeResponsavel : null,
+          estado_civil: null,
+          naturalidade_cidade: filho.naturalidadeCidade || null,
+          naturalidade_uf: filho.naturalidadeUf || null,
+          profissao: null,
+          escolaridade: filho.escolaridade || null,
+          batizado: filho.statusMembro === 'ativo' || Boolean(filho.dataBatismo),
+          data_batismo: filho.dataBatismo || null,
+          data_profissao_fe: filho.dataProfissaoFe || null,
+          cursos_discipulado: filho.cursosSelecionados.length > 0 ? filho.cursosSelecionados : null,
+          grupo_familiar_nome: filho.grupoFamiliarNome || null,
+          ativo: true,
+          cargo: 'membro',
+          atualizado_em: new Date().toISOString(),
+        };
+        const res = await fetch('/api/cadastro-publico', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || tr('Erro ao cadastrar filho(a).', 'Error al registrar hijo(a).', 'Error registering child.'));
+        }
+      }
+      setQtdFilhosSalvos(filhosValidos.length);
+      setFilhosConcluidos(true);
+      scroll();
+    } catch (err: any) {
+      setErroFilhos(err.message || tr('Ocorreu um erro ao cadastrar os filhos.', 'Ocurrió un error al registrar a los hijos.', 'An error occurred while registering the children.'));
+    } finally {
+      setSalvandoFilhos(false);
+    }
+  };
 
   const salvar = async () => {
     setSalvando(true); setErro('');
@@ -367,6 +487,8 @@ function CadastroPublicoContent() {
         });
       }
 
+      setEnderecoSalvo(endereco);
+      setComplementoSalvo(complemento);
       setNomeEnviado(nome.trim().split(' ')[0]); setSucesso(true); scroll();
     } catch (err: any) {
       console.error(err);
@@ -400,37 +522,236 @@ function CadastroPublicoContent() {
   };
 
   if (sucesso) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-sm w-full text-center">
-        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
-          <Check className="w-10 h-10 text-emerald-700" />
+    <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-10 bg-emerald-900 shadow-md">
+        <div className="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Church className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-white leading-tight">{nomeIgreja}</h1>
+            <p className="text-xs text-emerald-300">{tr('Formulário de Cadastro', 'Formulario de registro', 'Registration Form')}</p>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">
-          {tr(`Obrigado, ${nomeEnviado}! 🙏`, `¡Gracias, ${nomeEnviado}! 🙏`, `Thank you, ${nomeEnviado}! 🙏`)}
-        </h2>
-        <p className="text-slate-600 leading-relaxed mb-5">
-          {tr(
-            `Seus dados foram recebidos com sucesso por ${nomeIgreja}.`,
-            `Tus datos fueron recibidos con éxito por ${nomeIgreja}.`,
-            `Your information was successfully received by ${nomeIgreja}.`
-          )}
-          <br />
-          {tr(
-            'Que o Senhor abençoe você e sua família!',
-            '¡Que el Señor bendiga tu vida y tu familia!',
-            'May the Lord bless you and your family!'
-          )}
-        </p>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left">
-          <p className="text-sm text-emerald-900 flex items-start gap-2">
-            <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-700" />
-            {tr(
-              'Suas informações são sigilosas e acessadas apenas pela liderança pastoral da igreja selecionada.',
-              'Tu información es confidencial y solo accede a ella el liderazgo pastoral de la iglesia seleccionada.',
-              'Your information is confidential and only accessed by the pastoral leadership of the selected church.'
-            )}
+      </header>
+
+      <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
+        {/* Sucesso principal */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-7 text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-emerald-700" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-1.5">
+            {tr(`Obrigado, ${nomeEnviado}! 🙏`, `¡Gracias, ${nomeEnviado}! 🙏`, `Thank you, ${nomeEnviado}! 🙏`)}
+          </h2>
+          <p className="text-slate-600 leading-relaxed mb-4 text-sm">
+            {tr(`Seus dados foram recebidos com sucesso por ${nomeIgreja}.`, `Tus datos fueron recibidos con éxito por ${nomeIgreja}.`, `Your information was successfully received by ${nomeIgreja}.`)}
           </p>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-left">
+            <p className="text-sm text-emerald-900 flex items-start gap-2">
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-700" />
+              {tr('Suas informações são sigilosas e acessadas apenas pela liderança pastoral.', 'Tu información es confidencial y solo accede a ella el liderazgo pastoral.', 'Your information is confidential and only accessed by the pastoral leadership.')}
+            </p>
+          </div>
         </div>
+
+        {/* Prompt para cadastrar filhos */}
+        {!filhosConcluidos && !cadastrandoFilhos && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-5 py-4 flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-base">{tr('Tem filhos na igreja?', '¿Tiene hijos en la iglesia?', 'Do you have children in the church?')}</h3>
+                <p className="text-blue-200 text-xs">{tr('Aproveite para cadastrá-los agora', 'Aprovecha para registrarlos ahora', 'Take the opportunity to register them now')}</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-slate-600">
+                {tr(
+                  'Cadastre seus filhos rapidamente. O endereço e o nome do responsável já serão preenchidos automaticamente.',
+                  'Registra a tus hijos rápidamente. La dirección y el nombre del responsable se completarán automáticamente.',
+                  'Register your children quickly. The address and guardian name will be filled in automatically.'
+                )}
+              </p>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setCadastrandoFilhos(true)}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors text-sm">
+                  <Plus className="w-4 h-4" /> {tr('Cadastrar filhos', 'Registrar hijos', 'Register children')}
+                </button>
+                <button type="button" onClick={() => setFilhosConcluidos(true)}
+                  className="px-4 py-3 border border-slate-200 text-slate-500 rounded-lg text-sm hover:bg-slate-50 transition-colors">
+                  {tr('Pular', 'Saltar', 'Skip')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Formulários de filhos */}
+        {!filhosConcluidos && cadastrandoFilhos && (<>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <p className="text-sm text-blue-900">
+              <strong>{tr('Cadastro de filhos', 'Registro de hijos', 'Children registration')}</strong>{' '}
+              {tr('— Endereço e responsável herdados do seu cadastro.', '— Dirección y responsable heredados de tu registro.', '— Address and guardian inherited from your registration.')}
+            </p>
+          </div>
+
+          {filhos.map((filho, idx) => (
+            <div key={filho.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-5 py-3.5 flex items-center justify-between">
+                <span className="text-white font-bold text-sm">{tr(`Filho(a) ${idx + 1}`, `Hijo(a) ${idx + 1}`, `Child ${idx + 1}`)}</span>
+                {filhos.length > 1 && (
+                  <button type="button" onClick={() => removerFilho(idx)}
+                    className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors">
+                    <X className="w-3.5 h-3.5 text-white" />
+                  </button>
+                )}
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{tr('Nome completo', 'Nombre completo', 'Full name')} <span className="text-red-500">*</span></label>
+                  <input type="text" value={filho.nome} onChange={e => atualizarFilho(idx, 'nome', e.target.value)} placeholder={tr('Nome do(a) filho(a)', 'Nombre del hijo(a)', "Child's full name")} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{tr('Como frequenta a igreja?', '¿Cómo asiste a la iglesia?', 'How do they attend?')} <span className="text-red-500">*</span></label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { v: 'ativo' as StatusMembro, l: tr('Membro', 'Miembro', 'Member') },
+                      { v: 'congregado' as StatusMembro, l: tr('Congregado', 'Congregante', 'Congregant') },
+                      { v: 'visitante' as StatusMembro, l: tr('Visitante', 'Visitante', 'Visitor') },
+                    ]).map(op => (
+                      <button key={op.v} type="button" onClick={() => atualizarFilho(idx, 'statusMembro', op.v)}
+                        className={`py-2.5 rounded-lg border-2 text-xs font-semibold transition-all ${filho.statusMembro === op.v ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-600 bg-white hover:border-slate-300'}`}>
+                        {op.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{tr('Sexo', 'Sexo', 'Sex')}</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([{ v: '', l: tr('N/I', 'N/I', 'N/I') }, { v: 'M', l: tr('Masc.', 'Masc.', 'Male') }, { v: 'F', l: tr('Fem.', 'Fem.', 'Female') }]).map(op => (
+                      <button key={op.v} type="button" onClick={() => atualizarFilho(idx, 'sexo', op.v)}
+                        className={`py-2.5 rounded-lg border-2 text-xs font-semibold transition-all ${filho.sexo === op.v ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-600 bg-white hover:border-slate-300'}`}>
+                        {op.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">🎂 {tr('Data de Nascimento', 'Fecha de nacimiento', 'Date of birth')}</label>
+                  <input type="date" value={filho.dataNascimento} onChange={e => atualizarFilho(idx, 'dataNascimento', e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{tr('Naturalidade', 'Lugar de nacimiento', 'Place of birth')}</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <input type="text" value={filho.naturalidadeCidade} onChange={e => atualizarFilho(idx, 'naturalidadeCidade', e.target.value)} placeholder={tr('Cidade natal', 'Ciudad natal', 'Birth city')} className={inputCls} />
+                    </div>
+                    <input type="text" maxLength={2} value={filho.naturalidadeUf} onChange={e => atualizarFilho(idx, 'naturalidadeUf', e.target.value.toUpperCase())} placeholder="UF" className={inputCls} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4" /> {tr('Escolaridade', 'Nivel educativo', 'Education')}
+                  </label>
+                  <select value={filho.escolaridade} onChange={e => atualizarFilho(idx, 'escolaridade', e.target.value)} className={selectCls}>
+                    <option value="">{tr('Não informada', 'No informado', 'Not informed')}</option>
+                    <option value="fundamental_incompleto">{tr('Fund. Incompleto', 'Primaria incompleta', 'Elementary incomplete')}</option>
+                    <option value="fundamental_completo">{tr('Fund. Completo', 'Primaria completa', 'Elementary complete')}</option>
+                    <option value="medio_incompleto">{tr('Médio Incompleto', 'Secundaria incompleta', 'High school incomplete')}</option>
+                    <option value="medio_completo">{tr('Médio Completo', 'Secundaria completa', 'High school complete')}</option>
+                    <option value="superior_incompleto">{tr('Superior Incompleto', 'Universidad incompleta', 'College incomplete')}</option>
+                    <option value="superior_completo">{tr('Superior Completo', 'Universidad completa', 'College complete')}</option>
+                    <option value="pos_graduacao">{tr('Pós-Graduação', 'Posgrado', 'Postgraduate')}</option>
+                    <option value="mestrado">{tr('Mestrado', 'Maestría', "Master's")}</option>
+                    <option value="doutorado">{tr('Doutorado', 'Doctorado', 'Doctorate')}</option>
+                  </select>
+                </div>
+                {(filho.statusMembro === 'ativo' || filho.statusMembro === 'congregado') && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">✝️ {tr('Data do Batismo', 'Fecha de bautismo', 'Baptism date')}</label>
+                      <input type="date" value={filho.dataBatismo} onChange={e => atualizarFilho(idx, 'dataBatismo', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">🙏 {tr('Data de Profissão de Fé', 'Fecha de profesión de fe', 'Profession of faith date')}</label>
+                      <input type="date" value={filho.dataProfissaoFe} onChange={e => atualizarFilho(idx, 'dataProfissaoFe', e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                      <Home className="w-4 h-4" /> {tr('Grupo Familiar', 'Grupo familiar', 'Family group')}
+                    </label>
+                    <input type="text" value={filho.grupoFamiliarNome} onChange={e => atualizarFilho(idx, 'grupoFamiliarNome', e.target.value)} placeholder={tr('Nome do grupo', 'Nombre del grupo', 'Group name')} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                      <BookOpen className="w-4 h-4" /> {tr('Cursos de Discipulado concluídos', 'Cursos de discipulado completados', 'Completed discipleship courses')}
+                    </label>
+                    <div className="space-y-1.5 mt-2">
+                      {cursos.map(c => (
+                        <CheckOption key={c.id} checked={filho.cursosSelecionados.includes(c.id)} onChange={() => toggleCursoFilho(idx, c.id)}>
+                          {c.label}
+                        </CheckOption>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button type="button" onClick={adicionarFilho}
+            className="w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-blue-300 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-colors text-sm">
+            <Plus className="w-4 h-4" /> {tr('Adicionar outro filho(a)', 'Agregar otro hijo(a)', 'Add another child')}
+          </button>
+
+          {erroFilhos && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800">{erroFilhos}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setFilhosConcluidos(true)}
+              className="px-5 py-3.5 border-2 border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-50 transition-colors text-sm">
+              {tr('Pular', 'Saltar', 'Skip')}
+            </button>
+            <button type="button" onClick={salvarFilhos} disabled={salvandoFilhos}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 text-sm">
+              {salvandoFilhos
+                ? <><span className="animate-spin inline-block w-4 h-4 border-b-2 border-white rounded-full" /> {tr('Salvando...', 'Guardando...', 'Saving...')}</>
+                : <><Check className="w-4 h-4" /> {tr('Salvar filhos', 'Guardar hijos', 'Save children')}</>}
+            </button>
+          </div>
+        </>)}
+
+        {/* Confirmação de filhos salvos */}
+        {filhosConcluidos && qtdFilhosSalvos > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Users className="w-6 h-6 text-blue-600" />
+            </div>
+            <p className="font-bold text-slate-900 mb-1">
+              {tr(
+                qtdFilhosSalvos === 1 ? '1 filho(a) cadastrado(a) com sucesso!' : `${qtdFilhosSalvos} filhos cadastrados com sucesso!`,
+                qtdFilhosSalvos === 1 ? '¡1 hijo(a) registrado(a) con éxito!' : `¡${qtdFilhosSalvos} hijos registrados con éxito!`,
+                qtdFilhosSalvos === 1 ? '1 child registered successfully!' : `${qtdFilhosSalvos} children registered successfully!`,
+              )}
+            </p>
+            <p className="text-sm text-slate-500">{tr('Que o Senhor abençoe toda a sua família!', '¡Que el Señor bendiga a toda tu familia!', 'May the Lord bless your entire family!')}</p>
+          </div>
+        )}
+
+        <p className="text-center text-xs text-slate-400 pb-6 flex items-center justify-center gap-1.5">
+          <Shield className="w-3.5 h-3.5" /> {tr('Dados protegidos · Uso exclusivo para fins pastorais', 'Datos protegidos · Uso exclusivo para fines pastorales', 'Protected data · For pastoral use only')}
+        </p>
       </div>
     </div>
   );
@@ -470,16 +791,23 @@ function CadastroPublicoContent() {
 
         {!loadingIgreja && igrejaSelecionada && temApresentacaoIgreja && (
           <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-[linear-gradient(135deg,#f5fbf7_0%,#edf7f1_100%)] shadow-sm">
-            <div className="border-b border-emerald-100 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
-                {tr('Conheça a igreja', 'Conoce la iglesia', 'Meet the church')}
-              </p>
-              <h2 className="mt-2 text-lg font-bold text-slate-900">
-                {apresentacaoTitulo || nomeIgreja}
-              </h2>
-            </div>
-            {paragrafosApresentacao.length > 0 && (
-              <div className="space-y-3 px-4 py-4 text-sm leading-relaxed text-slate-700">
+            <button
+              type="button"
+              onClick={() => setApresentacaoAberta(a => !a)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left"
+            >
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                  {tr('Conheça a igreja', 'Conoce la iglesia', 'Meet the church')}
+                </p>
+                <h2 className="mt-1 text-base font-bold text-slate-900">
+                  {apresentacaoTitulo || nomeIgreja}
+                </h2>
+              </div>
+              <ChevronRight className={`w-4 h-4 text-emerald-600 flex-shrink-0 ml-3 transition-transform ${apresentacaoAberta ? 'rotate-90' : ''}`} />
+            </button>
+            {apresentacaoAberta && paragrafosApresentacao.length > 0 && (
+              <div className="border-t border-emerald-100 space-y-3 px-4 py-4 text-sm leading-relaxed text-slate-700">
                 {paragrafosApresentacao.map((paragrafo, index) => (
                   <p key={`${index}-${paragrafo.slice(0, 24)}`}>{paragrafo}</p>
                 ))}
@@ -560,18 +888,21 @@ function CadastroPublicoContent() {
                 <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder={tr('Seu nome completo', 'Tu nombre completo', 'Your full name')} autoFocus className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">📱 {tr('Telefone / WhatsApp', 'Teléfono / WhatsApp', 'Phone / WhatsApp')} <span className="text-red-500">*</span></label>
-                <input 
-                  type="tel" 
-                  value={telefone} 
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  📱 {tr('Telefone / WhatsApp', 'Teléfono / WhatsApp', 'Phone / WhatsApp')}{' '}
+                  <span className="text-slate-400 text-xs font-normal">{tr('(opcional)', '(opcional)', '(optional)')}</span>
+                </label>
+                <input
+                  type="tel"
+                  value={telefone}
                   onChange={e => {
                     const formatado = formatPhoneNumber(e.target.value);
                     if (formatado.length <= 15) setTelefone(formatado);
-                  }} 
-                  placeholder={tr('(92) 99999-9999', '(92) 99999-9999', '(92) 99999-9999')} 
-                  className={inputCls} 
+                  }}
+                  placeholder={tr('(92) 99999-9999', '(92) 99999-9999', '(92) 99999-9999')}
+                  className={inputCls}
                 />
-                <p className="mt-1.5 text-xs text-slate-400">{tr('Usado para contato pela liderança. Não compartilhamos com terceiros.', 'Se usa para contacto con el liderazgo. No lo compartimos con terceros.', 'Used for contact by the leadership. We do not share it with third parties.')}</p>
+                <p className="mt-1.5 text-xs text-slate-400">{tr('Se informado, usado para contato pela liderança. Não compartilhamos com terceiros.', 'Si se proporciona, se usa para contacto con el liderazgo. No lo compartimos con terceros.', 'If provided, used for contact by leadership. We do not share it with third parties.')}</p>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">{tr('Como você frequenta', 'Cómo asistes a', 'How do you attend')} {igrejaSelecionada?.nome_abreviado || thisChurchLabel}? <span className="text-red-500">*</span></label>
