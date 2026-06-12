@@ -383,6 +383,32 @@ export default function PastorarMembrosPage() {
     window.location.href = `tel:${telefone}`;
   };
 
+  const excluirMembro = async (membro: Membro) => {
+    const confirmar = window.confirm(
+      tr(
+        `Excluir o cadastro de ${membro.nome}? Esta ação não pode ser desfeita.`,
+        `¿Eliminar el registro de ${membro.nome}? Esta acción no se puede deshacer.`,
+        `Delete ${membro.nome}'s registration? This cannot be undone.`
+      )
+    );
+    if (!confirmar) return;
+
+    const igrejaId = getStoredChurchId();
+    const params = new URLSearchParams();
+    if (igrejaId) params.set('igreja_id', igrejaId);
+
+    const res = await fetch(`/api/pessoas/${membro.id}?${params}`, { method: 'DELETE' });
+    const payload = await res.json();
+
+    if (!res.ok) {
+      setMensagem(payload?.message || tr('Erro ao excluir cadastro.', 'Error al eliminar el registro.', 'Error deleting record.'));
+      return;
+    }
+
+    setMensagem(payload?.message || tr('Cadastro excluído.', 'Registro eliminado.', 'Record deleted.'));
+    setMembros(prev => prev.filter(m => m.id !== membro.id));
+  };
+
   if (totalLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -996,15 +1022,6 @@ export default function PastorarMembrosPage() {
                             )}
                           </div>
 
-                          {/* Cursos de discipulado */}
-                          {membro.cursos_discipulado && membro.cursos_discipulado.length > 0 && (
-                            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                              <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-                              {membro.cursos_discipulado.map(c => (
-                                <span key={c} className="px-2 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200">{c}</span>
-                              ))}
-                            </div>
-                          )}
                         </div>
 
                         {/* Ações */}
@@ -1022,6 +1039,12 @@ export default function PastorarMembrosPage() {
                             className="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-xs font-medium">
                             {tr('Detalhes', 'Detalles', 'Details')}
                           </button>
+                          {permissoes.podeGerenciarUsuarios && (
+                            <button onClick={e => { e.stopPropagation(); excluirMembro(membro); }}
+                              className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-medium">
+                              {tr('Excluir', 'Eliminar', 'Delete')}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
