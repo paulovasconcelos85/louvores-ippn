@@ -796,7 +796,7 @@ async function buildAniversariantesSection(
       .select('nome, data_nascimento, pessoas_igrejas!inner(igreja_id, ativo, status_membro)')
       .eq('pessoas_igrejas.igreja_id', igrejaId)
       .eq('pessoas_igrejas.ativo', true)
-      .neq('pessoas_igrejas.status_membro', 'falecido')
+      .in('pessoas_igrejas.status_membro', ['ativo', 'congregado'])
       .not('data_nascimento', 'is', null);
 
     if (error) throw error;
