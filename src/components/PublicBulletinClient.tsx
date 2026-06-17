@@ -7,14 +7,16 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   CalendarDays,
+  Check,
+  Copy,
   ExternalLink,
   Eye,
   Globe,
   Library,
   MapPin,
+  MessageCircle,
   Music,
   Phone,
-  Share2,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -355,6 +357,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [canticoAberto, setCanticoAberto] = useState<CanticoModalData | null>(null);
   const [loadingCantico, setLoadingCantico] = useState(false);
   const [sobreIgrejaAberto, setSobreIgrejaAberto] = useState(false);
+  const [linkCopiado, setLinkCopiado] = useState(false);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
@@ -471,70 +474,66 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     });
   }, [sobreIgrejaAberto]);
 
-  const compartilharWhatsApp = async () => {
+  const linkBoletim = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/${igrejaSlug}`;
+  }, [igrejaSlug]);
+
+  const mensagemCompartilhamento = useMemo(() => {
+    const nomeIgreja = igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'nossa igreja';
+
+    return (
+      `📖 *Paz do Senhor!* 🙏\n\n` +
+      `Compartilho com você o boletim da *${nomeIgreja}*.\n\n` +
+      `_"Como são formosos os pés dos que anunciam coisas boas!"_ (Romanos 10.15)\n\n` +
+      `Que a Palavra de Deus edifique o seu coração nesta semana. Venha celebrar conosco a comunhão dos santos! 🕊️✨\n\n` +
+      `👉 ${linkBoletim}`
+    );
+  }, [igrejaDetalhes?.nome_completo, igrejaSelecionada?.nome, linkBoletim]);
+
+  const copiarLinkBoletim = async () => {
     if (!igrejaSelecionada) return;
 
-    let texto = `*BOLETIM ELETRONICO*\n`;
-    texto += `⛪ ${igrejaDetalhes?.nome_completo || igrejaSelecionada.nome}\n`;
+    const texto = mensagemCompartilhamento;
+    let copiado = false;
 
-    if (localizacao) {
-      texto += `📍 ${localizacao}\n`;
+    // Clipboard API moderna (requer contexto seguro: HTTPS ou localhost).
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(texto);
+        copiado = true;
+      } catch (error) {
+        console.error('Falha na Clipboard API, tentando fallback:', error);
+      }
     }
 
-    texto += '\n';
-
-    if (agendaCultos.length > 0) {
-      texto += '*AGENDA DE CULTOS*\n';
-      for (const culto of agendaCultos) {
-        texto += `• ${culto.nome} — ${culto.dia_semana} às ${culto.horario.slice(0, 5)}\n`;
+    // Fallback para contextos não seguros (ex.: acesso via HTTP em celular).
+    if (!copiado) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = texto;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copiado = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch (error) {
+        console.error('Erro ao copiar link do boletim:', error);
       }
-      texto += '\n';
     }
 
-    for (const [index, secao] of boletimSecoes.entries()) {
-      texto += `*${index + 1}. ${secao.titulo}*\n`;
-
-      if (secao.tipo === 'liturgia') {
-        const cards = agruparCardsLiturgia(secao.itens);
-
-        for (const card of cards) {
-          texto += `${getTituloCardLiturgia(card.nome)}\n`;
-
-          for (const grupo of card.grupos) {
-            texto += `${grupo.titulo}\n`;
-
-            for (const corpo of grupo.publicos) {
-              if (corpo) {
-                texto += `${corpo}\n`;
-              }
-            }
-
-            texto += '\n';
-          }
-        }
-
-        texto += '\n';
-        continue;
-      }
-
-      for (const item of secao.itens) {
-        const agenda = secao.tipo === 'agenda' ? parseAgendaBoletimItem(item.conteudo) : null;
-        const aviso = secao.tipo === 'avisos' ? parseAvisoBoletimItem(item.conteudo) : null;
-        if (agenda) {
-          texto += `- ${formatarDataAgenda(agenda.data, locale)}${agenda.temHora ? ` às ${agenda.hora}` : ''} — ${agenda.descricao}\n`;
-          continue;
-        }
-        if (aviso) {
-          texto += `${item.destaque ? '• ' : '- '}${aviso.titulo}\n${aviso.corpo}\n`;
-          continue;
-        }
-
-        texto += `${item.destaque ? '• ' : '- '}${item.conteudo}\n`;
-      }
-      texto += '\n';
+    if (copiado) {
+      setLinkCopiado(true);
+      window.setTimeout(() => setLinkCopiado(false), 2500);
     }
+  };
 
-    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+  const compartilharBoletimWhatsApp = () => {
+    if (!igrejaSelecionada) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensagemCompartilhamento)}`, '_blank');
   };
 
   useEffect(() => {
@@ -1048,12 +1047,24 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-wrap sm:gap-3">
                 <button
-                  onClick={compartilharWhatsApp}
+                  onClick={compartilharBoletimWhatsApp}
+                  disabled={!igrejaSelecionada}
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-[#25D366] hover:bg-[#1ebe5a] disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] transition-colors text-center"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">{t('home.shareWhatsApp')}</span>
+                </button>
+                <button
+                  onClick={copiarLinkBoletim}
                   disabled={!igrejaSelecionada}
                   className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] transition-colors text-center"
                 >
-                  <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{t('home.shareBulletin')}</span>
+                  {linkCopiado ? (
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  )}
+                  <span className="truncate">{linkCopiado ? t('home.linkCopied') : t('home.copyLink')}</span>
                 </button>
                 <Link
                   href={boletinsAnterioresHref}

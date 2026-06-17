@@ -68,6 +68,9 @@
     "publicBulletin": "Public bulletin",
     "locationUnknown": "Location not provided",
     "shareBulletin": "Share bulletin",
+    "shareWhatsApp": "Send on WhatsApp",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!",
     "pastBulletins": "Previous bulletins",
     "resources": "Resources"
   },
