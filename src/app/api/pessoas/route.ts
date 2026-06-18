@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
+import { getUserPermissionContext } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
 // Cliente Supabase Admin
@@ -31,7 +31,7 @@ const PESSOA_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token,
   usuarios_tags(
     tag_id,
     nivel_habilidade,
@@ -46,7 +46,7 @@ const PESSOA_COM_VINCULO_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token,
   pessoas_igrejas!inner(
     igreja_id,
     cargo,
@@ -111,8 +111,7 @@ export async function GET(request: NextRequest) {
     const tem_acesso = searchParams.get('tem_acesso'); // true/false
     const cargo = searchParams.get('cargo'); // musico, pastor, etc
     const busca = searchParams.get('busca'); // busca por nome/email
-    const igrejaParam = searchParams.get('igreja_id');
-    const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaParam, request);
+    const igrejaId = permissionContext.igrejaId;
 
     if (!igrejaId) {
       return apiSuccess({
@@ -295,11 +294,11 @@ export async function POST(request: NextRequest) {
       ativo = true,
       observacoes,
       status_membro = 'ativo',
-      igreja_id: igrejaBodyId,
       ...restoDados
     } = body;
     delete restoDados.tem_acesso;
-    const igrejaId = await resolveAuthorizedCurrentIgrejaId(igrejaBodyId, request);
+    delete restoDados.igreja_id;
+    const igrejaId = permissionContext.igrejaId;
 
     // Validações
     if (!nome || !cargo) {

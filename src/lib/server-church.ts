@@ -210,17 +210,14 @@ export async function resolveCurrentIgrejaId(preferredIgrejaId?: string | null, 
   );
 }
 
-export async function resolveAuthorizedCurrentIgrejaId(
-  preferredIgrejaId?: string | null,
-  request?: Request | null
+// Resolve a igreja autorizada a partir de user/acesso JÁ carregados, evitando
+// revalidar o token e repetir o lookup de usuarios_acesso.
+async function resolveIgrejaIdForUserAccess(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  user: { email?: string | null },
+  acesso: UsuarioAcessoBasico | null,
+  preferredIgrejaId?: string | null
 ) {
-  const user = await getAuthenticatedUser(request);
-  if (!user?.id) return null;
-
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
-
   const ehSuperAdmin = isSuperAdmin(user.email);
 
   if (!acesso) {
@@ -243,6 +240,19 @@ export async function resolveAuthorizedCurrentIgrejaId(
   return [...igrejaIds][0] || null;
 }
 
+export async function resolveAuthorizedCurrentIgrejaId(
+  preferredIgrejaId?: string | null,
+  request?: Request | null
+) {
+  const user = await getAuthenticatedUser(request);
+  if (!user?.id) return null;
+
+  const supabaseAdmin = getSupabaseAdmin();
+  const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
+
+  return resolveIgrejaIdForUserAccess(supabaseAdmin, user, acesso, preferredIgrejaId);
+}
+
 export async function getUserPermissionContext(
   preferredIgrejaId?: string | null,
   request?: Request | null
@@ -251,10 +261,10 @@ export async function getUserPermissionContext(
   if (!user?.id) return null;
 
   const supabaseAdmin = getSupabaseAdmin();
-  const igrejaId = await resolveAuthorizedCurrentIgrejaId(preferredIgrejaId, request);
-  const ehSuperAdmin = isSuperAdmin(user.email);
-
+  // user + acesso resolvidos uma única vez e reaproveitados na resolução da igreja.
   const acesso = await findUsuarioAcessoByAuthOrEmail(supabaseAdmin, user.id, user.email);
+  const igrejaId = await resolveIgrejaIdForUserAccess(supabaseAdmin, user, acesso, preferredIgrejaId);
+  const ehSuperAdmin = isSuperAdmin(user.email);
 
   let cargo: string | null = ehSuperAdmin ? 'superadmin' : null;
 

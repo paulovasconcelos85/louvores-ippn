@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoCor } from '@/lib/permissions';
@@ -19,8 +19,9 @@ import {
   ArrowLeft, Save, Phone, Mail, MapPin, Calendar, Heart,
   AlertCircle, MessageSquare, Plus, Edit2, Trash2, User,
   Cake, Church, Clock, Briefcase, GraduationCap, Home,
-  Users, BookOpen, Globe, Flag, ChevronDown, ChevronUp, Camera,
+  Users, BookOpen, Globe, Flag, ChevronDown, ChevronUp, Camera, Send, Copy,
 } from 'lucide-react';
+import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
 
 interface Membro {
   id: string;
@@ -64,6 +65,7 @@ interface Membro {
   cursos_discipulado: string[] | null;
   grupo_familiar_nome: string | null;
   grupo_familiar_lider: string | null;
+  cadastro_token: string | null;
 }
 
 interface NotaPastoral {
@@ -205,11 +207,33 @@ const CURSOS_DISCIPULADO: Record<string, string> = {
   apostila_03: 'Apostila 03 — Conhecendo a Nossa Fé',
 };
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-export default function MembroDetalhesPage() {
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface MembroDetalheProps {
+  membroId: string;
+  /** Quando embutido (ex.: split view), evita o wrapper de tela cheia. */
+  embutido?: boolean;
+  /** Dados já conhecidos (ex.: cache da lista) para render imediato sem spinner. */
+  membroInicial?: Partial<Membro> | null;
+  /** Ação do botão "voltar". Padrão: navega para /admin/membros. */
+  onVoltar?: () => void;
+  /** Chamado após salvar alterações com sucesso (para a lista se atualizar). */
+  onAtualizado?: () => void;
+  /** Navega para outro membro (ex.: via relacionamentos). Padrão: router.push. */
+  onNavegarMembro?: (id: string) => void;
+}
+
+// ─── Componente ───────────────────────────────────────────────────────────────
+export default function MembroDetalhe({
+  membroId,
+  embutido = false,
+  membroInicial = null,
+  onVoltar,
+  onAtualizado,
+  onNavegarMembro,
+}: MembroDetalheProps) {
   const router = useRouter();
-  const params = useParams();
-  const membroId = params?.id as string;
+  const voltar = onVoltar ?? (() => router.push('/admin/membros'));
+  const navegarMembro = onNavegarMembro ?? ((id: string) => router.push(`/admin/membros/${id}`));
   const locale = useLocale();
   const intlLocale = getIntlLocale(locale);
   const { user } = useAuth();
@@ -220,9 +244,11 @@ export default function MembroDetalhesPage() {
     [locale]
   );
 
-  const [membro, setMembro] = useState<Membro | null>(null);
+  const [membro, setMembro] = useState<Membro | null>(
+    () => (membroInicial ? (membroInicial as Membro) : null)
+  );
   const [notas, setNotas] = useState<NotaPastoral[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!membroInicial);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
   const [modoEdicao, setModoEdicao] = useState(false);
@@ -520,6 +546,7 @@ export default function MembroDetalhesPage() {
       );
       setModoEdicao(false);
       carregarMembro();
+      onAtualizado?.();
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
       setMensagem(error.message || tr(
@@ -689,11 +716,32 @@ export default function MembroDetalhesPage() {
     window.location.href = `tel:${membro.telefone}`;
   };
 
+  const pedirCadastro = () => {
+    if (!membro?.cadastro_token) {
+      setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
+      return;
+    }
+    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token);
+  };
+
+  const copiarLinkCadastro = async () => {
+    if (!membro?.cadastro_token) {
+      setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(buildCompletarCadastroUrl(membro.cadastro_token));
+      setMensagem(tr('Link de cadastro copiado com sucesso!', '¡Enlace copiado con éxito!', 'Registration link copied successfully!'));
+    } catch {
+      setMensagem(tr('Não foi possível copiar o link.', 'No se pudo copiar el enlace.', 'Could not copy the link.'));
+    }
+  };
+
   const inputCls = 'w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 
-  if (loading) {
+  if (loading && !membro) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className={`${embutido ? 'min-h-[60vh]' : 'min-h-screen bg-slate-50'} flex items-center justify-center`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto" />
           <p className="mt-4 text-slate-600">
@@ -706,14 +754,14 @@ export default function MembroDetalhesPage() {
 
   if (!membro) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className={`${embutido ? 'min-h-[60vh]' : 'min-h-screen bg-slate-50'} flex items-center justify-center`}>
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <p className="text-xl font-bold text-slate-900 mb-2">
             {tr('Membro não encontrado', 'Miembro no encontrado', 'Member not found')}
           </p>
           <button
-            onClick={() => router.push('/admin/membros')}
+            onClick={voltar}
             className="text-blue-600 hover:text-blue-800 font-medium"
           >
             {tr('Voltar para lista', 'Volver a la lista', 'Back to list')}
@@ -730,13 +778,13 @@ export default function MembroDetalhesPage() {
 
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={embutido ? '' : 'min-h-screen bg-slate-50'}>
+      <main className={embutido ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/admin/membros')} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
+            <button onClick={voltar} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
               <ArrowLeft className="w-6 h-6 text-slate-600" />
             </button>
             <div className="flex items-center gap-4">
@@ -834,6 +882,31 @@ export default function MembroDetalhesPage() {
                   >
                     <Plus className="w-5 h-5" /> {tr('Nova Nota', 'Nueva Nota', 'New Note')}
                   </button>
+                </div>
+
+                {/* Link para o próprio membro completar o cadastro */}
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 mb-2">
+                    {tr(
+                      'Peça que o próprio membro complete o cadastro (e o dos filhos):',
+                      'Pide que el propio miembro complete el registro (y el de los hijos):',
+                      'Ask the member to complete their own data (and their children):'
+                    )}
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={pedirCadastro}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
+                    >
+                      <Send className="w-4 h-4" /> {tr('Pedir cadastro (WhatsApp)', 'Pedir registro (WhatsApp)', 'Request data (WhatsApp)')}
+                    </button>
+                    <button
+                      onClick={copiarLinkCadastro}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
+                    >
+                      <Copy className="w-4 h-4" /> {tr('Copiar link', 'Copiar enlace', 'Copy link')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1387,7 +1460,7 @@ export default function MembroDetalhesPage() {
               membroNome={membro.nome}
               autorId={usuarioPermitido?.id}
               podeEditar={permissoes.isSuperAdmin || ['admin', 'pastor', 'presbitero'].includes(usuarioPermitido?.cargo || '')}
-              onNavegar={(id) => router.push(`/admin/membros/${id}`)}
+              onNavegar={navegarMembro}
             />
           </div>
         </div>

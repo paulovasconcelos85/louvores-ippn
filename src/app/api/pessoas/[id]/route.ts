@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
+import { getUserPermissionContext } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
 const supabaseAdmin = createClient(
@@ -106,10 +106,9 @@ export async function GET(
       return apiError('FORBIDDEN', 403, 'Sem permissão para consultar pessoas.');
     }
 
-    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
-      request.nextUrl.searchParams.get('igreja_id'),
-      request
-    );
+    // Reaproveita a igreja já resolvida pelo permissionContext (evita revalidar
+    // o token e refazer os lookups de acesso/igreja em outra chamada).
+    const igrejaId = permissionContext.igrejaId;
 
     if (!igrejaId) {
       return apiError('CHURCH_REQUIRED', 400, 'Nenhuma igreja selecionada.');
@@ -214,11 +213,8 @@ export async function PATCH(
       return apiError('FORBIDDEN', 403, 'Sem permissão para atualizar pessoas.');
     }
 
-    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
-      body.igreja_id || request.nextUrl.searchParams.get('igreja_id'),
-      request
-    );
-    
+    const igrejaId = permissionContext.igrejaId;
+
     const {
       nome,
       cargo,
@@ -450,10 +446,7 @@ export async function DELETE(
       return apiError('FORBIDDEN', 403, 'Sem permissão para remover pessoas.');
     }
 
-    const igrejaId = await resolveAuthorizedCurrentIgrejaId(
-      request.nextUrl.searchParams.get('igreja_id'),
-      request
-    );
+    const igrejaId = permissionContext.igrejaId;
 
     // Verificar se pessoa existe
     const { data: pessoa } = await supabaseAdmin

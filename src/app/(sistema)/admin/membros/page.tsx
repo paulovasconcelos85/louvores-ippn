@@ -11,13 +11,15 @@ import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import FamiliaView from '@/components/FamiliaView';
+import MembroDetalhe from '@/components/MembroDetalhe';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
   Users, Phone, MapPin, Calendar, Heart, AlertCircle,
   Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen, Printer,
-  LayoutList, Table2,
+  LayoutList, Table2, Send, Copy,
 } from 'lucide-react';
+import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
 
 interface Membro {
   id: string;
@@ -51,6 +53,7 @@ interface Membro {
   cursos_discipulado: string[] | null;
   naturalidade_cidade: string | null;
   naturalidade_uf: string | null;
+  cadastro_token: string | null;
 }
 
 type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
@@ -106,6 +109,15 @@ const CURSOS_DISCIPULADO: Record<string, string> = {
   apostila_03: 'Ap. 03 — Conhecendo a Nossa Fé',
 };
 
+// Cache em memória dos membros já carregados, para evitar recarregar a lista
+// toda vez que o usuário sai da tela e volta. É invalidado quando a igreja muda.
+const membrosCache: {
+  carregado: boolean;
+  igrejaId: string | null;
+  membros: Membro[];
+  igreja: IgrejaResumo | null;
+} = { carregado: false, igrejaId: null, membros: [], igreja: null };
+
 // ─── Avatar do membro ─────────────────────────────────────────────────────────
 function MembroAvatar({ nome, fotoUrl, size = 'md' }: { nome: string; fotoUrl: string | null; size?: 'sm' | 'md' }) {
   const [error, setError] = useState(false);
@@ -137,13 +149,14 @@ export default function PastorarMembrosPage() {
     [locale]
   );
 
-  const [membros, setMembros] = useState<Membro[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [membros, setMembros] = useState<Membro[]>(() => membrosCache.membros);
+  const [loading, setLoading] = useState(!membrosCache.carregado);
   const [mensagem, setMensagem] = useState('');
   const [visao, setVisao] = useState<'lista' | 'tabela' | 'familia'>('lista');
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
-  const [igrejaResumo, setIgrejaResumo] = useState<IgrejaResumo | null>(null);
+  const [igrejaResumo, setIgrejaResumo] = useState<IgrejaResumo | null>(() => membrosCache.igreja);
   const [tipoListaImpressao, setTipoListaImpressao] = useState<TipoListaImpressao>('membros');
+  const [membroSelecionadoId, setMembroSelecionadoId] = useState<string | null>(null);
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -162,9 +175,9 @@ export default function PastorarMembrosPage() {
     if (!totalLoading && user && !podeAcessar) router.push('/admin');
   }, [user, totalLoading, podeAcessar, router]);
 
-  const carregarMembros = useCallback(async () => {
+  const carregarMembros = useCallback(async (silencioso = false) => {
     try {
-      setLoading(true);
+      if (!silencioso) setLoading(true);
       const params = new URLSearchParams();
       const igrejaId = getStoredChurchId();
       if (igrejaId) params.set('igreja_id', igrejaId);
@@ -188,8 +201,16 @@ export default function PastorarMembrosPage() {
         );
       }
 
-      setMembros(payload.data || []);
-      setIgrejaResumo(payload.igreja || null);
+      const dados: Membro[] = payload.data || [];
+      const igreja: IgrejaResumo | null = payload.igreja || null;
+      setMembros(dados);
+      setIgrejaResumo(igreja);
+
+      // Guarda no cache para não recarregar ao voltar para a tela
+      membrosCache.carregado = true;
+      membrosCache.igrejaId = igrejaId;
+      membrosCache.membros = dados;
+      membrosCache.igreja = igreja;
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
       setMensagem(
@@ -205,7 +226,11 @@ export default function PastorarMembrosPage() {
   }, [tr, locale]);
 
   useEffect(() => {
-    if (user && podeAcessar) void carregarMembros();
+    if (!user || !podeAcessar) return;
+    // Só recarrega se ainda não há cache ou se a igreja selecionada mudou.
+    const igrejaId = getStoredChurchId();
+    if (membrosCache.carregado && membrosCache.igrejaId === igrejaId) return;
+    void carregarMembros();
   }, [user, podeAcessar, carregarMembros]);
 
   const churchTimezone = igrejaResumo?.timezone || DEFAULT_TIMEZONE;
@@ -383,6 +408,27 @@ export default function PastorarMembrosPage() {
     window.location.href = `tel:${telefone}`;
   };
 
+  const copiarLinkCadastro = async (membro: Membro) => {
+    if (!membro.cadastro_token) {
+      setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(buildCompletarCadastroUrl(membro.cadastro_token));
+      setMensagem(tr('Link de cadastro copiado com sucesso!', '¡Enlace copiado con éxito!', 'Registration link copied successfully!'));
+    } catch {
+      setMensagem(tr('Não foi possível copiar o link.', 'No se pudo copiar el enlace.', 'Could not copy the link.'));
+    }
+  };
+
+  const pedirCadastro = (membro: Membro) => {
+    if (!membro.cadastro_token) {
+      setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
+      return;
+    }
+    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token);
+  };
+
   const excluirMembro = async (membro: Membro) => {
     const confirmar = window.confirm(
       tr(
@@ -406,7 +452,11 @@ export default function PastorarMembrosPage() {
     }
 
     setMensagem(payload?.message || tr('Cadastro excluído.', 'Registro eliminado.', 'Record deleted.'));
-    setMembros(prev => prev.filter(m => m.id !== membro.id));
+    setMembros(prev => {
+      const atualizados = prev.filter(m => m.id !== membro.id);
+      membrosCache.membros = atualizados;
+      return atualizados;
+    });
   };
 
   if (totalLoading) {
@@ -569,6 +619,63 @@ export default function PastorarMembrosPage() {
           </div>
         )}
 
+        {membroSelecionadoId ? (
+          /* ── Split view: lista compacta à esquerda + detalhe à direita ── */
+          <div className="flex flex-col lg:flex-row gap-6">
+            <aside className="hidden lg:block lg:w-72 lg:shrink-0">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
+                <div className="px-3 py-2.5 border-b border-slate-200 shrink-0">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={filtroTexto}
+                      onChange={e => setFiltroTexto(e.target.value)}
+                      placeholder={tr('Buscar...', 'Buscar...', 'Search...')}
+                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-100">
+                  {membrosFiltrados.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setMembroSelecionadoId(m.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-l-4 ${
+                        m.id === membroSelecionadoId
+                          ? 'bg-blue-50 border-blue-600'
+                          : 'border-transparent hover:bg-slate-50'
+                      } ${!m.ativo ? 'opacity-60' : ''}`}
+                    >
+                      <MembroAvatar nome={m.nome} fotoUrl={m.foto_url} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900 text-sm truncate">{m.nome}</p>
+                        <p className="text-xs text-slate-500 truncate">{getStatusLabel(m.status_membro)}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {membrosFiltrados.length === 0 && (
+                    <p className="px-3 py-6 text-center text-sm text-slate-400">
+                      {tr('Nenhum membro encontrado', 'No se encontraron miembros', 'No members found')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </aside>
+            <div className="flex-1 min-w-0">
+              <MembroDetalhe
+                key={membroSelecionadoId}
+                membroId={membroSelecionadoId}
+                embutido
+                membroInicial={membros.find(m => m.id === membroSelecionadoId) ?? null}
+                onVoltar={() => setMembroSelecionadoId(null)}
+                onNavegarMembro={(id) => setMembroSelecionadoId(id)}
+                onAtualizado={() => void carregarMembros(true)}
+              />
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Aniversariantes de Hoje */}
         {aniversariantesHoje.length > 0 && (
           <div className="bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-300 rounded-xl p-6 mb-6">
@@ -595,7 +702,7 @@ export default function PastorarMembrosPage() {
               {aniversariantesHoje.map(membro => (
                 <div key={membro.id}
                   className="bg-white rounded-lg p-4 border-2 border-pink-200 hover:border-pink-400 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/admin/membros/${membro.id}`)}>
+                  onClick={() => setMembroSelecionadoId(membro.id)}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <MembroAvatar nome={membro.nome} fotoUrl={membro.foto_url} />
@@ -793,7 +900,7 @@ export default function PastorarMembrosPage() {
                       return (
                         <tr
                           key={membro.id}
-                          onClick={() => router.push(`/admin/membros/${membro.id}`)}
+                          onClick={() => setMembroSelecionadoId(membro.id)}
                           className={`border-b border-slate-100 cursor-pointer transition-colors ${
                             !membro.ativo ? 'opacity-50' : ''
                           } ${
@@ -871,6 +978,20 @@ export default function PastorarMembrosPage() {
                               >
                                 <Phone className="w-3.5 h-3.5" />
                               </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); pedirCadastro(membro); }}
+                                title={tr('Pedir cadastro (WhatsApp)', 'Pedir registro (WhatsApp)', 'Request data (WhatsApp)')}
+                                className="p-1.5 rounded text-emerald-600 hover:bg-emerald-100"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); copiarLinkCadastro(membro); }}
+                                title={tr('Copiar link de cadastro', 'Copiar enlace', 'Copy link')}
+                                className="p-1.5 rounded text-slate-500 hover:bg-slate-100"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -891,7 +1012,7 @@ export default function PastorarMembrosPage() {
 
                   return (
                     <div key={membro.id}
-                      onClick={() => router.push(`/admin/membros/${membro.id}`)}
+                      onClick={() => setMembroSelecionadoId(membro.id)}
                       className={`border-2 rounded-lg p-4 transition-all hover:shadow-md cursor-pointer ${
                         !membro.ativo ? 'opacity-60' :
                         ehAniversarioHoje(membro.data_nascimento) ? 'border-pink-300 bg-pink-50' :
@@ -1035,9 +1156,17 @@ export default function PastorarMembrosPage() {
                             className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1.5 justify-center">
                             <Phone className="w-3.5 h-3.5" /> {tr('Ligar', 'Llamar', 'Call')}
                           </button>
-                          <button onClick={e => { e.stopPropagation(); router.push(`/admin/membros/${membro.id}`); }}
+                          <button onClick={e => { e.stopPropagation(); setMembroSelecionadoId(membro.id); }}
                             className="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-xs font-medium">
                             {tr('Detalhes', 'Detalles', 'Details')}
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); pedirCadastro(membro); }}
+                            className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-medium flex items-center gap-1.5 justify-center">
+                            <Send className="w-3.5 h-3.5" /> {tr('Pedir cadastro', 'Pedir registro', 'Request data')}
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); copiarLinkCadastro(membro); }}
+                            className="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-xs font-medium flex items-center gap-1.5 justify-center">
+                            <Copy className="w-3.5 h-3.5" /> {tr('Copiar link', 'Copiar enlace', 'Copy link')}
                           </button>
                           {permissoes.podeGerenciarUsuarios && (
                             <button onClick={e => { e.stopPropagation(); excluirMembro(membro); }}
@@ -1054,6 +1183,8 @@ export default function PastorarMembrosPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </main>
     </div>
   );
