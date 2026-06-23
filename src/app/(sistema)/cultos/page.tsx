@@ -1054,7 +1054,7 @@ async function carregarBoletimSecoesEstruturadasPorCulto(
 async function carregarUltimasSecoesBoletimPorTipo(
   igrejaId: string,
   diaAtual: string,
-  tipoDesejado: string,
+  tipoDesejado: string | null,
   locale: Locale
 ): Promise<{ secoes: BoletimSecaoRascunho[]; origemDia: string | null }> {
   const { data: cultosAnterioresRaw, error: cultosError } = await supabase
@@ -1102,7 +1102,7 @@ async function carregarUltimasSecoesBoletimPorTipo(
           .find((secoes) => secoes.length > 0)
           ?.filter(
             (secao) =>
-              secao.tipo === tipoDesejado &&
+              (tipoDesejado === null || secao.tipo === tipoDesejado) &&
               secao.itens.some((item) => item.conteudo.trim().length > 0)
           ) || [];
 
@@ -1139,7 +1139,9 @@ async function carregarUltimasSecoesBoletimPorTipo(
   for (const [dia, idsDoDia] of cultosAgrupadosPorDia.entries()) {
     const rowsDoDia = idsDoDia.flatMap((cultoId) => rowsPorCulto.get(cultoId) || []);
     const secoesDoDia = buildBoletimSecoesFromFallbackRows(rowsDoDia, locale).filter(
-      (secao) => secao.tipo === tipoDesejado && secao.itens.some((item) => item.conteudo.trim().length > 0)
+      (secao) =>
+        (tipoDesejado === null || secao.tipo === tipoDesejado) &&
+        secao.itens.some((item) => item.conteudo.trim().length > 0)
     );
 
     if (secoesDoDia.length > 0) {
@@ -2620,7 +2622,7 @@ function EditorBoletimDoDiaModal({
   const [showEscolherTipo, setShowEscolherTipo] = useState(false);
   const [tipoNovaSecao, setTipoNovaSecao] = useState<string | null>(null);
   const [secaoEditandoIndex, setSecaoEditandoIndex] = useState<number | null>(null);
-  const [pedidosOracaoReaproveitadosDe, setPedidosOracaoReaproveitadosDe] = useState<string | null>(null);
+  const [secoesReaproveitadasDe, setSecoesReaproveitadasDe] = useState<string | null>(null);
 
   const referencia = useMemo(() => getCultoBoletimReferencia(cultos), [cultos]);
   const cultoIds = useMemo(() => cultos.map((culto) => culto['Culto nr.']), [cultos]);
@@ -2642,7 +2644,7 @@ function EditorBoletimDoDiaModal({
     setImagemPreview(referencia?.imagem_url || null);
     setImagemUpload(null);
     setInstagramUrl('');
-    setPedidosOracaoReaproveitadosDe(null);
+    setSecoesReaproveitadasDe(null);
 
     const carregar = async () => {
       if (cultoIds.length === 0) {
@@ -2693,38 +2695,40 @@ function EditorBoletimDoDiaModal({
         }
 
         const secoesAtuais = normalizarSecoesBoletim(secoes);
-        const jaTemSecaoOracao = secoesAtuais.some(
-          (secao) => secao.tipo === 'oracao' && secao.itens.some((item) => item.conteudo.trim().length > 0)
-        );
-
-        if (jaTemSecaoOracao) {
-          setBoletimSecoes(secoesAtuais);
-          return;
-        }
 
         if (!igrejaId) {
           setBoletimSecoes(secoesAtuais);
           return;
         }
 
-        const { secoes: secoesReaproveitadas, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
+        const tiposJaPresentes = new Set(
+          secoesAtuais
+            .filter((secao) => secao.itens.some((item) => item.conteudo.trim().length > 0))
+            .map((secao) => secao.tipo)
+        );
+
+        const { secoes: secoesAnterior, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
           igrejaId,
           dia,
-          'oracao',
+          null,
           locale
         );
 
-        if (secoesReaproveitadas.length === 0 || !origemDia) {
+        const secoesParaAdicionar = secoesAnterior.filter(
+          (secao) => !tiposJaPresentes.has(secao.tipo)
+        );
+
+        if (secoesParaAdicionar.length === 0 || !origemDia) {
           setBoletimSecoes(secoesAtuais);
           return;
         }
 
-        setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesReaproveitadas]));
-        setPedidosOracaoReaproveitadosDe(origemDia);
+        setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesParaAdicionar]));
+        setSecoesReaproveitadasDe(origemDia);
       } catch (error) {
         console.warn('Falha ao carregar boletim do dia:', error);
         setBoletimSecoes([]);
-        setPedidosOracaoReaproveitadosDe(null);
+        setSecoesReaproveitadasDe(null);
       } finally {
         setLoadingBoletim(false);
       }
@@ -3101,10 +3105,10 @@ function EditorBoletimDoDiaModal({
               </button>
             </div>
 
-            {pedidosOracaoReaproveitadosDe ? (
+            {secoesReaproveitadasDe ? (
               <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-6 text-sky-950/80">
-                Os pedidos de oração do boletim de {formatCultoDateLabel(pedidosOracaoReaproveitadosDe)} foram
-                carregados automaticamente. Revise, retire o que saiu e acrescente o que entrou antes de salvar.
+                As seções do boletim de {formatCultoDateLabel(secoesReaproveitadasDe)} foram carregadas
+                automaticamente. Revise, retire o que saiu e acrescente o que entrou antes de salvar.
               </div>
             ) : null}
 
@@ -3487,28 +3491,35 @@ function EditorLiturgia({
       }
 
       const secoesAtuais = normalizarSecoesBoletim(secoesRascunho);
-      const jaTemSecaoOracao = secoesAtuais.some(
-        (secao) => secao.tipo === 'oracao' && secao.itens.some((item) => item.conteudo.trim().length > 0)
-      );
 
-      if (jaTemSecaoOracao || !igrejaId) {
+      if (!igrejaId) {
         setBoletimSecoes(secoesAtuais);
         return;
       }
 
-      const { secoes: secoesReaproveitadas, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
+      const tiposJaPresentes = new Set(
+        secoesAtuais
+          .filter((secao) => secao.itens.some((item) => item.conteudo.trim().length > 0))
+          .map((secao) => secao.tipo)
+      );
+
+      const { secoes: secoesAnterior, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
         igrejaId,
         dia,
-        'oracao',
+        null,
         locale
       );
 
-      if (secoesReaproveitadas.length === 0 || !origemDia) {
+      const secoesParaAdicionar = secoesAnterior.filter(
+        (secao) => !tiposJaPresentes.has(secao.tipo)
+      );
+
+      if (secoesParaAdicionar.length === 0 || !origemDia) {
         setBoletimSecoes(secoesAtuais);
         return;
       }
 
-      setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesReaproveitadas]));
+      setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesParaAdicionar]));
     } catch (error) {
       console.warn('Falha ao carregar seções extras do boletim:', error);
       setBoletimSecoes([]);
