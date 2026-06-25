@@ -681,6 +681,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
   const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
   const isAvisosSection = (secao: BoletimSecao) => secao.tipo === 'avisos';
+  const isPedidosOracaoSection = (secao: BoletimSecao) =>
+    /pedido[s]?\s*de\s*ora/i.test(secao.titulo);
   const isCadaDiaSection = (secao: BoletimSecao) =>
     secao.tipo === 'cada_dia' ||
     secao.id === 'cada-dia-devocional' ||
@@ -934,6 +936,26 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     );
   };
 
+  const renderPedidosOracaoConteudo = (conteudo: string) => {
+    const linhas = conteudo.split('\n');
+    return (
+      <div className="divide-y divide-[#e8e2d8]">
+        {linhas.map((linha, index) => {
+          const valor = linha.trim();
+          if (!valor) return null;
+          return (
+            <div key={index} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <span className="mt-[0.35rem] h-2 w-2 flex-shrink-0 rounded-full bg-[#365c4d]" />
+              <p className="text-[15px] leading-7 text-slate-700 sm:text-base break-words">
+                {parseInlineLinks(valor)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderItemConteudo = (
     secao: BoletimSecao,
     conteudo: string,
@@ -987,6 +1009,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
     if (isPastoralSection(secao)) {
       return renderPastoralContent(conteudo);
+    }
+
+    if (isPedidosOracaoSection(secao)) {
+      return renderPedidosOracaoConteudo(conteudo);
     }
 
     if (!isLiturgiaSection(secao)) {
