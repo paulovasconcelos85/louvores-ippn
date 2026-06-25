@@ -720,6 +720,34 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     };
   };
 
+  const parseInlineLinks = (text: string): React.ReactNode => {
+    const urlRegex = /(https?:\/\/[^\s,;]+)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = urlRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      parts.push(
+        <a
+          key={match.index}
+          href={match[1]}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#365c4d] underline underline-offset-2 break-all hover:text-[#2a4a3d]"
+        >
+          {match[1]}
+        </a>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    if (parts.length === 0) return text;
+    if (parts.length === 1 && typeof parts[0] === 'string') return parts[0];
+    return <>{parts}</>;
+  };
+
   const parseInlinePastoral = (text: string): React.ReactNode => {
     // Order matters: ** before *, __ before _
     const regex = /(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)/g;
@@ -728,7 +756,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+      if (match.index > lastIndex) parts.push(parseInlineLinks(text.slice(lastIndex, match.index)));
       if (match[1])      parts.push(<strong key={match.index} className="font-bold">{match[2]}</strong>);
       else if (match[3]) parts.push(<u key={match.index} className="underline underline-offset-2">{match[4]}</u>);
       else if (match[5]) parts.push(<em key={match.index} className="italic">{match[6]}</em>);
@@ -736,8 +764,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-    if (parts.length === 0) return text;
+    if (lastIndex < text.length) parts.push(parseInlineLinks(text.slice(lastIndex)));
+    if (parts.length === 0) return parseInlineLinks(text);
     if (parts.length === 1) return parts[0];
     return <>{parts}</>;
   };
@@ -858,7 +886,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 className={`${textoClassName} flex items-start gap-2 text-[15px] leading-7 sm:text-base break-words`}
               >
                 <span className="pt-[0.12rem] text-[#365c4d]">•</span>
-                <span className="flex-1 min-w-0 break-words">{itemLista}</span>
+                <span className="flex-1 min-w-0 break-words">{parseInlineLinks(itemLista)}</span>
               </p>
             );
           }
@@ -868,7 +896,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               key={`${valor}-${index}`}
               className={`${textoClassName} text-[15px] whitespace-pre-line leading-7 sm:text-base break-words`}
             >
-              {valor}
+              {parseInlineLinks(valor)}
             </p>
           );
         })}

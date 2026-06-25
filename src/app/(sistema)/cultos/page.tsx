@@ -4148,9 +4148,20 @@ export default function CultosPage() {
   const [boletimDiaEditando, setBoletimDiaEditando] = useState<{ dia: string; cultos: Culto[] } | null>(null);
   const [cultoExcluindoId, setCultoExcluindoId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paginaAnteriores, setPaginaAnteriores] = useState(0);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
   const totalLoading = loading || permLoading;
   const gruposCultos = useMemo(() => buildCultoDayGroups(cultos), [cultos]);
+
+  const GRUPOS_RECENTES = 3;
+  const GRUPOS_POR_PAGINA = 5;
+  const gruposRecentes = gruposCultos.slice(0, GRUPOS_RECENTES);
+  const gruposAnteriores = gruposCultos.slice(GRUPOS_RECENTES);
+  const totalPaginasAnteriores = Math.ceil(gruposAnteriores.length / GRUPOS_POR_PAGINA);
+  const gruposAnterioresVisiveis = gruposAnteriores.slice(
+    paginaAnteriores * GRUPOS_POR_PAGINA,
+    (paginaAnteriores + 1) * GRUPOS_POR_PAGINA
+  );
 
   useEffect(() => {
     if (!permLoading && !permissoes.podeGerenciarCultos) {
@@ -4809,7 +4820,7 @@ export default function CultosPage() {
       configuracaoIgreja={configuracaoIgreja}
       podeEditarLiturgiaCompleta={permissoes.podeEditarLiturgiaCompleta}
       podeEditarLouvor={permissoes.podeEditarLouvor}
-      onSalvo={() => { setEditando(null); setNovoDiaInicial(''); carregarTudo(); }}
+      onSalvo={() => { setEditando(null); setNovoDiaInicial(''); carregarTudo(); window.scrollTo({ top: 0 }); }}
       onCancelar={() => { setEditando(null); setNovoDiaInicial(''); }}
     />
   );
@@ -4858,7 +4869,7 @@ export default function CultosPage() {
               Nenhuma liturgia encontrada para a igreja selecionada.
             </div>
           )}
-          {gruposCultos.map((grupo) => (
+          {gruposRecentes.map((grupo) => (
             <section
               key={grupo.dia}
               className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
@@ -4948,6 +4959,7 @@ export default function CultosPage() {
                         onSalvo={() => {
                           setBoletimDiaEditando(null);
                           carregarTudo();
+                          window.scrollTo({ top: 0 });
                         }}
                       />
                     </div>
@@ -4997,6 +5009,194 @@ export default function CultosPage() {
               })()}
             </section>
           ))}
+
+          {gruposAnteriores.length > 0 && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 border-t border-slate-200" />
+                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                  Boletins anteriores
+                </p>
+                <div className="flex-1 border-t border-slate-200" />
+              </div>
+
+              {gruposAnterioresVisiveis.map((grupo) => (
+                <section
+                  key={grupo.dia}
+                  className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm opacity-90"
+                >
+                  {(() => {
+                    const boletimReferencia = getCultoBoletimReferencia(grupo.cultos);
+
+                    return (
+                      <>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                        {grupo.isDomingo ? 'Boletim do domingo' : 'Grupo do dia'}
+                      </p>
+                      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                        {formatCultoDateLabel(grupo.dia)}
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        {grupo.cultos.length === 1
+                          ? '1 liturgia cadastrada neste dia.'
+                          : `${grupo.cultos.length} liturgias cadastradas neste dia.`}
+                      </p>
+                    </div>
+
+                    {isLideranca && (
+                      <button
+                        onClick={() => { setNovoDiaInicial(grupo.dia); setEditando('novo'); }}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                      >
+                        + Nova liturgia neste dia
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    <div className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.98),rgba(255,255,255,0.98))] shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBoletimDiaEditando((atual) =>
+                            atual?.dia === grupo.dia ? null : { dia: grupo.dia, cultos: grupo.cultos }
+                          )
+                        }
+                        className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-emerald-50/80"
+                      >
+                        <div className="max-w-3xl">
+                          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
+                            Boletim compartilhado do dia
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.
+                          </p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+                              {boletimReferencia?.palavra_pastoral?.trim() ? 'Palavra pastoral preenchida' : 'Palavra pastoral vazia'}
+                            </span>
+                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+                              {boletimReferencia?.imagem_url ? 'Imagem definida' : 'Sem imagem do tema'}
+                            </span>
+                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm">
+                              {boletimDiaEditando?.dia === grupo.dia ? 'Editor aberto abaixo' : 'Editor fechado'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-3">
+                          <span className="hidden rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white lg:inline-flex">
+                            {boletimDiaEditando?.dia === grupo.dia ? 'Fechar boletim' : 'Abrir boletim'}
+                          </span>
+                          <span
+                            className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-emerald-700 shadow-sm transition-transform ${
+                              boletimDiaEditando?.dia === grupo.dia ? 'rotate-180' : ''
+                            }`}
+                          >
+                            ⌄
+                          </span>
+                        </div>
+                      </button>
+
+                      {boletimDiaEditando?.dia === grupo.dia ? (
+                        <div className="border-t border-emerald-200 bg-white/90 p-4">
+                          <EditorBoletimDoDiaModal
+                            aberto
+                            inline
+                            dia={grupo.dia}
+                            cultos={grupo.cultos}
+                            onFechar={() => setBoletimDiaEditando(null)}
+                            onSalvo={() => {
+                              setBoletimDiaEditando(null);
+                              carregarTudo();
+                              window.scrollTo({ top: 0 });
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50/65 p-4">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                            Liturgias do dia
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-slate-500">
+                            Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {grupo.cultos.map((culto, index) => (
+                          <CultoCard
+                            key={culto['Culto nr.']}
+                            culto={culto}
+                            tituloExibicao={
+                              grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : 'Liturgia única'
+                            }
+                            descricaoExibicao={
+                              grupo.cultos.length > 1
+                                ? 'Uma das liturgias deste mesmo domingo.'
+                                : 'Liturgia deste domingo.'
+                            }
+                            esconderResumoBoletim
+                            podeEditar={permissoes.podeEditarLouvor}
+                            podeExcluir={isLideranca}
+                            excluindo={cultoExcluindoId === culto['Culto nr.']}
+                            onEditar={(item: Culto) => setEditando(item)}
+                            onWhatsApp={shareWhatsApp}
+                            onPDF={sharePDF}
+                            onExcluir={deletarCulto}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                      </>
+                    );
+                  })()}
+                </section>
+              ))}
+
+              {totalPaginasAnteriores > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaginaAnteriores((p) => Math.max(0, p - 1))}
+                    disabled={paginaAnteriores === 0}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                  >
+                    ← Anterior
+                  </button>
+                  {Array.from({ length: totalPaginasAnteriores }, (_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setPaginaAnteriores(i)}
+                      className={`h-10 w-10 rounded-2xl border text-sm font-bold transition-colors ${
+                        paginaAnteriores === i
+                          ? 'border-emerald-600 bg-emerald-700 text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPaginaAnteriores((p) => Math.min(totalPaginasAnteriores - 1, p + 1))}
+                    disabled={paginaAnteriores === totalPaginasAnteriores - 1}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                  >
+                    Próximo →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
