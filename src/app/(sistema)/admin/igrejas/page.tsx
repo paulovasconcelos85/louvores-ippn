@@ -93,6 +93,7 @@ type IgrejaForm = {
   site: string;
   instagram: string;
   youtube: string;
+  logo_url: string;
   apresentacao_titulo_i18n: LocalizedTextMapForm;
   apresentacao_texto_i18n: LocalizedTextMapForm;
   apresentacao_imagem_url: string;
@@ -183,6 +184,7 @@ function criarFormularioVazio(): IgrejaForm {
     site: '',
     instagram: '',
     youtube: '',
+    logo_url: '',
     apresentacao_titulo_i18n: createEmptyLocalizedTextMap(),
     apresentacao_texto_i18n: createEmptyLocalizedTextMap(),
     apresentacao_imagem_url: '',
@@ -438,6 +440,7 @@ function mapDetailToForm(payload: any): IgrejaForm {
     site: igreja.site || '',
     instagram: igreja.instagram || '',
     youtube: igreja.youtube || '',
+    logo_url: igreja.logo_url || '',
     apresentacao_titulo_i18n: normalizeLocalizedTextMap(
       igreja.apresentacao_titulo_i18n,
       igreja.apresentacao_titulo
@@ -980,6 +983,7 @@ export default function AdminIgrejasPage() {
       site: form.site,
       instagram: form.instagram,
       youtube: form.youtube,
+      logo_url: form.logo_url,
       apresentacao_titulo: form.apresentacao_titulo_i18n.pt,
       apresentacao_texto: form.apresentacao_texto_i18n.pt,
       apresentacao_titulo_i18n: compactLocalizedTextMap(form.apresentacao_titulo_i18n),
@@ -1313,7 +1317,20 @@ export default function AdminIgrejasPage() {
                     <Input label="WhatsApp" value={form.whatsapp} onChange={(value) => updateForm('whatsapp', value)} />
                     <Input label={tr('E-mail', 'Correo electrónico', 'Email')} value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
+                    <Input
+                      label={tr('Logo da igreja', 'Logo de la iglesia', 'Church logo')}
+                      value={form.logo_url}
+                      onChange={(value) => updateForm('logo_url', value)}
+                      placeholder="https://..."
+                    />
                   </div>
+                  <p className="text-xs text-slate-500">
+                    {tr(
+                      'A logo aparece antes do nome da igreja no cabeçalho do boletim público.',
+                      'El logo aparece antes del nombre de la iglesia en el encabezado del boletín público.',
+                      'The logo appears before the church name in the public bulletin header.'
+                    )}
+                  </p>
                 </section>
 
                 <section className="space-y-5">

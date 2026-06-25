@@ -95,6 +95,7 @@ interface IgrejaDetalhes {
   instagram: string | null;
   youtube: string | null;
   whatsapp: string | null;
+  logo_url: string | null;
   horario_publicacao_boletim: string | null;
   dia_publicacao_boletim: number | null;
   timezone_boletim: string | null;
@@ -689,6 +690,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     secao.titulo.trim().toLowerCase() === 'cada dia';
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
+  const logoIgrejaUrl = igrejaDetalhes?.logo_url?.trim() || null;
 
   const boletinsAnterioresHref = igrejaAtualId
     ? `/boletins-anteriores?igreja_id=${igrejaAtualId}`
@@ -1085,13 +1087,23 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <div className="space-y-4 sm:space-y-5">
             <div className="space-y-4 sm:space-y-5">
               <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] text-[#365c4d]">{t('home.publicEdition')}</p>
-              <div className="space-y-2">
-                <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl sm:text-3xl lg:text-4xl leading-tight font-semibold text-slate-900 break-words">
-                  {nomeExibicaoIgreja}
-                </h2>
-                <p className="text-xs sm:text-sm uppercase tracking-[0.18em] sm:tracking-[0.22em] text-slate-500 break-words">
-                  {dataEdicao ? t('home.editionOf', { date: dataEdicao }) : t('home.publicBulletin')}
-                </p>
+              <div className="flex items-center gap-3 sm:gap-4">
+                {logoIgrejaUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={logoIgrejaUrl}
+                    alt={`Logo ${nomeExibicaoIgreja}`}
+                    className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-full object-cover border border-[#d8d1c4] bg-white shadow-sm"
+                  />
+                )}
+                <div className="space-y-2 min-w-0">
+                  <h2 className="font-['Georgia','Times_New_Roman',serif] text-2xl sm:text-3xl lg:text-4xl leading-tight font-semibold text-slate-900 break-words">
+                    {nomeExibicaoIgreja}
+                  </h2>
+                  <p className="text-xs sm:text-sm uppercase tracking-[0.18em] sm:tracking-[0.22em] text-slate-500 break-words">
+                    {dataEdicao ? t('home.editionOf', { date: dataEdicao }) : t('home.publicBulletin')}
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2 text-xs sm:text-sm text-slate-600">
                 <span className="inline-flex items-start gap-2 rounded-2xl sm:rounded-full border border-[#ded7cb] bg-[#faf7f0] px-3 py-1.5 text-[#365c4d] break-words">
@@ -1099,58 +1111,61 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   <span className="break-words">{enderecoFormatado || localizacao || t('home.locationUnknown')}</span>
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:flex-wrap sm:gap-3">
-                <button
-                  onClick={compartilharBoletimWhatsApp}
-                  disabled={!igrejaSelecionada}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-[#25D366] hover:bg-[#1ebe5a] disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] transition-colors text-center"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{t('home.shareWhatsApp')}</span>
-                </button>
-                <button
-                  onClick={copiarLinkBoletim}
-                  disabled={!igrejaSelecionada}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] disabled:bg-slate-300 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] transition-colors text-center"
-                >
-                  {linkCopiado ? (
-                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  )}
-                  <span className="truncate">{linkCopiado ? t('home.linkCopied') : t('home.copyLink')}</span>
-                </button>
-                <Link
-                  href={boletinsAnterioresHref}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d] text-center"
-                >
-                  <span className="truncate">{t('home.pastBulletins')}</span>
-                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                </Link>
-                <Link
-                  href={recursosHref}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fffdf8] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-slate-700 transition-colors hover:border-[#365c4d] hover:text-[#365c4d] text-center"
-                >
-                  <Library className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{t('home.resources')}</span>
-                </Link>
-                <Link
-                  href={pedidosPastoraisHref}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-100 text-center"
-                >
-                  <span className="truncate">Pedidos</span>
-                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                </Link>
-                {temApresentacaoIgreja ? (
-                  <button
-                    type="button"
-                    onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
-                    className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-[#d8d1c4] bg-[#fff7ea] px-2.5 sm:px-4 py-2.5 sm:py-3 sm:min-w-[160px] text-xs sm:text-sm font-semibold text-[#7a5123] transition-colors hover:border-[#c79a67] hover:text-[#8e5e29] text-center"
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+                  <Link
+                    href={pedidosPastoraisHref}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] px-5 py-3 text-sm sm:text-base font-semibold text-white shadow-sm transition-colors text-center sm:min-w-[180px]"
                   >
-                    <span className="truncate">{sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}</span>
-                    <ArrowRight className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
+                    <span className="truncate">Pedidos de oração</span>
+                    <ArrowRight className="w-4 h-4 flex-shrink-0" />
+                  </Link>
+                  {temApresentacaoIgreja ? (
+                    <button
+                      type="button"
+                      onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#c79a67] bg-[#fff7ea] px-5 py-3 text-sm sm:text-base font-semibold text-[#7a5123] transition-colors hover:bg-[#fceede] text-center sm:min-w-[180px]"
+                    >
+                      <span className="truncate">{sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}</span>
+                      <ArrowRight className={`w-4 h-4 flex-shrink-0 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs sm:text-[13px]">
+                  <button
+                    onClick={compartilharBoletimWhatsApp}
+                    disabled={!igrejaSelecionada}
+                    className="inline-flex items-center gap-1.5 font-medium text-slate-500 hover:text-[#365c4d] disabled:text-slate-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>{t('home.shareWhatsApp')}</span>
                   </button>
-                ) : null}
+                  <button
+                    onClick={copiarLinkBoletim}
+                    disabled={!igrejaSelecionada}
+                    className="inline-flex items-center gap-1.5 font-medium text-slate-500 hover:text-[#365c4d] disabled:text-slate-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {linkCopiado ? (
+                      <Check className="w-3.5 h-3.5 flex-shrink-0" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 flex-shrink-0" />
+                    )}
+                    <span>{linkCopiado ? t('home.linkCopied') : t('home.copyLink')}</span>
+                  </button>
+                  <Link
+                    href={boletinsAnterioresHref}
+                    className="inline-flex items-center gap-1.5 font-medium text-slate-500 hover:text-[#365c4d] transition-colors"
+                  >
+                    <span>{t('home.pastBulletins')}</span>
+                  </Link>
+                  <Link
+                    href={recursosHref}
+                    className="inline-flex items-center gap-1.5 font-medium text-slate-500 hover:text-[#365c4d] transition-colors"
+                  >
+                    <Library className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>{t('home.resources')}</span>
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

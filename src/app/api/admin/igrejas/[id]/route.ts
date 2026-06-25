@@ -101,6 +101,7 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     horario_publicacao_boletim: sanitizeString(body.horario_publicacao_boletim),
     dia_publicacao_boletim: sanitizeNumber(body.dia_publicacao_boletim),
     timezone_boletim: sanitizeString(body.timezone_boletim),
+    logo_url: sanitizeString(body.logo_url),
     apresentacao_titulo: apresentacaoTituloI18n.pt || sanitizeString(body.apresentacao_titulo),
     apresentacao_texto: apresentacaoTextoI18n.pt || sanitizeString(body.apresentacao_texto),
     apresentacao_titulo_i18n: compactLocalizedTextMap(apresentacaoTituloI18n),

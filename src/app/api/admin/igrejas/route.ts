@@ -59,6 +59,7 @@ type IgrejaPayload = {
   horario_publicacao_boletim?: string | null;
   dia_publicacao_boletim?: number | null;
   timezone_boletim?: string | null;
+  logo_url?: string | null;
   apresentacao_titulo?: string | null;
   apresentacao_texto?: string | null;
   apresentacao_titulo_i18n?: unknown;
@@ -161,6 +162,7 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
     horario_publicacao_boletim: body.horario_publicacao_boletim?.trim() || null,
     dia_publicacao_boletim: body.dia_publicacao_boletim ?? null,
     timezone_boletim: body.timezone_boletim?.trim() || null,
+    logo_url: body.logo_url?.trim() || null,
     apresentacao_titulo: apresentacaoTituloI18n.pt || body.apresentacao_titulo?.trim() || null,
     apresentacao_texto: apresentacaoTextoI18n.pt || body.apresentacao_texto?.trim() || null,
     apresentacao_titulo_i18n: compactLocalizedTextMap(apresentacaoTituloI18n),
