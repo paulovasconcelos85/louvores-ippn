@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { LocaleProvider } from '@/i18n/provider'
@@ -36,6 +37,7 @@ export default async function RootLayout({
           {children}
           <LanguageSwitcher />
         </LocaleProvider>
+        <Analytics />
       </body>
     </html>
   )
