@@ -58,19 +58,63 @@ interface Relacionamento {
 interface PessoaOpcao {
   id: string;
   nome: string;
+  sexo?: string | null;
 }
 
 interface Props {
   membroId: string;
   membroNome: string;
+  membroSexo?: string | null;
   autorId: string | undefined;
   podeEditar: boolean;
   onNavegar: (id: string) => void;
 }
 
+const INVERSO_NEUTRO: Record<TipoRelacionamento, TipoRelacionamento> = {
+  conjuge: 'conjuge',
+  pai: 'filho', mae: 'filho',
+  filho: 'pai', filha: 'pai',
+  irmao: 'irmao', irma: 'irmao',
+  avo_paterno: 'neto', avo_paterna: 'neto', avo_materno: 'neto', avo_materna: 'neto',
+  neto: 'avo_paterno', neta: 'avo_paterna',
+  cunhado: 'cunhado', cunhada: 'cunhado',
+  sogro: 'genro', sogra: 'genro',
+  genro: 'sogro', nora: 'sogro',
+  tio: 'sobrinho', tia: 'sobrinho',
+  sobrinho: 'tio', sobrinha: 'tio',
+  primo: 'primo', prima: 'primo',
+};
+
+function calcularInverso(
+  tipo: TipoRelacionamento,
+  membroSexo: string | null | undefined,
+  relSexo: string | null | undefined
+): TipoRelacionamento {
+  const mF = membroSexo === 'F';
+  const rF = relSexo === 'F';
+  switch (tipo) {
+    case 'conjuge': return 'conjuge';
+    case 'pai': case 'mae': return rF ? 'filha' : 'filho';
+    case 'filho': case 'filha': return mF ? 'mae' : 'pai';
+    case 'irmao': case 'irma': return rF ? 'irma' : 'irmao';
+    case 'avo_paterno': case 'avo_materno': return rF ? 'neta' : 'neto';
+    case 'avo_paterna': case 'avo_materna': return rF ? 'neta' : 'neto';
+    case 'neto': return mF ? 'avo_materna' : 'avo_paterno';
+    case 'neta': return mF ? 'avo_materna' : 'avo_paterna';
+    case 'cunhado': case 'cunhada': return rF ? 'cunhada' : 'cunhado';
+    case 'sogro': case 'sogra': return rF ? 'nora' : 'genro';
+    case 'genro': case 'nora': return mF ? 'sogra' : 'sogro';
+    case 'tio': case 'tia': return rF ? 'sobrinha' : 'sobrinho';
+    case 'sobrinho': case 'sobrinha': return mF ? 'tia' : 'tio';
+    case 'primo': case 'prima': return rF ? 'prima' : 'primo';
+    default: return INVERSO_NEUTRO[tipo] ?? tipo;
+  }
+}
+
 export default function RelacionamentosCard({
   membroId,
   membroNome,
+  membroSexo,
   autorId,
   podeEditar,
   onNavegar,
@@ -146,7 +190,7 @@ export default function RelacionamentosCard({
       }
 
       const pessoasMap = new Map(
-        ((pessoasPayload.data || []) as Array<Relacionamento['pessoa_relacionada']>).map((pessoa) => [pessoa.id, pessoa])
+        ((pessoasPayload.data || []) as Array<Relacionamento['pessoa_relacionada'] & { sexo?: string | null }>).map((pessoa) => [pessoa.id, pessoa])
       );
 
       const { data, error } = await supabase
@@ -221,8 +265,9 @@ export default function RelacionamentosCard({
         }
 
         setPessoas(
-          ((payload.data || []) as PessoaOpcao[])
+          ((payload.data || []) as Array<{ id: string; nome: string; sexo?: string | null }>)
             .filter((pessoa) => pessoa.id !== membroId)
+            .map((p) => ({ id: p.id, nome: p.nome, sexo: p.sexo ?? null }))
             .slice(0, 8)
         );
       } finally {
@@ -260,6 +305,18 @@ export default function RelacionamentosCard({
         }
         return;
       }
+
+      // Inserir o relacionamento inverso automaticamente
+      const tipoInverso = calcularInverso(tipoSelecionado, membroSexo, pessoaSelecionada.sexo);
+      await supabase
+        .from('relacionamentos')
+        .insert({
+          pessoa_id: pessoaSelecionada.id,
+          pessoa_relacionada_id: membroId,
+          tipo: tipoInverso,
+          criado_por: autorId ?? null,
+        });
+      // Ignoramos erro 23505 (já existe) no inverso
 
       setModalAberto(false);
       setBusca('');

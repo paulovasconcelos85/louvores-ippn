@@ -1458,6 +1458,7 @@ export default function MembroDetalhe({
             <RelacionamentosCard
               membroId={membroId}
               membroNome={membro.nome}
+              membroSexo={membro.sexo}
               autorId={usuarioPermitido?.id}
               podeEditar={permissoes.isSuperAdmin || ['admin', 'pastor', 'presbitero'].includes(usuarioPermitido?.cargo || '')}
               onNavegar={navegarMembro}

@@ -191,6 +191,18 @@ const CADA_DIA_SECTION_ID = 'cada-dia-devocional';
 const ANIVERSARIANTES_SECTION_ID = 'aniversariantes-do-mes';
 const ANIVERSARIANTES_DEFAULT_TIMEZONE = 'America/Manaus';
 
+const BODAS_NOME: Record<number, string> = {
+  1: 'Papel', 2: 'Algodão', 3: 'Couro', 4: 'Flores e Frutas',
+  5: 'Madeira', 6: 'Açúcar', 7: 'Lã', 8: 'Bronze', 9: 'Cerâmica',
+  10: 'Estanho', 11: 'Aço', 12: 'Seda', 13: 'Renda', 14: 'Marfim',
+  15: 'Cristal', 16: 'Turquesa', 17: 'Âmbar', 18: 'Turmalina',
+  19: 'Cretone', 20: 'Porcelana', 21: 'Prata Brunida',
+  22: 'Bronze Dourado', 23: 'Berílio', 24: 'Cetim', 25: 'Prata',
+  30: 'Pérola', 35: 'Coral', 40: 'Rubi', 45: 'Safira',
+  50: 'Ouro', 55: 'Esmeralda', 60: 'Diamante', 65: 'Platina',
+  70: 'Platina Dupla',
+};
+
 function getRequestedLocale(request: NextRequest): Locale {
   const locale = request.nextUrl.searchParams.get('locale');
   return SUPPORTED_LOCALES.includes(locale as Locale) ? (locale as Locale) : DEFAULT_LOCALE;
@@ -748,10 +760,13 @@ async function buildCadaDiaSection(
 }
 
 function isAniversariantesSection(secao: LegacyBoletimSecao) {
+  const t = secao.titulo.trim().toLowerCase();
   return (
     secao.id === ANIVERSARIANTES_SECTION_ID ||
-    secao.titulo.trim().toLowerCase() === 'aniversariantes do mês' ||
-    secao.titulo.trim().toLowerCase() === 'aniversariantes do mes'
+    t === 'aniversariantes do mês' ||
+    t === 'aniversariantes do mes' ||
+    t === 'aniversários do mês' ||
+    t === 'aniversários do mes'
   );
 }
 
@@ -771,6 +786,20 @@ function getCurrentMonthInTimeZone(timeZone: string) {
   return new Date().getMonth() + 1;
 }
 
+function getCurrentYearInTimeZone(timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((p) => p.type === 'year')?.value);
+    if (Number.isFinite(year) && year > 1900) return year;
+  } catch {
+    // fall through to default
+  }
+  return new Date().getFullYear();
+}
+
 function parseMesDiaNascimento(value: string | null | undefined) {
   if (!value || typeof value !== 'string') return null;
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -782,6 +811,18 @@ function parseMesDiaNascimento(value: string | null | undefined) {
   return { month, day };
 }
 
+function parseDatePartes(value: string | null | undefined) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
 async function buildAniversariantesSection(
   igrejaId: string,
   timezoneBoletim: string | null | undefined,
@@ -790,34 +831,118 @@ async function buildAniversariantesSection(
   try {
     const timezone = timezoneBoletim?.trim() || ANIVERSARIANTES_DEFAULT_TIMEZONE;
     const mesAtual = getCurrentMonthInTimeZone(timezone);
+    const anoAtual = getCurrentYearInTimeZone(timezone);
 
     const { data: pessoasRaw, error } = await supabaseAdmin
       .from('pessoas')
-      .select('nome, data_nascimento, pessoas_igrejas!inner(igreja_id, ativo, status_membro)')
+      .select('id, nome, apelido, data_nascimento, data_casamento, conjuge_nome, pessoas_igrejas!inner(igreja_id, ativo, status_membro)')
       .eq('pessoas_igrejas.igreja_id', igrejaId)
       .eq('pessoas_igrejas.ativo', true)
-      .in('pessoas_igrejas.status_membro', ['ativo', 'congregado'])
-      .not('data_nascimento', 'is', null);
+      .in('pessoas_igrejas.status_membro', ['ativo', 'congregado']);
 
     if (error) throw error;
 
-    const aniversariantes = (
-      (pessoasRaw || []) as Array<{ nome: string | null; data_nascimento: string | null }>
-    )
-      .map((pessoa) => {
-        const partes = parseMesDiaNascimento(pessoa.data_nascimento);
-        const nome = pessoa.nome?.trim();
-        if (!partes || !nome) return null;
-        if (partes.month !== mesAtual) return null;
-        return { dia: partes.day, nome };
+    type PessoaRaw = {
+      id: string;
+      nome: string | null;
+      apelido: string | null;
+      data_nascimento: string | null;
+      data_casamento: string | null;
+      conjuge_nome: string | null;
+    };
+
+    const pessoas = (pessoasRaw || []) as PessoaRaw[];
+
+    type EntradaAniv = { dia: number; texto: string; tipo: 'nascimento' | 'casamento' };
+
+    // --- Aniversários de nascimento ---
+    const nascimentos: EntradaAniv[] = pessoas
+      .map((p): EntradaAniv | null => {
+        const partes = parseMesDiaNascimento(p.data_nascimento);
+        const nome = (p.apelido?.trim() || p.nome?.trim());
+        if (!partes || !nome || partes.month !== mesAtual) return null;
+        return { dia: partes.day, texto: nome, tipo: 'nascimento' };
       })
-      .filter((item): item is { dia: number; nome: string } => item !== null)
-      .sort((a, b) => a.dia - b.dia || a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+      .filter((item): item is EntradaAniv => item !== null);
 
-    if (aniversariantes.length === 0) return null;
+    // --- Aniversários de casamento ---
+    const membrosComCasamento = pessoas.filter((p) => {
+      const partes = parseDatePartes(p.data_casamento);
+      return partes && partes.month === mesAtual;
+    });
 
-    const conteudo = aniversariantes
-      .map((item) => `${String(item.dia).padStart(2, '0')} · ${item.nome}`)
+    const casamentos: EntradaAniv[] = [];
+
+    if (membrosComCasamento.length > 0) {
+      const memberIds = membrosComCasamento.map((m) => m.id);
+      const { data: relsRaw } = await supabaseAdmin
+        .from('relacionamentos')
+        .select('pessoa_id, pessoa_relacionada_id')
+        .eq('tipo', 'conjuge')
+        .in('pessoa_id', memberIds);
+
+      const rels = (relsRaw || []) as { pessoa_id: string; pessoa_relacionada_id: string }[];
+      const membrosMap = new Map(membrosComCasamento.map((m) => [m.id, m]));
+      const processedIds = new Set<string>();
+
+      for (const membro of membrosComCasamento) {
+        if (processedIds.has(membro.id)) continue;
+
+        const partes = parseDatePartes(membro.data_casamento)!;
+        const anos = anoAtual - partes.year;
+        if (anos <= 0) { processedIds.add(membro.id); continue; }
+
+        const bodasNome = BODAS_NOME[anos];
+        const bodasStr = bodasNome ? ` (Bodas de ${bodasNome})` : '';
+        const anosStr = `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+        const nome1 = (membro.apelido?.trim() || membro.nome?.trim()) ?? '';
+
+        // Verifica se cônjuge também está cadastrado e no mesmo mês
+        const rel = rels.find(
+          (r) =>
+            r.pessoa_id === membro.id &&
+            membrosMap.has(r.pessoa_relacionada_id) &&
+            !processedIds.has(r.pessoa_relacionada_id)
+        );
+
+        if (rel) {
+          const conjuge = membrosMap.get(rel.pessoa_relacionada_id)!;
+          processedIds.add(membro.id);
+          processedIds.add(conjuge.id);
+          const nome2 = (conjuge.apelido?.trim() || conjuge.nome?.trim()) ?? '';
+          casamentos.push({
+            dia: partes.day,
+            texto: `${nome1} e ${nome2} — ${anosStr}${bodasStr}`,
+            tipo: 'casamento',
+          });
+        } else {
+          processedIds.add(membro.id);
+          const nomeConjuge = membro.conjuge_nome?.trim();
+          const parNomes = nomeConjuge ? `${nome1} e ${nomeConjuge}` : nome1;
+          casamentos.push({
+            dia: partes.day,
+            texto: `${parNomes} — ${anosStr}${bodasStr}`,
+            tipo: 'casamento',
+          });
+        }
+      }
+    }
+
+    // --- Mescla e ordena por dia ---
+    const todas: EntradaAniv[] = [...nascimentos, ...casamentos].sort(
+      (a, b) =>
+        a.dia - b.dia ||
+        (a.tipo === b.tipo ? 0 : a.tipo === 'nascimento' ? -1 : 1) ||
+        a.texto.localeCompare(b.texto, 'pt-BR', { sensitivity: 'base' })
+    );
+
+    if (todas.length === 0) return null;
+
+    const conteudo = todas
+      .map((item) => {
+        const simbolo = item.tipo === 'casamento' ? '♥' : '·';
+        return `${String(item.dia).padStart(2, '0')} ${simbolo} ${item.texto}`;
+      })
       .join('\n');
 
     const secaoExistente = secoesAtuais.find(isAniversariantesSection);
@@ -827,7 +952,7 @@ async function buildAniversariantesSection(
       igreja_id: igrejaId,
       culto_id: secaoExistente?.culto_id || null,
       tipo: 'outro',
-      titulo: 'Aniversariantes do mês',
+      titulo: 'Aniversários do mês',
       icone: null,
       ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
       visivel: true,
@@ -844,7 +969,7 @@ async function buildAniversariantesSection(
       ],
     };
   } catch (error) {
-    console.warn('Falha ao montar aniversariantes do mês:', error);
+    console.warn('Falha ao montar aniversários do mês:', error);
     return null;
   }
 }
