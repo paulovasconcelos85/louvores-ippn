@@ -1043,13 +1043,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       <header className="bg-[#17352b] text-white">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 flex items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-emerald-200/80 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.22em] sm:tracking-[0.28em] mb-1">
-              OIKOS Hub
-            </p>
             <h1 className="text-base sm:text-xl font-bold text-white truncate">{t('home.bulletinTitle')}</h1>
-            {igrejaSelecionada && (
-              <p className="text-xs sm:text-sm text-emerald-50/90 mt-1 truncate">{nomeExibicaoIgreja}</p>
-            )}
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {user ? (
