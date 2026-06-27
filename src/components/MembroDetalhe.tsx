@@ -298,6 +298,7 @@ export default function MembroDetalhe({
   const [classificacaoMembro, setClassificacaoMembro] = useState<string>('');
   const [isTeste, setIsTeste] = useState(false);
   const [confirmandoDelete, setConfirmandoDelete] = useState(false);
+  const [erroDelete, setErroDelete] = useState('');
   const [transferidoIpb, setTransferidoIpb] = useState(false);
   const [transferidoOutra, setTransferidoOutra] = useState('');
   const [cursosDiscipulado, setCursosDiscipulado] = useState<string[]>([]);
@@ -576,16 +577,31 @@ export default function MembroDetalhe({
         { method: 'DELETE', headers: await buildAuthenticatedHeaders() }
       );
       const payload = await response.json();
+
       if (!response.ok) {
-        throw new Error(
-          resolveApiErrorMessage(locale, payload, tr('Erro ao excluir', 'Error al eliminar', 'Error deleting'))
-        );
+        const msgErro = resolveApiErrorMessage(locale, payload, tr('Erro ao excluir', 'Error al eliminar', 'Error deleting'));
+        setConfirmandoDelete(false);
+        setErroDelete(msgErro);
+        return;
       }
+
+      // A API pode apenas desvincular da igreja sem excluir o cadastro
+      if (payload.messageCode === 'PERSON_REMOVED_FROM_CHURCH') {
+        setConfirmandoDelete(false);
+        setErroDelete(tr(
+          'Este cadastro existe em mais de uma igreja — foi apenas desvinculado desta congregação, não excluído do sistema.',
+          'Este registro existe en más de una iglesia — solo se desvinculó de esta congregación.',
+          'This record exists in more than one church — it was only unlinked from this congregation, not deleted.'
+        ));
+        onAtualizado?.();
+        return;
+      }
+
       onAtualizado?.();
       router.back();
     } catch (error: any) {
       setConfirmandoDelete(false);
-      setMensagem(error.message || tr('Erro ao excluir membro', 'Error al eliminar', 'Error deleting member'));
+      setErroDelete(error.message || tr('Erro ao excluir membro', 'Error al eliminar', 'Error deleting member'));
     }
   };
 
@@ -1553,7 +1569,7 @@ export default function MembroDetalhe({
                 {!confirmandoDelete ? (
                   <button
                     type="button"
-                    onClick={() => setConfirmandoDelete(true)}
+                    onClick={() => { setErroDelete(''); setConfirmandoDelete(true); }}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1575,13 +1591,18 @@ export default function MembroDetalhe({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setConfirmandoDelete(false)}
+                        onClick={() => { setConfirmandoDelete(false); setErroDelete(''); }}
                         className="flex-1 px-3 py-2 border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50 transition-colors"
                       >
                         {tr('Cancelar', 'Cancelar', 'Cancel')}
                       </button>
                     </div>
                   </div>
+                )}
+                {erroDelete && (
+                  <p className="text-xs text-red-700 bg-red-100 border border-red-300 rounded-lg px-3 py-2">
+                    ⚠️ {erroDelete}
+                  </p>
                 )}
               </div>
             )}
