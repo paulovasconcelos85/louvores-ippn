@@ -67,6 +67,7 @@ interface Membro {
   grupo_familiar_lider: string | null;
   cadastro_token: string | null;
   is_teste: boolean;
+  classificacao_membro: 'comungante' | 'nao_comungante' | 'aderente_comungante' | 'aderente_nao_comungante' | null;
 }
 
 interface NotaPastoral {
@@ -294,6 +295,7 @@ export default function MembroDetalhe({
 
   // Vida eclesiástica
   const [batizado, setBatizado] = useState(false);
+  const [classificacaoMembro, setClassificacaoMembro] = useState<string>('');
   const [isTeste, setIsTeste] = useState(false);
   const [confirmandoDelete, setConfirmandoDelete] = useState(false);
   const [transferidoIpb, setTransferidoIpb] = useState(false);
@@ -418,6 +420,7 @@ export default function MembroDetalhe({
       setEnderecoCompletoEdit(data.endereco_completo || '');
       setComplemento('');
       setBatizado(data.batizado ?? false);
+      setClassificacaoMembro(data.classificacao_membro || '');
       setIsTeste(data.is_teste ?? false);
       setTransferidoIpb(data.transferido_ipb ?? false);
       setTransferidoOutra(data.transferido_outra_denominacao || '');
@@ -515,6 +518,7 @@ export default function MembroDetalhe({
           google_place_id: googlePlaceId,
           endereco_completo: enderecoCompletoEdit || null,
           batizado,
+          classificacao_membro: classificacaoMembro || null,
           transferido_ipb: transferidoIpb,
           transferido_outra_denominacao: transferidoOutra.trim() || null,
           cursos_discipulado: cursosArray.length > 0 ? cursosArray : null,
@@ -1161,6 +1165,16 @@ export default function MembroDetalhe({
                   <h3 className="font-semibold text-slate-900 border-b pb-3 flex items-center gap-2">
                     <Church className="w-4 h-4" /> {tr('Vida Eclesiástica', 'Vida Eclesiástica', 'Church Life')}
                   </h3>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Classificação eclesiástica', 'Clasificación eclesiástica', 'Church classification')}</label>
+                    <select value={classificacaoMembro} onChange={(e) => setClassificacaoMembro(e.target.value)} className={inputCls}>
+                      <option value="">{tr('— não definida —', '— no definida —', '— not set —')}</option>
+                      <option value="comungante">{tr('Comungante', 'Comulgante', 'Communicant')}</option>
+                      <option value="nao_comungante">{tr('Não comungante', 'No comulgante', 'Non-communicant')}</option>
+                      <option value="aderente_comungante">{tr('Aderente comungante', 'Adherente comulgante', 'Adherent communicant')}</option>
+                      <option value="aderente_nao_comungante">{tr('Aderente não comungante', 'Adherente no comulgante', 'Adherent non-communicant')}</option>
+                    </select>
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Data de Batismo', 'Fecha de Bautismo', 'Baptism Date')}</label>
@@ -1314,6 +1328,16 @@ export default function MembroDetalhe({
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Líder do Grupo', 'Líder del Grupo', 'Group Leader')} valor={membro.grupo_familiar_lider} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
+                    {membro.classificacao_membro && (() => {
+                      const map: Record<string, { label: string; cls: string }> = {
+                        comungante: { label: tr('Comungante', 'Comulgante', 'Communicant'), cls: 'bg-purple-100 text-purple-800 border-purple-300' },
+                        nao_comungante: { label: tr('Não comungante', 'No comulgante', 'Non-communicant'), cls: 'bg-sky-100 text-sky-800 border-sky-300' },
+                        aderente_comungante: { label: tr('Aderente comungante', 'Adherente comulgante', 'Adherent communicant'), cls: 'bg-teal-100 text-teal-800 border-teal-300' },
+                        aderente_nao_comungante: { label: tr('Aderente não comungante', 'Adherente no comulgante', 'Adherent non-communicant'), cls: 'bg-slate-100 text-slate-700 border-slate-300' },
+                      };
+                      const c = map[membro.classificacao_membro];
+                      return c ? <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${c.cls}`}>{c.label}</span> : null;
+                    })()}
                     {membro.batizado && <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ {tr('Batizado', 'Bautizado', 'Baptized')}</span>}
                     {membro.transferido_ipb && <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ {tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>}
                     {membro.transferido_outra_denominacao && (

@@ -32,6 +32,7 @@ const PESSOA_SELECT = `
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
   cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token, is_teste,
+  classificacao_membro,
   usuarios_tags(
     tag_id,
     nivel_habilidade,
@@ -47,6 +48,7 @@ const PESSOA_COM_VINCULO_SELECT = `
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
   cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token, is_teste,
+  classificacao_membro,
   pessoas_igrejas!inner(
     igreja_id,
     cargo,

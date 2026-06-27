@@ -55,6 +55,7 @@ interface Membro {
   naturalidade_uf: string | null;
   cadastro_token: string | null;
   is_teste: boolean;
+  classificacao_membro: 'comungante' | 'nao_comungante' | 'aderente_comungante' | 'aderente_nao_comungante' | null;
 }
 
 type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
@@ -1079,6 +1080,16 @@ export default function PastorarMembrosPage() {
                               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusCor(membro.status_membro)}`}>
                                 {getStatusLabel(membro.status_membro)}
                               </span>
+                              {membro.classificacao_membro && (() => {
+                                const classBadge: Record<string, { label: string; cls: string }> = {
+                                  comungante: { label: tr('Comungante', 'Comulgante', 'Communicant'), cls: 'bg-purple-100 text-purple-800' },
+                                  nao_comungante: { label: tr('Não comungante', 'No comulgante', 'Non-communicant'), cls: 'bg-sky-100 text-sky-800' },
+                                  aderente_comungante: { label: tr('Aderente comungante', 'Adherente comulgante', 'Adherent communicant'), cls: 'bg-teal-100 text-teal-800' },
+                                  aderente_nao_comungante: { label: tr('Aderente', 'Adherente', 'Adherent'), cls: 'bg-slate-100 text-slate-600' },
+                                };
+                                const b = classBadge[membro.classificacao_membro];
+                                return b ? <span className={`px-2 py-0.5 rounded text-xs font-semibold ${b.cls}`}>{b.label}</span> : null;
+                              })()}
                               {membro.batizado && (
                                 <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">
                                   {tr('Batizado', 'Bautizado', 'Baptized')}
