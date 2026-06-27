@@ -283,6 +283,14 @@ export default function RelacionamentosCard({
     setSalvando(true);
     setMensagem('');
     try {
+      // Remove qualquer registro anterior entre os dois nesta direção
+      // (evita duplicatas quando o usuário corrige um tipo errado)
+      await supabase
+        .from('relacionamentos')
+        .delete()
+        .eq('pessoa_id', membroId)
+        .eq('pessoa_relacionada_id', pessoaSelecionada.id);
+
       const { error } = await supabase
         .from('relacionamentos')
         .insert({
@@ -292,23 +300,16 @@ export default function RelacionamentosCard({
           criado_por: autorId ?? null,
         });
 
-      if (error) {
-        if (error.code === '23505') {
-          setMensagem(
-            tr(
-              'Este relacionamento já está cadastrado.',
-              'Esta relación ya está registrada.',
-              'This relationship is already registered.'
-            )
-          );
-        } else {
-          throw error;
-        }
-        return;
-      }
+      if (error) throw error;
 
-      // Inserir o relacionamento inverso automaticamente
+      // Remove inverso antigo e insere o novo
       const tipoInverso = calcularInverso(tipoSelecionado, membroSexo, pessoaSelecionada.sexo);
+      await supabase
+        .from('relacionamentos')
+        .delete()
+        .eq('pessoa_id', pessoaSelecionada.id)
+        .eq('pessoa_relacionada_id', membroId);
+
       await supabase
         .from('relacionamentos')
         .insert({
@@ -317,7 +318,6 @@ export default function RelacionamentosCard({
           tipo: tipoInverso,
           criado_por: autorId ?? null,
         });
-      // Ignoramos erro 23505 (já existe) no inverso
 
       setModalAberto(false);
       setBusca('');
