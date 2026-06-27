@@ -271,6 +271,12 @@ export async function POST(request: NextRequest) {
       criados += 1;
     }
 
+    // Invalida o token após confirmação bem-sucedida para evitar reutilização
+    await supabaseAdmin
+      .from('pessoas')
+      .update({ cadastro_token: null })
+      .eq('id', pessoa.id);
+
     return NextResponse.json({ success: true, filhos_criados: criados });
   } catch (error: any) {
     console.error('Erro ao salvar cadastro por token:', error);

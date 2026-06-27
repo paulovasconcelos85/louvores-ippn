@@ -88,25 +88,26 @@ const INVERSO_NEUTRO: Record<TipoRelacionamento, TipoRelacionamento> = {
 function calcularInverso(
   tipo: TipoRelacionamento,
   membroSexo: string | null | undefined,
-  relSexo: string | null | undefined
+  _relSexo?: string | null
 ): TipoRelacionamento {
+  // O inverso descreve o que o MEMBRO é para a pessoa relacionada.
+  // Sempre usamos o sexo do MEMBRO (mF) para a forma de gênero correta.
   const mF = membroSexo === 'F';
-  const rF = relSexo === 'F';
   switch (tipo) {
     case 'conjuge': return 'conjuge';
-    case 'pai': case 'mae': return rF ? 'filha' : 'filho';
     case 'filho': case 'filha': return mF ? 'mae' : 'pai';
-    case 'irmao': case 'irma': return rF ? 'irma' : 'irmao';
-    case 'avo_paterno': case 'avo_materno': return rF ? 'neta' : 'neto';
-    case 'avo_paterna': case 'avo_materna': return rF ? 'neta' : 'neto';
+    case 'pai': case 'mae': return mF ? 'filha' : 'filho';
+    case 'irmao': case 'irma': return mF ? 'irma' : 'irmao';
+    case 'avo_paterno': case 'avo_materno': return mF ? 'neta' : 'neto';
+    case 'avo_paterna': case 'avo_materna': return mF ? 'neta' : 'neto';
     case 'neto': return mF ? 'avo_materna' : 'avo_paterno';
     case 'neta': return mF ? 'avo_materna' : 'avo_paterna';
-    case 'cunhado': case 'cunhada': return rF ? 'cunhada' : 'cunhado';
-    case 'sogro': case 'sogra': return rF ? 'nora' : 'genro';
+    case 'cunhado': case 'cunhada': return mF ? 'cunhada' : 'cunhado';
+    case 'sogro': case 'sogra': return mF ? 'nora' : 'genro';
     case 'genro': case 'nora': return mF ? 'sogra' : 'sogro';
-    case 'tio': case 'tia': return rF ? 'sobrinha' : 'sobrinho';
+    case 'tio': case 'tia': return mF ? 'sobrinha' : 'sobrinho';
     case 'sobrinho': case 'sobrinha': return mF ? 'tia' : 'tio';
-    case 'primo': case 'prima': return rF ? 'prima' : 'primo';
+    case 'primo': case 'prima': return mF ? 'prima' : 'primo';
     default: return INVERSO_NEUTRO[tipo] ?? tipo;
   }
 }
@@ -554,8 +555,8 @@ export default function RelacionamentosCard({
               {/* Tipo */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  {membroNome} {tr('é', 'es', 'is')} <strong>__</strong>{' '}
-                  {tr('de', 'de', 'of')} {pessoaSelecionada?.nome ?? '...'}
+                  {pessoaSelecionada?.nome ?? '...'} {tr('é', 'es', 'is')} <strong>__</strong>{' '}
+                  {tr('de', 'de', 'of')} {membroNome}
                 </label>
                 <select
                   value={tipoSelecionado}
