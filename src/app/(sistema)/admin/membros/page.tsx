@@ -386,20 +386,21 @@ export default function PastorarMembrosPage() {
   );
 
   const membrosParaVotacao = membros
-    .filter((m) => m.ativo && m.status_membro === 'ativo')
+    .filter((m) => m.ativo && m.status_membro === 'ativo' && m.classificacao_membro === 'comungante' && !m.is_teste)
     .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' }));
   const todosParaImpressao = [...membros]
+    .filter((m) => !m.is_teste)
     .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' }));
   const pessoasParaImpressao = tipoListaImpressao === 'membros' ? membrosParaVotacao : todosParaImpressao;
   const localizacaoIgreja = [igrejaResumo?.cidade, igrejaResumo?.uf, igrejaResumo?.pais].filter(Boolean).join(', ');
   const tituloListaImpressao =
     tipoListaImpressao === 'membros'
-      ? tr('Lista de Membros para Votação', 'Lista de Miembros para Votación', 'Voting Member List')
+      ? tr('Lista de Membros Comungantes', 'Lista de Miembros Comulgantes', 'Communicant Member List')
       : tr('Lista Geral de Pessoas', 'Lista General de Personas', 'Full People List');
   const descricaoListaImpressao =
     tipoListaImpressao === 'membros'
-      ? tr('Somente membros ativos', 'Solo miembros activos', 'Active members only')
-      : tr('Todos os status', 'Todos los estados', 'All statuses');
+      ? tr('Comungantes ativos — habilitados a votar (Art. 12–13, CI/IPB)', 'Comulgantes activos — habilitados para votar (Art. 12–13, CI/IPB)', 'Active communicants — eligible to vote (Art. 12–13, CI/IPB)')
+      : tr('Todos os cadastros (exceto testes)', 'Todos los registros (excepto pruebas)', 'All records (excluding test)');
 
   const imprimirLista = (tipo: TipoListaImpressao) => {
     flushSync(() => setTipoListaImpressao(tipo));
@@ -562,9 +563,14 @@ export default function PastorarMembrosPage() {
                 {tr('Telefone', 'Teléfono', 'Phone')}
               </th>
               {tipoListaImpressao === 'todos' && (
-                <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
-                  {tr('Status', 'Estado', 'Status')}
-                </th>
+                <>
+                  <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                    {tr('Classificação', 'Clasificación', 'Classification')}
+                  </th>
+                  <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
+                    {tr('Status', 'Estado', 'Status')}
+                  </th>
+                </>
               )}
               <th className="w-1/3 border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
                 {tr('Assinatura', 'Firma', 'Signature')}
@@ -572,22 +578,35 @@ export default function PastorarMembrosPage() {
             </tr>
           </thead>
           <tbody>
-            {pessoasParaImpressao.map((membro, index) => (
-              <tr key={membro.id}>
-                <td className="border border-slate-300 p-2 text-center">{index + 1}</td>
-                <td className="border border-slate-300 p-2">{membro.nome}</td>
-                <td className="border border-slate-300 p-2">
-                  {membro.telefone ? formatPhoneNumber(membro.telefone) : ''}
-                </td>
-                {tipoListaImpressao === 'todos' && (
+            {pessoasParaImpressao.map((membro, index) => {
+              const classLabel: Record<string, string> = {
+                comungante: tr('Comungante', 'Comulgante', 'Communicant'),
+                nao_comungante: tr('Não comungante', 'No comulgante', 'Non-communicant'),
+                aderente_comungante: tr('Aderente comungante', 'Adherente comulgante', 'Adherent communicant'),
+                aderente_nao_comungante: tr('Aderente', 'Adherente', 'Adherent'),
+              };
+              return (
+                <tr key={membro.id}>
+                  <td className="border border-slate-300 p-2 text-center">{index + 1}</td>
+                  <td className="border border-slate-300 p-2">{membro.nome}</td>
                   <td className="border border-slate-300 p-2">
-                    {getStatusLabel(membro.status_membro)}
-                    {!membro.ativo ? ` / ${tr('Inativo', 'Inactivo', 'Inactive')}` : ''}
+                    {membro.telefone ? formatPhoneNumber(membro.telefone) : ''}
                   </td>
-                )}
-                <td className="border border-slate-300 p-2">&nbsp;</td>
-              </tr>
-            ))}
+                  {tipoListaImpressao === 'todos' && (
+                    <>
+                      <td className="border border-slate-300 p-2">
+                        {membro.classificacao_membro ? classLabel[membro.classificacao_membro] ?? '' : ''}
+                      </td>
+                      <td className="border border-slate-300 p-2">
+                        {getStatusLabel(membro.status_membro)}
+                        {!membro.ativo ? ` / ${tr('Inativo', 'Inactivo', 'Inactive')}` : ''}
+                      </td>
+                    </>
+                  )}
+                  <td className="border border-slate-300 p-2">&nbsp;</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>
