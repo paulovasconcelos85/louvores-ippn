@@ -66,6 +66,7 @@ interface Membro {
   grupo_familiar_nome: string | null;
   grupo_familiar_lider: string | null;
   cadastro_token: string | null;
+  is_teste: boolean;
 }
 
 interface NotaPastoral {
@@ -293,6 +294,8 @@ export default function MembroDetalhe({
 
   // Vida eclesiástica
   const [batizado, setBatizado] = useState(false);
+  const [isTeste, setIsTeste] = useState(false);
+  const [confirmandoDelete, setConfirmandoDelete] = useState(false);
   const [transferidoIpb, setTransferidoIpb] = useState(false);
   const [transferidoOutra, setTransferidoOutra] = useState('');
   const [cursosDiscipulado, setCursosDiscipulado] = useState<string[]>([]);
@@ -415,6 +418,7 @@ export default function MembroDetalhe({
       setEnderecoCompletoEdit(data.endereco_completo || '');
       setComplemento('');
       setBatizado(data.batizado ?? false);
+      setIsTeste(data.is_teste ?? false);
       setTransferidoIpb(data.transferido_ipb ?? false);
       setTransferidoOutra(data.transferido_outra_denominacao || '');
       setCursosDiscipulado(data.cursos_discipulado || []);
@@ -516,6 +520,7 @@ export default function MembroDetalhe({
           cursos_discipulado: cursosArray.length > 0 ? cursosArray : null,
           grupo_familiar_nome: grupoFamiliarNome.trim() || null,
           grupo_familiar_lider: grupoFamiliarLider.trim() || null,
+          is_teste: isTeste,
           igreja_id: getStoredChurchId(),
         })
       });
@@ -556,6 +561,27 @@ export default function MembroDetalhe({
       ));
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const deletarMembro = async () => {
+    try {
+      const igrejaId = getStoredChurchId();
+      const response = await fetch(
+        `/api/pessoas/${membroId}?igreja_id=${igrejaId}`,
+        { method: 'DELETE', headers: await buildAuthenticatedHeaders() }
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          resolveApiErrorMessage(locale, payload, tr('Erro ao excluir', 'Error al eliminar', 'Error deleting'))
+        );
+      }
+      onAtualizado?.();
+      router.back();
+    } catch (error: any) {
+      setConfirmandoDelete(false);
+      setMensagem(error.message || tr('Erro ao excluir membro', 'Error al eliminar', 'Error deleting member'));
     }
   };
 
@@ -1454,6 +1480,87 @@ export default function MembroDetalhe({
                 ))}
               </div>
             </div>
+
+            {permissoes.isSuperAdmin && (
+              <div className="bg-red-50 rounded-xl shadow-sm border border-red-200 p-6 space-y-4">
+                <h3 className="font-semibold text-red-800 text-sm uppercase tracking-wide">
+                  {tr('Zona do Superadmin', 'Zona del Superadmin', 'Superadmin Zone')}
+                </h3>
+
+                {/* Toggle is_teste */}
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="text-sm text-red-700 font-medium">
+                    {tr('Cadastro de teste', 'Registro de prueba', 'Test record')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const novoValor = !isTeste;
+                      setIsTeste(novoValor);
+                      try {
+                        await fetch(`/api/pessoas/${membroId}`, {
+                          method: 'PATCH',
+                          headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
+                          body: JSON.stringify({ is_teste: novoValor, igreja_id: getStoredChurchId() }),
+                        });
+                        onAtualizado?.();
+                      } catch {
+                        setIsTeste(!novoValor);
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      isTeste ? 'bg-red-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isTeste ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </label>
+                {isTeste && (
+                  <p className="text-xs text-red-600">
+                    {tr('Não contabiliza em totais e relatórios.', 'No se contabiliza en totales.', 'Not counted in totals.')}
+                  </p>
+                )}
+
+                {/* Botão deletar */}
+                {!confirmandoDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoDelete(true)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {tr('Excluir cadastro', 'Eliminar registro', 'Delete record')}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-red-700 font-medium text-center">
+                      {tr('Confirmar exclusão de', 'Confirmar eliminación de', 'Confirm deletion of')}{' '}
+                      <strong>{membro.nome}</strong>?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={deletarMembro}
+                        className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                      >
+                        {tr('Sim, excluir', 'Sí, eliminar', 'Yes, delete')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmandoDelete(false)}
+                        className="flex-1 px-3 py-2 border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        {tr('Cancelar', 'Cancelar', 'Cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <RelacionamentosCard
               membroId={membroId}

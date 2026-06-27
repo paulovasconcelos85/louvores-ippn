@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -54,6 +54,7 @@ interface Membro {
   naturalidade_cidade: string | null;
   naturalidade_uf: string | null;
   cadastro_token: string | null;
+  is_teste: boolean;
 }
 
 type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
@@ -323,6 +324,36 @@ export default function PastorarMembrosPage() {
   const gruposUnicos = Array.from(
     new Set(membros.map(m => m.grupo_familiar_nome).filter(Boolean))
   ) as string[];
+
+  // ── Detecção de possíveis duplicatas ──
+  const duplicatasIds = useMemo(() => {
+    const ids = new Set<string>();
+    const normNome = (n: string) =>
+      n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+
+    const porTelefone = new Map<string, string[]>();
+    const porEmail = new Map<string, string[]>();
+    const porAssinatura = new Map<string, string[]>();
+
+    for (const m of membros) {
+      if (m.telefone) {
+        const tel = m.telefone.replace(/\D/g, '');
+        if (tel) { if (!porTelefone.has(tel)) porTelefone.set(tel, []); porTelefone.get(tel)!.push(m.id); }
+      }
+      if (m.email) {
+        const email = m.email.toLowerCase().trim();
+        if (!porEmail.has(email)) porEmail.set(email, []); porEmail.get(email)!.push(m.id);
+      }
+      const partes = normNome(m.nome).split(' ').filter(Boolean);
+      if (partes.length >= 2) {
+        const sig = `${partes[0]}|${partes[partes.length - 1]}`;
+        if (!porAssinatura.has(sig)) porAssinatura.set(sig, []); porAssinatura.get(sig)!.push(m.id);
+      }
+    }
+    for (const list of [...porTelefone.values(), ...porEmail.values(), ...porAssinatura.values()])
+      if (list.length > 1) list.forEach(id => ids.add(id));
+    return ids;
+  }, [membros]);
 
   // ── Filtros aplicados ──
   const membrosFiltrados = membros.filter(m => {
@@ -740,11 +771,11 @@ export default function PastorarMembrosPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
           {[
-            { label: tr('Total', 'Total', 'Total'), val: membros.length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
-            { label: tr('Ativos', 'Activos', 'Active'), val: membros.filter(m => m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: tr('Total', 'Total', 'Total'), val: membros.filter(m => !m.is_teste).length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
+            { label: tr('Ativos', 'Activos', 'Active'), val: membros.filter(m => !m.is_teste && m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
             { label: tr('Aniv. Hoje', 'Cumpl. Hoy', 'Birthdays Today'), val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
-            { label: tr('Este Mês', 'Este Mes', 'This Month'), val: membros.filter(m => ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
-            { label: tr('Batizados', 'Bautizados', 'Baptized'), val: membros.filter(m => m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
+            { label: tr('Este Mês', 'Este Mes', 'This Month'), val: membros.filter(m => !m.is_teste && ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
+            { label: tr('Batizados', 'Bautizados', 'Baptized'), val: membros.filter(m => !m.is_teste && m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
             { label: tr('Grupos', 'Grupos', 'Groups'), val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
           ].map(stat => (
             <div key={stat.label} className={`rounded-lg border p-4 ${stat.cor}`}>
@@ -1006,6 +1037,7 @@ export default function PastorarMembrosPage() {
                   const idade = calcularIdade(membro.data_nascimento);
                   const ehMembroCargo = membro.cargo === 'membro';
                   const temAlerta = membro.situacao_saude || membro.observacoes || ehAniversarioProximos7Dias(membro.data_nascimento);
+                  const ehDuplicata = duplicatasIds.has(membro.id);
                   const endereco = enderecoResumido(membro);
                   const faltando = camposIncompletos(membro);
                   const cadastroIncompleto = faltando.length > 0;
@@ -1059,6 +1091,20 @@ export default function PastorarMembrosPage() {
                                 >
                                   <AlertCircle className="w-3 h-3" />
                                   {tr('Cadastro incompleto', 'Registro incompleto', 'Incomplete data')}
+                                </span>
+                              )}
+                              {membro.is_teste && (
+                                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-600 border border-slate-300">
+                                  TESTE
+                                </span>
+                              )}
+                              {ehDuplicata && permissoes.isSuperAdmin && (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300 flex items-center gap-1"
+                                  title={tr('Nome, telefone ou e-mail semelhante a outro cadastro', 'Posible duplicado', 'Possible duplicate')}
+                                >
+                                  <AlertCircle className="w-3 h-3" />
+                                  {tr('Possível duplicata', 'Posible duplicado', 'Possible duplicate')}
                                 </span>
                               )}
                             </div>

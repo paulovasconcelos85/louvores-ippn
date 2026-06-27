@@ -31,7 +31,7 @@ const PESSOA_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token, is_teste,
   usuarios_tags(
     tag_id,
     nivel_habilidade,
@@ -46,7 +46,7 @@ const PESSOA_COM_VINCULO_SELECT = `
   nome_pai, nome_mae, naturalidade_cidade, naturalidade_uf, nacionalidade, escolaridade,
   profissao, logradouro, bairro, cep, cidade, uf, latitude, longitude, google_place_id,
   batizado, data_profissao_fe, transferido_ipb, transferido_outra_denominacao,
-  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token,
+  cursos_discipulado, grupo_familiar_nome, grupo_familiar_lider, cadastro_token, is_teste,
   pessoas_igrejas!inner(
     igreja_id,
     cargo,
