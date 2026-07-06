@@ -68,6 +68,7 @@ interface Membro {
   cadastro_token: string | null;
   is_teste: boolean;
   classificacao_membro: 'comungante' | 'nao_comungante' | 'aderente_comungante' | 'aderente_nao_comungante' | null;
+  outras_pessoas_mesmo_telefone: string[] | null;
 }
 
 interface NotaPastoral {
@@ -1290,7 +1291,22 @@ export default function MembroDetalhe({
                 <SecaoColapsavel titulo={tr('Dados Pessoais', 'Datos Personales', 'Personal Data')} icone={<User className="w-5 h-5 text-slate-600" />}>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <CampoInfo icone={<Mail className="w-5 h-5" />} label="Email" valor={membro.email} />
-                    <CampoInfo icone={<Phone className="w-5 h-5" />} label={tr('Telefone', 'Teléfono', 'Phone')} valor={membro.telefone ? formatPhoneNumber(membro.telefone) : null} />
+                    <div>
+                      <CampoInfo icone={<Phone className="w-5 h-5" />} label={tr('Telefone', 'Teléfono', 'Phone')} valor={membro.telefone ? formatPhoneNumber(membro.telefone) : null} />
+                      {membro.outras_pessoas_mesmo_telefone && membro.outras_pessoas_mesmo_telefone.length > 0 && (
+                        <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>
+                            {tr(
+                              'Este telefone também está cadastrado para: ',
+                              'Este teléfono también está registrado para: ',
+                              'This phone is also registered to: '
+                            )}
+                            <span className="font-medium">{membro.outras_pessoas_mesmo_telefone.join(', ')}</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Sexo', 'Sexo', 'Sex')} valor={membro.sexo === 'M' ? tr('Masculino', 'Masculino', 'Male') : membro.sexo === 'F' ? tr('Feminino', 'Femenino', 'Female') : null} />
                     <CampoInfo icone={<Cake className="w-5 h-5" />} label={tr('Nascimento', 'Nacimiento', 'Birth')} valor={membro.data_nascimento ? `${formatarData(membro.data_nascimento)} (${idade} ${tr('anos', 'años', 'years')})` : null} />
                     <CampoInfo

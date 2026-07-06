@@ -144,6 +144,18 @@ export async function GET(
 
     const temAcesso = await pessoaTemAcesso(pessoa.id, pessoa.usuario_id);
 
+    let outrasPessoasMesmoTelefone: string[] = [];
+    if (pessoa.telefone) {
+      const { data: outrasComMesmoTelefone, error: telefoneDuplicadoError } = await supabaseAdmin
+        .from('pessoas')
+        .select('nome')
+        .eq('telefone', pessoa.telefone)
+        .neq('id', pessoa.id);
+
+      if (telefoneDuplicadoError) throw telefoneDuplicadoError;
+      outrasPessoasMesmoTelefone = (outrasComMesmoTelefone || []).map((p) => p.nome);
+    }
+
     const { data: igrejaAtual, error: igrejaAtualError } = await supabaseAdmin
       .from('igrejas')
       .select('id, timezone_boletim, cidade, uf, pais, slug')
@@ -156,6 +168,7 @@ export async function GET(
     const pessoaFormatada = {
       ...pessoa,
       tem_acesso: temAcesso || Boolean(pessoa.usuario_id),
+      outras_pessoas_mesmo_telefone: outrasPessoasMesmoTelefone,
       igreja_id: pessoa.pessoas_igrejas?.[0]?.igreja_id || igrejaId,
       cargo: pessoa.pessoas_igrejas?.[0]?.cargo || pessoa.cargo,
       status_membro: pessoa.pessoas_igrejas?.[0]?.status_membro || pessoa.status_membro,

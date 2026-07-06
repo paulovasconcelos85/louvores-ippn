@@ -184,20 +184,10 @@ export async function POST(request: NextRequest) {
         }
       | null = null;
 
-    if (telefone) {
-      const porTelefone = await supabaseAdmin
-        .from('pessoas')
-        .select('id, usuario_id')
-        .eq('telefone', telefone)
-        .maybeSingle();
-
-      if (porTelefone.error) throw porTelefone.error;
-      if (porTelefone.data) {
-        pessoaExistente = porTelefone.data;
-      }
-    }
-
-    if (!pessoaExistente && email) {
+    // Telefone não identifica a pessoa: pode ser compartilhado por mais de
+    // uma pessoa (celular de família, número emprestado etc). Só o e-mail é
+    // usado para reconhecer que é a mesma pessoa preenchendo de novo.
+    if (email) {
       const porEmail = await supabaseAdmin
         .from('pessoas')
         .select('id, usuario_id')
@@ -301,13 +291,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro ao salvar cadastro público:', error);
-
-    if (error.code === '23505' && String(error.message || '').includes('telefone')) {
-      return NextResponse.json(
-        { error: 'Este telefone já está cadastrado. Fale com a liderança para atualizá-lo.' },
-        { status: 409 }
-      );
-    }
 
     if (error.code === '23505') {
       return NextResponse.json(

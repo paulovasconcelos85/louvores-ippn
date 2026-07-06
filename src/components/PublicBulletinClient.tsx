@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { jsPDF } from 'jspdf';
 import {
   ArrowRight,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
   MessageCircle,
   Music,
   Phone,
+  Printer,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -359,6 +361,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [loadingCantico, setLoadingCantico] = useState(false);
   const [sobreIgrejaAberto, setSobreIgrejaAberto] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
@@ -492,39 +495,40 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     );
   }, [igrejaDetalhes?.nome_completo, igrejaSelecionada?.nome, linkBoletim]);
 
-  const copiarLinkBoletim = async () => {
-    if (!igrejaSelecionada) return;
-
-    const texto = mensagemCompartilhamento;
-    let copiado = false;
-
+  const copiarParaAreaTransferencia = async (texto: string) => {
     // Clipboard API moderna (requer contexto seguro: HTTPS ou localhost).
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(texto);
-        copiado = true;
+        return true;
       } catch (error) {
         console.error('Falha na Clipboard API, tentando fallback:', error);
       }
     }
 
     // Fallback para contextos não seguros (ex.: acesso via HTTP em celular).
-    if (!copiado) {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = texto;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.top = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        copiado = document.execCommand('copy');
-        document.body.removeChild(textarea);
-      } catch (error) {
-        console.error('Erro ao copiar link do boletim:', error);
-      }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = texto;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copiado = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return copiado;
+    } catch (error) {
+      console.error('Erro ao copiar para a área de transferência:', error);
+      return false;
     }
+  };
+
+  const copiarLinkBoletim = async () => {
+    if (!igrejaSelecionada) return;
+
+    const copiado = await copiarParaAreaTransferencia(mensagemCompartilhamento);
 
     if (copiado) {
       setLinkCopiado(true);
@@ -532,9 +536,86 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     }
   };
 
+  const copiarCadaDia = async (texto: string) => {
+    const copiado = await copiarParaAreaTransferencia(texto);
+
+    if (copiado) {
+      setCadaDiaCopiado(true);
+      window.setTimeout(() => setCadaDiaCopiado(false), 2500);
+    }
+  };
+
   const compartilharBoletimWhatsApp = () => {
     if (!igrejaSelecionada) return;
     window.open(`https://wa.me/?text=${encodeURIComponent(mensagemCompartilhamento)}`, '_blank');
+  };
+
+  const imprimirLiturgiaPdf = (card: LiturgiaCard) => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const marginX = 12;
+    const headerBottom = 30;
+    const bottomY = ph - 10;
+    const contentWidth = pw - marginX * 2;
+
+    const drawHeader = () => {
+      doc.setFillColor(16, 60, 48);
+      doc.rect(0, 0, pw, headerBottom - 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text(getTituloCardLiturgia(card.nome).toUpperCase(), pw / 2, 11, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(
+        [nomeExibicaoIgreja, dataEdicao].filter(Boolean).join(' · '),
+        pw / 2,
+        18,
+        { align: 'center' }
+      );
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(16, 60, 48);
+      doc.line(marginX, headerBottom, pw - marginX, headerBottom);
+    };
+
+    let y = headerBottom + 6;
+    drawHeader();
+
+    const garantirEspaco = (altura: number) => {
+      if (y + altura > bottomY) {
+        doc.addPage();
+        y = headerBottom + 6;
+        drawHeader();
+      }
+    };
+
+    card.grupos.forEach((grupo, index) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11.5);
+      const titulo = `${index + 1}. ${grupo.titulo.toUpperCase()}${grupo.horario ? ' / ' + grupo.horario : ''}`;
+      const tituloLinhas = doc.splitTextToSize(titulo, contentWidth);
+      garantirEspaco(tituloLinhas.length * 6);
+      doc.setTextColor(0, 0, 0);
+      doc.text(tituloLinhas, marginX, y);
+      y += tituloLinhas.length * 6 + 1.5;
+
+      grupo.publicos.forEach((publico) => {
+        if (!publico.trim()) return;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(55, 55, 55);
+        const linhas = doc.splitTextToSize(publico.trim(), contentWidth - 4);
+        garantirEspaco(linhas.length * 5);
+        doc.text(linhas, marginX + 3, y);
+        y += linhas.length * 5;
+      });
+
+      y += 4.2;
+    });
+
+    const blobUrl = doc.output('bloburl');
+    window.open(blobUrl, '_blank', 'noopener,noreferrer');
   };
 
   useEffect(() => {
@@ -916,20 +997,54 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     const texto = conteudo
       .replace(/\n\nFonte:\s*https?:\/\/\S+[\s\S]*$/i, '')
       .trim();
+    const [titulo, ...corpoPartes] = texto.split('\n\n');
+    const corpo = corpoPartes.join('\n\n').trim();
+    const textoCompartilhamento = `*${titulo}*\n\n${corpo}\n\nFonte: ${fonteUrl}`;
 
     return (
       <div className="space-y-5">
         {renderBlocoTexto(texto)}
         <div className="rounded-[22px] border border-[#ece5d9] bg-[#faf7f0] px-3 sm:px-4 py-3">
-          <a
-            href={fonteUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-[#365c4d] underline underline-offset-4 break-all"
-          >
-            <span className="break-all">Fonte: {fonteUrl}</span>
-            <ExternalLink className="h-4 w-4 flex-shrink-0" />
-          </a>
+          <div className="flex items-start justify-between gap-2">
+            <a
+              href={fonteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-[#365c4d] underline underline-offset-4 break-all"
+            >
+              <span className="break-all">Fonte: {fonteUrl}</span>
+              <ExternalLink className="h-4 w-4 flex-shrink-0" />
+            </a>
+            <div className="flex flex-shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(
+                    `https://wa.me/?text=${encodeURIComponent(textoCompartilhamento)}`,
+                    '_blank'
+                  )
+                }
+                title="Compartilhar no WhatsApp"
+                className="inline-flex items-center gap-1 rounded-full border border-transparent px-1.5 py-1 text-[11px] text-slate-400 transition-colors hover:border-[#d8d1c4] hover:text-[#365c4d]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => copiarCadaDia(textoCompartilhamento)}
+                title="Copiar para compartilhar no WhatsApp"
+                className="inline-flex items-center gap-1 rounded-full border border-transparent px-1.5 py-1 text-[11px] text-slate-400 transition-colors hover:border-[#d8d1c4] hover:text-[#365c4d]"
+              >
+                {cadaDiaCopiado ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">{cadaDiaCopiado ? 'Copiado' : 'Copiar'}</span>
+              </button>
+            </div>
+          </div>
           {credito ? (
             <p className="mt-3 text-xs sm:text-sm leading-6 text-slate-600 break-words">{credito}</p>
           ) : null}
@@ -1288,10 +1403,21 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                             className="rounded-[22px] sm:rounded-[28px] border border-[#d8d1c4] bg-[#fffdf8] px-4 py-4 shadow-[0_10px_32px_rgba(77,58,32,0.05)] sm:px-6 sm:py-5"
                           >
                             <div className="space-y-0">
-                              <div className="border-b border-[#ece5d9] pb-4">
+                              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#ece5d9] pb-4">
                                 <p className="text-lg font-semibold text-slate-900 sm:text-xl">
                                   {getTituloCardLiturgia(card.nome)}
                                 </p>
+                                <div className="flex flex-shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => imprimirLiturgiaPdf(card)}
+                                    title="Imprimir PDF"
+                                    className="inline-flex items-center gap-1 rounded-full border border-transparent px-1.5 py-1 text-[11px] text-slate-400 transition-colors hover:border-[#d8d1c4] hover:text-[#365c4d]"
+                                  >
+                                    <Printer className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline">PDF</span>
+                                  </button>
+                                </div>
                               </div>
 
                               {card.grupos.map((grupo, itemIndex) => (
