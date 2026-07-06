@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { useLocale } from '@/i18n/provider';
-import { Users, ChevronDown, ChevronUp, Cake, Heart } from 'lucide-react';
+import { Users, ChevronDown, ChevronUp, Cake, Heart, Pencil, Check, X } from 'lucide-react';
 
 type TipoRelacionamento =
   | 'conjuge' | 'pai' | 'mae' | 'filho' | 'filha'
@@ -23,6 +23,7 @@ interface MembroSimples {
   data_nascimento: string | null;
   status_membro: string;
   situacao_saude: string | null;
+  nome_familia_customizado?: string | null;
 }
 
 interface MembroComRelacao extends MembroSimples {
@@ -34,7 +35,11 @@ interface Familia {
   membros: MembroComRelacao[];
 }
 
-export default function FamiliaView() {
+interface FamiliaViewProps {
+  podeEditar?: boolean;
+}
+
+export default function FamiliaView({ podeEditar = false }: FamiliaViewProps) {
   const router = useRouter();
   const locale = useLocale();
   const tr = useCallback(
@@ -73,6 +78,9 @@ export default function FamiliaView() {
   const [semFamilia, setSemFamilia] = useState<MembroSimples[]>([]);
   const [loading, setLoading] = useState(true);
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [editandoChefeId, setEditandoChefeId] = useState<string | null>(null);
+  const [nomeFamiliaEdit, setNomeFamiliaEdit] = useState('');
+  const [salvandoNomeFamilia, setSalvandoNomeFamilia] = useState(false);
 
   const carregarFamilias = useCallback(async () => {
     try {
@@ -201,8 +209,57 @@ export default function FamiliaView() {
   };
 
   const getNomeFamilia = (chefe: MembroSimples): string => {
+    if (chefe.nome_familia_customizado?.trim()) return chefe.nome_familia_customizado.trim();
     const sobrenome = chefe.nome.trim().split(' ').slice(-1)[0];
     return `${tr('Família', 'Familia', 'Family')} ${sobrenome}`;
+  };
+
+  const iniciarEdicaoNomeFamilia = (e: React.MouseEvent, chefe: MembroSimples) => {
+    e.stopPropagation();
+    setEditandoChefeId(chefe.id);
+    setNomeFamiliaEdit(getNomeFamilia(chefe));
+  };
+
+  const cancelarEdicaoNomeFamilia = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditandoChefeId(null);
+    setNomeFamiliaEdit('');
+  };
+
+  const salvarNomeFamilia = async (e: React.MouseEvent, chefeId: string) => {
+    e.stopPropagation();
+    const novoNome = nomeFamiliaEdit.trim();
+    setSalvandoNomeFamilia(true);
+    try {
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+
+      const response = await fetch(`/api/pessoas/${chefeId}?${params.toString()}`, {
+        method: 'PATCH',
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ nome_familia_customizado: novoNome || null }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || tr('Erro ao renomear família', 'Error al renombrar familia', 'Error renaming family'));
+      }
+
+      setFamilias((prev) =>
+        prev.map((familia) =>
+          familia.chefe.id === chefeId
+            ? { ...familia, chefe: { ...familia.chefe, nome_familia_customizado: novoNome || null } }
+            : familia
+        )
+      );
+      setEditandoChefeId(null);
+      setNomeFamiliaEdit('');
+    } catch (err) {
+      console.error('Erro ao renomear família:', err);
+    } finally {
+      setSalvandoNomeFamilia(false);
+    }
   };
 
   const getStatusCor = (status: string) => {
@@ -332,16 +389,64 @@ export default function FamiliaView() {
           className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
         >
           {/* Header da família */}
-          <button
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => toggleFamilia(familia.chefe.id)}
-            className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') toggleFamilia(familia.chefe.id);
+            }}
+            className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                 <Users className="w-5 h-5 text-blue-600" />
               </div>
-              <div className="text-left">
-                <p className="font-bold text-slate-900">{getNomeFamilia(familia.chefe)}</p>
+              <div className="text-left min-w-0 flex-1">
+                {editandoChefeId === familia.chefe.id ? (
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={nomeFamiliaEdit}
+                      onChange={(e) => setNomeFamiliaEdit(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') salvarNomeFamilia(e as any, familia.chefe.id);
+                        if (e.key === 'Escape') cancelarEdicaoNomeFamilia(e as any);
+                      }}
+                      className="min-w-0 flex-1 px-2 py-1 text-sm font-bold text-slate-900 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={(e) => salvarNomeFamilia(e, familia.chefe.id)}
+                      disabled={salvandoNomeFamilia}
+                      className="p-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 flex-shrink-0"
+                      title={tr('Salvar', 'Guardar', 'Save')}
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={cancelarEdicaoNomeFamilia}
+                      disabled={salvandoNomeFamilia}
+                      className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-50 flex-shrink-0"
+                      title={tr('Cancelar', 'Cancelar', 'Cancel')}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 group">
+                    <p className="font-bold text-slate-900 truncate">{getNomeFamilia(familia.chefe)}</p>
+                    {podeEditar && (
+                      <button
+                        onClick={(e) => iniciarEdicaoNomeFamilia(e, familia.chefe)}
+                        className="p-1 rounded text-slate-300 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                        title={tr('Renomear família', 'Renombrar familia', 'Rename family')}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-slate-500">
                   {familia.membros.length + 1}{' '}
                   {familia.membros.length + 1 !== 1
@@ -351,10 +456,10 @@ export default function FamiliaView() {
               </div>
             </div>
             {abertos.has(familia.chefe.id)
-              ? <ChevronUp className="w-5 h-5 text-slate-400" />
-              : <ChevronDown className="w-5 h-5 text-slate-400" />
+              ? <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              : <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
             }
-          </button>
+          </div>
 
           {/* Membros da família */}
           {abertos.has(familia.chefe.id) && (

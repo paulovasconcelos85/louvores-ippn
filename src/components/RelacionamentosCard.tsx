@@ -283,41 +283,38 @@ export default function RelacionamentosCard({
     setSalvando(true);
     setMensagem('');
     try {
-      // Remove qualquer registro anterior entre os dois nesta direção
-      // (evita duplicatas quando o usuário corrige um tipo errado)
-      await supabase
-        .from('relacionamentos')
-        .delete()
-        .eq('pessoa_id', membroId)
-        .eq('pessoa_relacionada_id', pessoaSelecionada.id);
-
+      // Upsert em vez de apagar+inserir: se já existir um relacionamento entre
+      // os dois nesta direção (ex.: criado por outra pessoa), este ajusta o
+      // tipo em vez de depender de uma permissão de DELETE que pode não valer
+      // para registros que o usuário atual não criou.
       const { error } = await supabase
         .from('relacionamentos')
-        .insert({
-          pessoa_id: membroId,
-          pessoa_relacionada_id: pessoaSelecionada.id,
-          tipo: tipoSelecionado,
-          criado_por: autorId ?? null,
-        });
+        .upsert(
+          {
+            pessoa_id: membroId,
+            pessoa_relacionada_id: pessoaSelecionada.id,
+            tipo: tipoSelecionado,
+            criado_por: autorId ?? null,
+          },
+          { onConflict: 'pessoa_id,pessoa_relacionada_id' }
+        );
 
       if (error) throw error;
 
-      // Remove inverso antigo e insere o novo
       const tipoInverso = calcularInverso(tipoSelecionado, membroSexo, pessoaSelecionada.sexo);
-      await supabase
+      const { error: errorInverso } = await supabase
         .from('relacionamentos')
-        .delete()
-        .eq('pessoa_id', pessoaSelecionada.id)
-        .eq('pessoa_relacionada_id', membroId);
+        .upsert(
+          {
+            pessoa_id: pessoaSelecionada.id,
+            pessoa_relacionada_id: membroId,
+            tipo: tipoInverso,
+            criado_por: autorId ?? null,
+          },
+          { onConflict: 'pessoa_id,pessoa_relacionada_id' }
+        );
 
-      await supabase
-        .from('relacionamentos')
-        .insert({
-          pessoa_id: pessoaSelecionada.id,
-          pessoa_relacionada_id: membroId,
-          tipo: tipoInverso,
-          criado_por: autorId ?? null,
-        });
+      if (errorInverso) throw errorInverso;
 
       setModalAberto(false);
       setBusca('');

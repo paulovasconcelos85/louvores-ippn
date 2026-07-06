@@ -915,7 +915,7 @@ export default function PastorarMembrosPage() {
 
           <div className="p-6">
             {visao === 'familia' ? (
-              <FamiliaView />
+              <FamiliaView podeEditar={permissoes.podePastorearMembros} />
             ) : loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700 mx-auto" />
