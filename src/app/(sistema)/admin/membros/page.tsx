@@ -62,6 +62,10 @@ type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
 type FiltroStatus = 'todos' | 'ativo' | 'afastado' | 'visitante' | 'congregado' | 'falecido';
 type FiltroBatismo = 'todos' | 'batizado' | 'nao_batizado';
 type FiltroGrupo = string;
+type FiltroFaixaEtaria = 'todos' | 'ate_10' | '11_18' | '19_35' | '36_59' | '60_mais';
+type FiltroEstadoCivil = 'todos' | 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
+type FiltroSexo = 'todos' | 'M' | 'F';
+type FiltroCargo = 'todos' | string;
 type TipoListaImpressao = 'membros' | 'todos';
 
 interface IgrejaResumo {
@@ -168,6 +172,10 @@ export default function PastorarMembrosPage() {
   const [filtroBatismo, setFiltroBatismo] = useState<FiltroBatismo>('todos');
   const [filtroGrupo, setFiltroGrupo] = useState<FiltroGrupo>('todos');
   const [filtroProfissao, setFiltroProfissao] = useState('');
+  const [filtroFaixaEtaria, setFiltroFaixaEtaria] = useState<FiltroFaixaEtaria>('todos');
+  const [filtroEstadoCivil, setFiltroEstadoCivil] = useState<FiltroEstadoCivil>('todos');
+  const [filtroSexo, setFiltroSexo] = useState<FiltroSexo>('todos');
+  const [filtroCargo, setFiltroCargo] = useState<FiltroCargo>('todos');
 
   const totalLoading = authLoading || permLoading;
   const podeAcessar = permissoes.podePastorearMembros;
@@ -337,6 +345,24 @@ export default function PastorarMembrosPage() {
     new Set(membros.map(m => m.grupo_familiar_nome).filter(Boolean))
   ) as string[];
 
+  const cargosUnicos = Array.from(
+    new Set(membros.map(m => m.cargo).filter(Boolean))
+  ) as string[];
+
+  const estaNaFaixaEtaria = (dataNascimento: string | null, faixa: FiltroFaixaEtaria) => {
+    if (faixa === 'todos') return true;
+    const idade = calcularIdade(dataNascimento);
+    if (idade === null) return false;
+    switch (faixa) {
+      case 'ate_10': return idade <= 10;
+      case '11_18': return idade >= 11 && idade <= 18;
+      case '19_35': return idade >= 19 && idade <= 35;
+      case '36_59': return idade >= 36 && idade <= 59;
+      case '60_mais': return idade >= 60;
+      default: return true;
+    }
+  };
+
   // ── Detecção de possíveis duplicatas ──
   const duplicatasIds = useMemo(() => {
     const ids = new Set<string>();
@@ -378,6 +404,10 @@ export default function PastorarMembrosPage() {
     if (filtroBatismo === 'nao_batizado' && m.batizado) return false;
     if (filtroGrupo !== 'todos' && m.grupo_familiar_nome !== filtroGrupo) return false;
     if (filtroProfissao && !(m.profissao || '').toLowerCase().includes(filtroProfissao.toLowerCase())) return false;
+    if (filtroFaixaEtaria !== 'todos' && !estaNaFaixaEtaria(m.data_nascimento, filtroFaixaEtaria)) return false;
+    if (filtroEstadoCivil !== 'todos' && m.estado_civil !== filtroEstadoCivil) return false;
+    if (filtroSexo !== 'todos' && m.sexo !== filtroSexo) return false;
+    if (filtroCargo !== 'todos' && m.cargo !== filtroCargo) return false;
     if (!filtroTexto) return true;
     const busca = filtroTexto.toLowerCase();
     return (
@@ -890,6 +920,37 @@ export default function PastorarMembrosPage() {
                       onChange={e => setFiltroProfissao(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
+                  <select value={filtroFaixaEtaria} onChange={e => setFiltroFaixaEtaria(e.target.value as FiltroFaixaEtaria)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">{tr('Todas as idades', 'Todas las edades', 'All ages')}</option>
+                    <option value="ate_10">{tr('Até 10 anos', 'Hasta 10 años', 'Up to 10 years')}</option>
+                    <option value="11_18">{tr('11 a 18 anos', '11 a 18 años', '11 to 18 years')}</option>
+                    <option value="19_35">{tr('19 a 35 anos', '19 a 35 años', '19 to 35 years')}</option>
+                    <option value="36_59">{tr('36 a 59 anos', '36 a 59 años', '36 to 59 years')}</option>
+                    <option value="60_mais">{tr('60 anos ou mais', '60 años o más', '60 years or more')}</option>
+                  </select>
+                  <select value={filtroEstadoCivil} onChange={e => setFiltroEstadoCivil(e.target.value as FiltroEstadoCivil)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">{tr('Estado Civil: Todos', 'Estado Civil: Todos', 'Marital Status: All')}</option>
+                    <option value="solteiro">{tr('Solteiro(a)', 'Soltero(a)', 'Single')}</option>
+                    <option value="casado">{tr('Casado(a)', 'Casado(a)', 'Married')}</option>
+                    <option value="uniao_estavel">{tr('União Estável', 'Unión Estable', 'Civil Union')}</option>
+                    <option value="divorciado">{tr('Divorciado(a)', 'Divorciado(a)', 'Divorced')}</option>
+                    <option value="viuvo">{tr('Viúvo(a)', 'Viudo(a)', 'Widowed')}</option>
+                  </select>
+                  <select value={filtroSexo} onChange={e => setFiltroSexo(e.target.value as FiltroSexo)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">{tr('Sexo: Todos', 'Sexo: Todos', 'Sex: All')}</option>
+                    <option value="M">{tr('Masculino', 'Masculino', 'Male')}</option>
+                    <option value="F">{tr('Feminino', 'Femenino', 'Female')}</option>
+                  </select>
+                  <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="todos">{tr('Função: Todas', 'Función: Todas', 'Role: All')}</option>
+                    {cargosUnicos.map(c => (
+                      <option key={c} value={c}>{getCargoLabelLocalized(c as CargoTipo)}</option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
