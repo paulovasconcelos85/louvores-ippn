@@ -1,0 +1,84 @@
+NOTAS — Notificações de cadastro (pendente de implementar)
+============================================================
+Contexto salvo em: 2026-07-06
+
+PERGUNTA ORIGINAL
+------------------
+Pastor Manoel é pastor da ICPB e da ICPT ao mesmo tempo. Discussão sobre quem
+fica sabendo de novos cadastros/alterações de membros.
+
+O QUE JÁ DESCOBRIMOS SOBRE ACESSO MULTI-IGREJA
+------------------------------------------------
+- Sistema é multi-igreja de verdade: `pessoas_igrejas` e `usuarios_igrejas`
+  guardam um vínculo (cargo, status, ativo) por igreja. `pessoas.igreja_id`/
+  `cargo` e `usuarios_acesso.igreja_id`/`cargo` são só "espelhos" da igreja
+  principal, sincronizados por trigger.
+- Pastor Manoel, vinculado como pastor na ICPB e na ICPT, TEM acesso
+  administrativo às duas — mas precisa TROCAR MANUALMENTE a igreja
+  selecionada no seletor (localStorage, `getStoredChurchId()`) para alternar
+  entre "Pastorear Membros" de uma e de outra. Não existe visão agregada das
+  duas ao mesmo tempo.
+- `GET /api/pessoas` filtra estritamente pela igreja selecionada
+  (`igreja_id` resolvido em `getUserPermissionContext`/`server-church.ts`).
+
+O QUE JÁ EXISTE DE INFRA DE NOTIFICAÇÃO (reaproveitável)
+------------------------------------------------------------
+- Tabelas: `notifications`, `notification_deliveries`, `push_dispositivos`
+  (tokens de push, plataforma, locale, status APNs).
+- Função SQL: `enqueue_push_notification(...)` — está em
+  sql/2026-04-30_boletim_tables_and_push_notification_function.sql
+- Endpoint de envio: `src/app/api/internal/notifications/dispatch/route.ts`
+  - Aceita GET ou POST, autenticado por header (Bearer ou x-cron-secret)
+    comparado com `CRON_SECRET` (env var).
+  - Busca `notification_deliveries` com status='pending' e canal='push',
+    junta com `notifications` e `push_dispositivos` (só ios, ativo,
+    authorization_status válido), e envia via APNs (`src/lib/apns.ts`).
+  - É uma rota comum — pode ser chamada de QUALQUER lugar do backend, não só
+    pelo cron da Vercel.
+- Textos das notificações: `src/lib/notification-copy.ts`
+- Tipos já cabeados no front hoje: `pastoral.resumo_10min` (badge de pedidos
+  pastorais, só aparece pra cargo superadmin/pastor/seminarista — ADMIN PURO
+  NÃO VÊ) e `escala.usuario_alistado`.
+- Cron atual: `vercel.json` roda `/api/internal/notifications/dispatch`
+  1x por dia às 12h (`"0 12 * * *"`).
+
+LIMITAÇÃO IMPORTANTE DA VERCEL (confirmada, não é impressão)
+----------------------------------------------------------------
+- No plano gratuito (Hobby) da Vercel, cron jobs só rodam no MÁXIMO 1x/dia,
+  mesmo configurando um horário mais frequente no vercel.json. É bem
+  provável que seja por isso que `pastoral.resumo_10min` (nome sugere rodar
+  a cada 10 min) hoje só dispara 1x/dia.
+- Cron mais frequente (a cada minuto/hora) só no plano Pro (pago) da Vercel.
+
+SOLUÇÃO PROPOSTA PARA "AVISAR SOBRE NOVO CADASTRO" (ainda não implementada)
+--------------------------------------------------------------------------
+Não depender do cron da Vercel pra essa notificação específica — chamar o
+dispatch (ou a lógica de enqueue+dispatch) DIRETO de dentro do
+`POST /api/cadastro-publico` (src/app/api/cadastro-publico/route.ts), logo
+após salvar a pessoa com sucesso. Assim funciona instantâneo, mesmo no
+plano gratuito, sem custo adicional de infra.
+
+Passos para implementar, quando for a hora:
+1. No fim do POST de cadastro-publico (depois do upsert em
+   pessoas/pessoas_igrejas), chamar `enqueue_push_notification(...)` (via
+   RPC do supabase-js) uma vez para cada usuario_acesso_id de admin/pastor
+   da igreja em questão.
+2. Criar um novo `tipo` de notificação, ex.: `cadastro.novo_publico`, e
+   adicionar o texto em `src/lib/notification-copy.ts`.
+3. Decidir: quem recebe — só admin/superadmin, ou pastor também? (hoje
+   pedidos pastorais deixam "admin" puro de fora — decidir se aqui é igual
+   ou diferente).
+4. Decidir: notifica em TODO cadastro/alteração, ou só cadastro NOVO
+   (pessoa inexistente)? Cadastro que faz update (mesmo email já existente)
+   também deveria notificar "alteração"?
+5. Depois de enfileirar, chamar a rota
+   `/api/internal/notifications/dispatch` (fetch interno, com o
+   CRON_SECRET) pra despachar na hora, sem esperar o cron diário.
+6. Opcional: expandir o contador/badge em
+   `src/app/api/admin/notifications/route.ts` pra incluir esse novo tipo.
+
+DECISÕES AINDA EM ABERTO (perguntar ao usuário quando for implementar)
+------------------------------------------------------------------------
+- Quem recebe: admin, superadmin, pastor, todos?
+- Notificar só cadastro novo, ou também toda alteração de dados de um
+  membro já existente?
