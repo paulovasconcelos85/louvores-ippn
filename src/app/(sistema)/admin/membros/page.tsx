@@ -300,6 +300,17 @@ export default function PastorarMembrosPage() {
       superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
     } satisfies Record<CargoTipo, string>)[cargo];
 
+  const getMaritalStatusLabel = (value: string | null) =>
+    value
+      ? ({
+          solteiro: tr('Solteiro(a)', 'Soltero(a)', 'Single'),
+          casado: tr('Casado(a)', 'Casado(a)', 'Married'),
+          divorciado: tr('Divorciado(a)', 'Divorciado(a)', 'Divorced'),
+          viuvo: tr('Viúvo(a)', 'Viudo(a)', 'Widowed'),
+          uniao_estavel: tr('União Estável', 'Unión Estable', 'Civil Union'),
+        }[value] || value)
+      : null;
+
   const getStatusCor = (status: string) =>
     ({ ativo: 'bg-green-100 text-green-800 border-green-300', afastado: 'bg-yellow-100 text-yellow-800 border-yellow-300', falecido: 'bg-gray-100 text-gray-800 border-gray-300', visitante: 'bg-blue-100 text-blue-800 border-blue-300', congregado: 'bg-purple-100 text-purple-800 border-purple-300' }[status] || 'bg-slate-100 text-slate-800 border-slate-300');
 
@@ -939,6 +950,9 @@ export default function PastorarMembrosPage() {
                       <th className="text-left py-2 px-2">{tr('Sexo', 'Sexo', 'Sex')}</th>
                       <th className="text-left py-2 px-2">{tr('Nascimento', 'Nacimiento', 'Birth')}</th>
                       <th className="text-left py-2 px-2">{tr('Telefone', 'Teléfono', 'Phone')}</th>
+                      <th className="text-left py-2 px-2">Email</th>
+                      <th className="text-left py-2 px-2">{tr('Estado Civil', 'Estado Civil', 'Marital Status')}</th>
+                      <th className="text-left py-2 px-2">{tr('Profissão', 'Profesión', 'Profession')}</th>
                       <th className="text-left py-2 px-2">{tr('Bairro', 'Barrio', 'Neighborhood')}</th>
                       <th className="text-left py-2 px-2">{tr('Grupo', 'Grupo', 'Group')}</th>
                       <th className="text-center py-2 px-2">{tr('Bat.', 'Baut.', 'Bap.')}</th>
@@ -997,6 +1011,15 @@ export default function PastorarMembrosPage() {
                           </td>
                           <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
                             {membro.telefone ? formatPhoneNumber(membro.telefone) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-2 text-slate-600 max-w-[160px] truncate">
+                            {membro.email || <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
+                            {getMaritalStatusLabel(membro.estado_civil) || <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="py-2 px-2 text-slate-600 max-w-[140px] truncate">
+                            {membro.profissao || <span className="text-slate-300">—</span>}
                           </td>
                           <td className="py-2 px-2 text-slate-600 max-w-[140px] truncate">
                             {membro.bairro || membro.cidade || <span className="text-slate-300">—</span>}
