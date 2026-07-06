@@ -20,6 +20,30 @@ import {
 } from 'lucide-react';
 import { useLocale } from '@/i18n/provider';
 
+const IGREJAS_PARCEIRAS = [
+  {
+    nome: 'Igreja Presbiteriana da Ponta Negra',
+    sigla: 'IPPN Manaus',
+    local: 'Manaus, Brasil',
+    slug: 'ippn-manaus',
+    logo: '/oikos/igrejas/ippn-manaus.jpg',
+  },
+  {
+    nome: 'Igreja Cristã Presbiteriana do Barreiro',
+    sigla: 'ICPB',
+    local: 'Barreiro, Portugal',
+    slug: 'icpb',
+    logo: '/oikos/igrejas/icpb.jpg',
+  },
+  {
+    nome: 'Igreja Cristã Presbiteriana de Telheiras',
+    sigla: 'ICPT',
+    local: 'Telheiras, Portugal',
+    slug: 'icpt',
+    logo: '/oikos/igrejas/icpt.jpg',
+  },
+];
+
 type Copy = {
   navCta: string;
   loginCta: string;
@@ -31,6 +55,10 @@ type Copy = {
   heroMetricA: string;
   heroMetricB: string;
   heroMetricC: string;
+  churchesEyebrow: string;
+  churchesTitle: string;
+  churchesText: string;
+  churchesCta: string;
   problemTitle: string;
   problemText: string;
   problems: string[];
@@ -72,6 +100,11 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     heroMetricA: 'Boletim público',
     heroMetricB: 'Cultos e escalas',
     heroMetricC: 'Cadastro pastoral',
+    churchesEyebrow: 'Já em uso',
+    churchesTitle: 'Igrejas que já estão usando o OIKOS Hub.',
+    churchesText:
+      'Três igrejas, em dois países, já publicam o boletim semanal e organizam a vida da comunidade pelo OIKOS Hub. Escolha uma abaixo e veja o boletim ao vivo.',
+    churchesCta: 'Ver boletim',
     problemTitle: 'O problema não é falta de zelo. É trabalho espalhado.',
     problemText:
       'Toda semana alguém refaz boletim, confere escala, procura aviso, cobra voluntário e tenta manter tudo alinhado em grupos e planilhas.',
@@ -131,6 +164,11 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     heroMetricA: 'Boletín público',
     heroMetricB: 'Cultos y turnos',
     heroMetricC: 'Registro pastoral',
+    churchesEyebrow: 'Ya en uso',
+    churchesTitle: 'Iglesias que ya están usando OIKOS Hub.',
+    churchesText:
+      'Tres iglesias, en dos países, ya publican el boletín semanal y organizan la vida de la comunidad con OIKOS Hub. Elige una abajo y mira el boletín en vivo.',
+    churchesCta: 'Ver boletín',
     problemTitle: 'El problema no es falta de dedicación. Es trabajo disperso.',
     problemText:
       'Cada semana alguien rehace el boletín, revisa turnos, busca avisos, recuerda voluntarios y mantiene todo alineado entre grupos y hojas de cálculo.',
@@ -190,6 +228,11 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     heroMetricA: 'Public bulletin',
     heroMetricB: 'Services and schedules',
     heroMetricC: 'Pastoral records',
+    churchesEyebrow: 'Already in use',
+    churchesTitle: 'Churches already using OIKOS Hub.',
+    churchesText:
+      'Three churches, in two countries, already publish their weekly bulletin and run community life through OIKOS Hub. Pick one below and see the live bulletin.',
+    churchesCta: 'View bulletin',
     problemTitle: 'The problem is not lack of care. It is scattered work.',
     problemText:
       'Every week someone rebuilds the bulletin, checks schedules, finds announcements, reminds volunteers, and keeps everything aligned across chats and spreadsheets.',
@@ -395,6 +438,42 @@ export default function OikosLandingClient() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="igrejas" className="bg-white py-12 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <p className="inline-flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-800 sm:text-sm">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {copy.churchesEyebrow}
+          </p>
+          <h2 className="mt-4 max-w-3xl text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">
+            {copy.churchesTitle}
+          </h2>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600 sm:mt-4 sm:text-lg sm:leading-8">
+            {copy.churchesText}
+          </p>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:mt-10">
+            {IGREJAS_PARCEIRAS.map((igreja) => (
+              <Link
+                key={igreja.slug}
+                href={`/${igreja.slug}`}
+                className="group flex items-center gap-4 rounded border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-400 hover:bg-emerald-50 sm:p-5"
+              >
+                <span className="relative flex h-14 w-14 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white sm:h-16 sm:w-16">
+                  <Image src={igreja.logo} alt={igreja.nome} fill sizes="64px" className="object-cover" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-black text-slate-950 sm:text-lg">{igreja.sigla}</span>
+                  <span className="block truncate text-xs text-slate-500 sm:text-sm">{igreja.local}</span>
+                  <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 sm:text-sm">
+                    {copy.churchesCta}
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
+                  </span>
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

@@ -154,6 +154,7 @@ function CadastroPublicoContent() {
   // Etapa 5
   const [situacaoSaude, setSituacaoSaude] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [aceiteDados, setAceiteDados] = useState(false);
 
   // Cadastro de filhos (após sucesso)
   const [enderecoSalvo, setEnderecoSalvo] = useState<EnderecoGoogle | null>(null);
@@ -434,6 +435,16 @@ function CadastroPublicoContent() {
   };
 
   const salvar = async () => {
+    if (!aceiteDados) {
+      setErro(
+        tr(
+          'Você precisa concordar com o uso dos seus dados antes de enviar o cadastro.',
+          'Debes aceptar el uso de tus datos antes de enviar el registro.',
+          'You need to agree to the use of your data before submitting the registration.'
+        )
+      );
+      return;
+    }
     setSalvando(true); setErro('');
     try {
       if (!igrejaSelecionada?.id) {
@@ -1174,6 +1185,26 @@ function CadastroPublicoContent() {
             </>)}
           </div>
 
+          {isUltima && (
+            <div className="px-5 pb-2">
+              <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={aceiteDados}
+                  onChange={e => setAceiteDados(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-700 flex-shrink-0"
+                />
+                <span className="text-xs text-slate-600 leading-relaxed">
+                  {tr(
+                    'Autorizo o uso dos meus dados, incluindo os campos de saúde e observações informados acima (opcionais e sigilosos), exclusivamente para fins de cadastro, comunicação e cuidado pastoral desta igreja, conforme a LGPD/GDPR. Posso solicitar a correção ou exclusão dos meus dados a qualquer momento junto à liderança.',
+                    'Autorizo el uso de mis datos, incluidos los campos de salud y observaciones indicados arriba (opcionales y confidenciales), exclusivamente para fines de registro, comunicación y cuidado pastoral de esta iglesia, conforme a la LGPD/GDPR. Puedo solicitar la corrección o eliminación de mis datos en cualquier momento con el liderazgo.',
+                    'I authorize the use of my data, including the health and notes fields above (optional and confidential), solely for registration, communication, and pastoral care purposes at this church, in accordance with LGPD/GDPR. I may request correction or deletion of my data at any time from the leadership.'
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Navegação */}
           <div className="px-5 pb-5 flex gap-3">
             {etapa > 1 && (
@@ -1186,7 +1217,7 @@ function CadastroPublicoContent() {
                 {tr('Continuar', 'Continuar', 'Continue')} <ChevronRight className="w-5 h-5" />
               </button>
             ) : (
-              <button type="button" onClick={salvar} disabled={salvando || loadingIgreja || !igrejaSelecionada} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm disabled:opacity-50 text-base">
+              <button type="button" onClick={salvar} disabled={salvando || loadingIgreja || !igrejaSelecionada || !aceiteDados} className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-emerald-700 text-white rounded-lg font-bold hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm disabled:opacity-50 text-base">
                 {salvando ? <><span className="animate-spin inline-block w-5 h-5 border-b-2 border-white rounded-full" /> {tr('Enviando...', 'Enviando...', 'Sending...')}</> : <><Check className="w-5 h-5" /> {tr('Enviar Cadastro', 'Enviar registro', 'Submit Registration')}</>}
               </button>
             )}
