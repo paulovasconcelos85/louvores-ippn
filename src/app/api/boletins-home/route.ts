@@ -826,12 +826,31 @@ function parseDatePartes(value: string | null | undefined) {
 async function buildAniversariantesSection(
   igrejaId: string,
   timezoneBoletim: string | null | undefined,
-  secoesAtuais: LegacyBoletimSecao[]
+  secoesAtuais: LegacyBoletimSecao[],
+  diaReferencia?: string | null
 ): Promise<LegacyBoletimSecao | null> {
   try {
     const timezone = timezoneBoletim?.trim() || ANIVERSARIANTES_DEFAULT_TIMEZONE;
-    const mesAtual = getCurrentMonthInTimeZone(timezone);
-    const anoAtual = getCurrentYearInTimeZone(timezone);
+
+    const cultoDateKey = diaReferencia ? getCultoDateKey(diaReferencia) : null;
+    const cultoDateParts = cultoDateKey ? parseCultoDateKey(cultoDateKey) : null;
+
+    const mesAtual = cultoDateParts?.month ?? getCurrentMonthInTimeZone(timezone);
+    const anoAtual = cultoDateParts?.year ?? getCurrentYearInTimeZone(timezone);
+
+    // Se o boletim cai nos primeiros dias do mês, a "semana anterior" cruza a
+    // virada do mês. Mapeia esses dias (mês anterior) para não deixar de
+    // convocar quem fez aniversário neles.
+    const diasMesAnterior = new Map<string, { month: number; day: number; year: number }>();
+    if (cultoDateKey) {
+      for (let offset = 1; offset <= 6; offset++) {
+        const shifted = shiftDateKey(cultoDateKey, -offset);
+        const parts = shifted ? parseCultoDateKey(shifted) : null;
+        if (!parts) continue;
+        if (parts.month === mesAtual && parts.year === anoAtual) continue;
+        diasMesAnterior.set(`${parts.month}-${parts.day}`, parts);
+      }
+    }
 
     const { data: pessoasRaw, error } = await supabaseAdmin
       .from('pessoas')
@@ -853,22 +872,46 @@ async function buildAniversariantesSection(
 
     const pessoas = (pessoasRaw || []) as PessoaRaw[];
 
-    type EntradaAniv = { dia: number; texto: string; tipo: 'nascimento' | 'casamento' };
+type EntradaAniv = {
+      dia: number;
+      texto: string;
+      tipo: 'nascimento' | 'casamento';
+      mes: number;
+      deMesAnterior: boolean;
+    };
 
     // --- Aniversários de nascimento ---
     const nascimentos: EntradaAniv[] = pessoas
       .map((p): EntradaAniv | null => {
         const partes = parseMesDiaNascimento(p.data_nascimento);
         const nome = (p.apelido?.trim() || p.nome?.trim());
-        if (!partes || !nome || partes.month !== mesAtual) return null;
-        return { dia: partes.day, texto: nome, tipo: 'nascimento' };
+        if (!partes || !nome) return null;
+
+        if (partes.month === mesAtual) {
+          return { dia: partes.day, texto: nome, tipo: 'nascimento', mes: mesAtual, deMesAnterior: false };
+        }
+
+        const anteriorInfo = diasMesAnterior.get(`${partes.month}-${partes.day}`);
+        if (anteriorInfo) {
+          return {
+            dia: partes.day,
+            texto: nome,
+            tipo: 'nascimento',
+            mes: anteriorInfo.month,
+            deMesAnterior: true,
+          };
+        }
+
+        return null;
       })
       .filter((item): item is EntradaAniv => item !== null);
 
     // --- Aniversários de casamento ---
     const membrosComCasamento = pessoas.filter((p) => {
       const partes = parseDatePartes(p.data_casamento);
-      return partes && partes.month === mesAtual;
+      if (!partes) return false;
+      if (partes.month === mesAtual) return true;
+      return diasMesAnterior.has(`${partes.month}-${partes.day}`);
     });
 
     const casamentos: EntradaAniv[] = [];
@@ -889,7 +932,11 @@ async function buildAniversariantesSection(
         if (processedIds.has(membro.id)) continue;
 
         const partes = parseDatePartes(membro.data_casamento)!;
-        const anos = anoAtual - partes.year;
+        const deMesAnterior = partes.month !== mesAtual;
+        const anteriorInfo = deMesAnterior ? diasMesAnterior.get(`${partes.month}-${partes.day}`) : null;
+        const anoRef = anteriorInfo ? anteriorInfo.year : anoAtual;
+        const mesRef = anteriorInfo ? anteriorInfo.month : mesAtual;
+        const anos = anoRef - partes.year;
         if (anos <= 0) { processedIds.add(membro.id); continue; }
 
         const bodasNome = BODAS_NOME[anos];
@@ -914,6 +961,8 @@ async function buildAniversariantesSection(
             dia: partes.day,
             texto: `${nome1} e ${nome2} — ${anosStr}${bodasStr}`,
             tipo: 'casamento',
+            mes: mesRef,
+            deMesAnterior,
           });
         } else {
           processedIds.add(membro.id);
@@ -923,14 +972,17 @@ async function buildAniversariantesSection(
             dia: partes.day,
             texto: `${parNomes} — ${anosStr}${bodasStr}`,
             tipo: 'casamento',
+            mes: mesRef,
+            deMesAnterior,
           });
         }
       }
     }
 
-    // --- Mescla e ordena por dia ---
+    // --- Mescla e ordena por dia (dias do mês anterior vêm primeiro, por serem cronologicamente anteriores) ---
     const todas: EntradaAniv[] = [...nascimentos, ...casamentos].sort(
       (a, b) =>
+        (a.deMesAnterior === b.deMesAnterior ? 0 : a.deMesAnterior ? -1 : 1) ||
         a.dia - b.dia ||
         (a.tipo === b.tipo ? 0 : a.tipo === 'nascimento' ? -1 : 1) ||
         a.texto.localeCompare(b.texto, 'pt-BR', { sensitivity: 'base' })
@@ -941,7 +993,10 @@ async function buildAniversariantesSection(
     const conteudo = todas
       .map((item) => {
         const simbolo = item.tipo === 'casamento' ? '♥' : '·';
-        return `${String(item.dia).padStart(2, '0')} ${simbolo} ${item.texto}`;
+        const dataStr = item.deMesAnterior
+          ? `${String(item.dia).padStart(2, '0')}/${String(item.mes).padStart(2, '0')}`
+          : String(item.dia).padStart(2, '0');
+        return `${dataStr} ${simbolo} ${item.texto}`;
       })
       .join('\n');
 
@@ -1489,7 +1544,8 @@ export async function GET(request: NextRequest) {
       const aniversariantesSection = await buildAniversariantesSection(
         igrejaId,
         igrejaDetalhes?.timezone_boletim,
-        boletimSecoes
+        boletimSecoes,
+        diaBoletimSelecionado
       );
       boletimSecoes = boletimSecoes.filter((secao) => !isAniversariantesSection(secao));
       if (aniversariantesSection) {
