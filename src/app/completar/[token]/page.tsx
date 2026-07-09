@@ -6,7 +6,7 @@ import { useLocale } from '@/i18n/provider';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import {
-  User, MapPin, Users, Check, AlertCircle, Plus, X, Heart, Loader2,
+  User, MapPin, Users, Check, AlertCircle, Plus, X, Heart, Loader2, Church, ClipboardList,
 } from 'lucide-react';
 
 type FilhoExistente = {
@@ -66,6 +66,19 @@ export default function CompletarCadastroPage() {
   const [dataCasamento, setDataCasamento] = useState('');
   const [naturalidadeCidade, setNaturalidadeCidade] = useState('');
   const [naturalidadeUf, setNaturalidadeUf] = useState('');
+  const [nacionalidade, setNacionalidade] = useState('Brasileira');
+  const [paisOrigem, setPaisOrigem] = useState('');
+  const [conjugeReligiao, setConjugeReligiao] = useState('');
+  const [atividadeAtual, setAtividadeAtual] = useState('');
+  const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
+
+  // Ficha de Candidato à Membresia
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
+  const [congregacaoNome, setCongregacaoNome] = useState('');
+  const [tipoTransferencia, setTipoTransferencia] = useState<'nenhuma' | 'ipb' | 'outra' | 'jurisdicao'>('nenhuma');
+  const [transferenciaQual, setTransferenciaQual] = useState('');
+  const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
+  const [propositoEntrevista, setPropositoEntrevista] = useState('');
 
   // Endereço
   const [logradouro, setLogradouro] = useState('');
@@ -110,6 +123,28 @@ export default function CompletarCadastroPage() {
         setDataCasamento(p.data_casamento || '');
         setNaturalidadeCidade(p.naturalidade_cidade || '');
         setNaturalidadeUf(p.naturalidade_uf || '');
+        setNacionalidade(p.nacionalidade || 'Brasileira');
+        setPaisOrigem(p.pais_origem || '');
+        setConjugeReligiao(p.conjuge_religiao || '');
+        setAtividadeAtual(p.atividade_atual || '');
+        setUniaoEstavelTempo(p.uniao_estavel_tempo || '');
+        setIgrejaSedeCongregacao(p.igreja_sede_congregacao || '');
+        setCongregacaoNome(p.congregacao_nome || '');
+        setTransferenciaObservacao(p.transferencia_observacao || '');
+        setPropositoEntrevista(p.proposito_entrevista || '');
+        if (p.transferido_ipb) {
+          setTipoTransferencia('ipb');
+          setTransferenciaQual(p.transferencia_ipb_origem || '');
+        } else if (p.transferido_outra_denominacao) {
+          setTipoTransferencia('outra');
+          setTransferenciaQual(p.transferido_outra_denominacao || '');
+        } else if (p.transferencia_jurisdicao_sem_carta) {
+          setTipoTransferencia('jurisdicao');
+          setTransferenciaQual(p.transferencia_jurisdicao_sem_carta || '');
+        } else {
+          setTipoTransferencia('nenhuma');
+          setTransferenciaQual('');
+        }
         setLogradouro(p.logradouro || '');
         setBairro(p.bairro || '');
         setCep(p.cep || '');
@@ -192,6 +227,19 @@ export default function CompletarCadastroPage() {
           data_casamento: dataCasamento || null,
           naturalidade_cidade: naturalidadeCidade.trim() || null,
           naturalidade_uf: naturalidadeUf.trim() || null,
+          nacionalidade: nacionalidade.trim() || null,
+          pais_origem: nacionalidade === 'Estrangeira' ? (paisOrigem.trim() || null) : null,
+          conjuge_religiao: conjugeReligiao.trim() || null,
+          atividade_atual: atividadeAtual.trim() || null,
+          uniao_estavel_tempo: estadoCivil === 'uniao_estavel' ? (uniaoEstavelTempo.trim() || null) : null,
+          igreja_sede_congregacao: igrejaSedeCongregacao || null,
+          congregacao_nome: igrejaSedeCongregacao !== 'sede' ? (congregacaoNome.trim() || null) : null,
+          transferido_ipb: tipoTransferencia === 'ipb',
+          transferencia_ipb_origem: tipoTransferencia === 'ipb' ? (transferenciaQual.trim() || null) : null,
+          transferido_outra_denominacao: tipoTransferencia === 'outra' ? (transferenciaQual.trim() || null) : null,
+          transferencia_jurisdicao_sem_carta: tipoTransferencia === 'jurisdicao' ? (transferenciaQual.trim() || null) : null,
+          transferencia_observacao: tipoTransferencia !== 'nenhuma' ? (transferenciaObservacao.trim() || null) : null,
+          proposito_entrevista: propositoEntrevista || null,
           logradouro: logradouro.trim() || null,
           bairro: bairro.trim() || null,
           cep: cep.replace(/\D/g, '') || null,
@@ -375,6 +423,10 @@ export default function CompletarCadastroPage() {
               <input value={profissao} onChange={e => setProfissao(e.target.value)} className={inputCls} />
             </div>
             <div>
+              <label className={labelCls}>{tr('Atividade atual', 'Actividad actual', 'Current activity')}</label>
+              <input value={atividadeAtual} onChange={e => setAtividadeAtual(e.target.value)} className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>{tr('Escolaridade', 'Escolaridad', 'Education')}</label>
               <select value={escolaridade} onChange={e => setEscolaridade(e.target.value)} className={inputCls}>
                 <option value="">{tr('Selecione', 'Seleccione', 'Select')}</option>
@@ -388,10 +440,20 @@ export default function CompletarCadastroPage() {
                   <input value={conjugeNome} onChange={e => setConjugeNome(e.target.value)} className={inputCls} />
                 </div>
                 <div>
+                  <label className={labelCls}>{tr('Religião do cônjuge', 'Religión del cónyuge', "Spouse's religion")}</label>
+                  <input value={conjugeReligiao} onChange={e => setConjugeReligiao(e.target.value)} className={inputCls} />
+                </div>
+                <div>
                   <label className={labelCls}>{tr('Data de casamento', 'Fecha de matrimonio', 'Marriage date')}</label>
                   <input type="date" value={dataCasamento} onChange={e => setDataCasamento(e.target.value)} className={inputCls} />
                 </div>
               </>
+            )}
+            {estadoCivil === 'uniao_estavel' && (
+              <div>
+                <label className={labelCls}>{tr('União estável há quanto tempo?', '¿Hace cuánto tiempo?', 'How long?')}</label>
+                <input value={uniaoEstavelTempo} onChange={e => setUniaoEstavelTempo(e.target.value)} className={inputCls} placeholder={tr('Ex.: 3 anos', 'Ej.: 3 años', 'E.g.: 3 years')} />
+              </div>
             )}
             <div>
               <label className={labelCls}>{tr('Nome do pai', 'Nombre del padre', "Father's name")}</label>
@@ -409,6 +471,123 @@ export default function CompletarCadastroPage() {
               <label className={labelCls}>{tr('Naturalidade (UF)', 'Provincia/estado', 'State')}</label>
               <input value={naturalidadeUf} onChange={e => setNaturalidadeUf(e.target.value)} maxLength={2} className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>{tr('Nacionalidade', 'Nacionalidad', 'Nationality')}</label>
+              <div className="flex gap-2">
+                {(['Brasileira', 'Estrangeira'] as const).map(opcao => (
+                  <button
+                    key={opcao}
+                    type="button"
+                    onClick={() => setNacionalidade(opcao)}
+                    className={`flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      nacionalidade === opcao
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opcao === 'Brasileira' ? tr('Brasileira', 'Brasileña', 'Brazilian') : tr('Estrangeira', 'Extranjera', 'Foreign')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {nacionalidade === 'Estrangeira' && (
+              <div>
+                <label className={labelCls}>{tr('País de origem', 'País de origen', 'Country of origin')}</label>
+                <input value={paisOrigem} onChange={e => setPaisOrigem(e.target.value)} className={inputCls} />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Igreja / Congregação e transferência */}
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-5">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <Church className="w-5 h-5 text-blue-600" /> {tr('Igreja e transferência', 'Iglesia y transferencia', 'Church and transfer')}
+          </h2>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>{tr('Onde você congrega?', '¿Dónde congrega?', 'Where do you attend?')}</label>
+              <select value={igrejaSedeCongregacao} onChange={e => setIgrejaSedeCongregacao(e.target.value)} className={inputCls}>
+                <option value="">{tr('Selecione', 'Seleccione', 'Select')}</option>
+                <option value="sede">{tr('Igreja Sede (Central ou Pedras Vivas)', 'Iglesia Sede (Central o Pedras Vivas)', 'Main Church (Central or Pedras Vivas)')}</option>
+                <option value="congregacao_manaus">{tr('Congregação em Manaus', 'Congregación en Manaus', 'Congregation in Manaus')}</option>
+                <option value="congregacao_interior">{tr('Congregação no Interior', 'Congregación en el interior', 'Congregation in the countryside')}</option>
+              </select>
+            </div>
+            {igrejaSedeCongregacao && igrejaSedeCongregacao !== 'sede' && (
+              <div>
+                <label className={labelCls}>{tr('Qual congregação?', '¿Cuál congregación?', 'Which congregation?')}</label>
+                <input value={congregacaoNome} onChange={e => setCongregacaoNome(e.target.value)} className={inputCls} />
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <label className={labelCls}>{tr('Você está vindo por transferência de outra igreja?', '¿Viene por transferencia de otra iglesia?', 'Are you coming by transfer from another church?')}</label>
+            <div className="grid sm:grid-cols-2 gap-2 mt-1">
+              {([
+                ['nenhuma', tr('Não', 'No', 'No')],
+                ['ipb', tr('Sim, entre igrejas IPB (com carta)', 'Sí, entre iglesias IPB (con carta)', 'Yes, between IPB churches (with letter)')],
+                ['outra', tr('Sim, de outra denominação', 'Sí, de otra denominación', 'Yes, from another denomination')],
+                ['jurisdicao', tr('Sim, por jurisdição (sem carta)', 'Sí, por jurisdicción (sin carta)', 'Yes, by jurisdiction (no letter)')],
+              ] as const).map(([valor, texto]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => { setTipoTransferencia(valor); if (valor === 'nenhuma') setTransferenciaQual(''); }}
+                  className={`px-3 py-2.5 rounded-lg border text-sm font-medium text-left transition-colors ${
+                    tipoTransferencia === valor
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {texto}
+                </button>
+              ))}
+            </div>
+            {tipoTransferencia !== 'nenhuma' && (
+              <div className="grid sm:grid-cols-2 gap-4 mt-3">
+                <div>
+                  <label className={labelCls}>
+                    {tipoTransferencia === 'ipb'
+                      ? tr('Qual igreja IPB?', '¿Cuál iglesia IPB?', 'Which IPB church?')
+                      : tr('Qual denominação?', '¿Cuál denominación?', 'Which denomination?')}
+                  </label>
+                  <input value={transferenciaQual} onChange={e => setTransferenciaQual(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>{tr('Observação (opcional)', 'Observación (opcional)', 'Note (optional)')}</label>
+                  <input value={transferenciaObservacao} onChange={e => setTransferenciaObservacao(e.target.value)} className={inputCls} />
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Propósito da entrevista */}
+        <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-5">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <ClipboardList className="w-5 h-5 text-blue-600" /> {tr('Propósito da entrevista', 'Propósito de la entrevista', 'Purpose of the interview')}
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-2">
+            {([
+              ['batismo_infantil', tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism')],
+              ['profissao_fe', tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')],
+              ['profissao_fe_e_batismo', tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism')],
+            ] as const).map(([valor, texto]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setPropositoEntrevista(valor)}
+                className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                  propositoEntrevista === valor
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {texto}
+              </button>
+            ))}
           </div>
         </section>
 

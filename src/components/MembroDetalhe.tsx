@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -13,6 +13,8 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
+import AssinaturaCanvas, { AssinaturaCanvasHandle } from '@/components/AssinaturaCanvas';
+import { gerarFichaCandidatoPdf } from '@/lib/ficha-candidato-pdf';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
@@ -20,6 +22,7 @@ import {
   AlertCircle, MessageSquare, Plus, Edit2, Trash2, User,
   Cake, Church, Clock, Briefcase, GraduationCap, Home,
   Users, BookOpen, Globe, Flag, ChevronDown, ChevronUp, Camera, Send, Copy,
+  ClipboardCheck, PenLine, Download,
 } from 'lucide-react';
 import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
 
@@ -69,6 +72,18 @@ interface Membro {
   is_teste: boolean;
   classificacao_membro: 'comungante' | 'nao_comungante' | 'aderente_comungante' | 'aderente_nao_comungante' | null;
   outras_pessoas_mesmo_telefone: string[] | null;
+  // Ficha de Candidato à Membresia
+  atividade_atual: string | null;
+  pais_origem: string | null;
+  uniao_estavel_tempo: string | null;
+  igreja_sede_congregacao: 'sede' | 'congregacao_manaus' | 'congregacao_interior' | null;
+  congregacao_nome: string | null;
+  transferencia_ipb_origem: string | null;
+  transferencia_jurisdicao_sem_carta: string | null;
+  transferencia_observacao: string | null;
+  proposito_entrevista: 'batismo_infantil' | 'profissao_fe' | 'profissao_fe_e_batismo' | null;
+  assinatura_ficha: string | null;
+  assinatura_ficha_em: string | null;
 }
 
 interface NotaPastoral {
@@ -210,6 +225,97 @@ const CURSOS_DISCIPULADO: Record<string, string> = {
   apostila_03: 'Apostila 03 — Conhecendo a Nossa Fé',
 };
 
+// ─── Assinatura digital da Ficha de Candidato à Membresia (no tablet) ──────────
+function AssinaturaFichaOverlay({
+  membro, assinanteNome, tr, onFechar, onSalvo,
+}: {
+  membro: Membro;
+  assinanteNome: string;
+  tr: (pt: string, es: string, en: string) => string;
+  onFechar: () => void;
+  onSalvo: (assinaturaFicha: string, assinaturaFichaEm: string) => void;
+}) {
+  const canvasRef = useRef<AssinaturaCanvasHandle | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const confirmar = async () => {
+    const dataUrl = canvasRef.current?.paraDataUrl();
+    if (!dataUrl) {
+      setErro(tr('Desenhe a assinatura antes de confirmar.', 'Dibuje la firma antes de confirmar.', 'Draw the signature before confirming.'));
+      return;
+    }
+    setSalvando(true);
+    setErro('');
+    try {
+      const agora = new Date().toISOString();
+      const params = new URLSearchParams();
+      const igrejaId = getStoredChurchId();
+      if (igrejaId) params.set('igreja_id', igrejaId);
+      const response = await fetch(`/api/pessoas/${membro.id}?${params.toString()}`, {
+        method: 'PATCH',
+        headers: await buildAuthenticatedHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ assinatura_ficha: dataUrl, assinatura_ficha_em: agora }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || tr('Erro ao salvar assinatura.', 'Error al guardar la firma.', 'Error saving signature.'));
+      }
+      onSalvo(dataUrl, agora);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : tr('Erro ao salvar assinatura.', 'Error al guardar la firma.', 'Error saving signature.'));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto p-6">
+        <div className="mb-4">
+          <h3 className="text-xl font-bold text-slate-900">
+            {tr('Confirmação da Ficha de Candidato à Membresia', 'Confirmación de la Ficha de Candidato a Membresía', 'Membership Candidate Form Confirmation')}
+          </h3>
+          <p className="text-sm text-slate-500 mt-1">
+            {tr('Ficha de', 'Ficha de', 'Form of')} {membro.nome} — {tr('confirmado e assinado por', 'confirmado y firmado por', 'confirmed and signed by')} {assinanteNome || tr('pastor/presbítero', 'pastor/presbítero', 'pastor/elder')}
+          </p>
+        </div>
+
+        <div className="h-56 mb-3">
+          <AssinaturaCanvas ref={canvasRef} className="w-full h-full touch-none bg-white rounded-xl border-2 border-dashed border-slate-300" />
+        </div>
+
+        {erro && <p className="text-sm text-red-600 mb-3">{erro}</p>}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => canvasRef.current?.limpar()}
+            className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+          >
+            {tr('Limpar', 'Limpiar', 'Clear')}
+          </button>
+          <button
+            type="button"
+            onClick={confirmar}
+            disabled={salvando}
+            className="flex-1 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+          >
+            {salvando ? tr('Salvando...', 'Guardando...', 'Saving...') : tr('Confirmar assinatura', 'Confirmar firma', 'Confirm signature')}
+          </button>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+          >
+            {tr('Cancelar', 'Cancelar', 'Cancel')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface MembroDetalheProps {
   membroId: string;
@@ -305,6 +411,18 @@ export default function MembroDetalhe({
   const [cursosDiscipulado, setCursosDiscipulado] = useState<string[]>([]);
   const [grupoFamiliarNome, setGrupoFamiliarNome] = useState('');
   const [grupoFamiliarLider, setGrupoFamiliarLider] = useState('');
+
+  // Ficha de Candidato à Membresia
+  const [atividadeAtual, setAtividadeAtual] = useState('');
+  const [paisOrigem, setPaisOrigem] = useState('');
+  const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
+  const [congregacaoNome, setCongregacaoNome] = useState('');
+  const [transferenciaIpbOrigem, setTransferenciaIpbOrigem] = useState('');
+  const [transferenciaJurisdicaoSemCarta, setTransferenciaJurisdicaoSemCarta] = useState('');
+  const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
+  const [propositoEntrevista, setPropositoEntrevista] = useState('');
+  const [assinaturaAberta, setAssinaturaAberta] = useState(false);
 
   // ── Notas ────────────────────────────────────────────────────────────────────
   const [modalNotaAberto, setModalNotaAberto] = useState(false);
@@ -429,6 +547,15 @@ export default function MembroDetalhe({
       setCursosDiscipulado(data.cursos_discipulado || []);
       setGrupoFamiliarNome(data.grupo_familiar_nome || '');
       setGrupoFamiliarLider(data.grupo_familiar_lider || '');
+      setAtividadeAtual(data.atividade_atual || '');
+      setPaisOrigem(data.pais_origem || '');
+      setUniaoEstavelTempo(data.uniao_estavel_tempo || '');
+      setIgrejaSedeCongregacao(data.igreja_sede_congregacao || '');
+      setCongregacaoNome(data.congregacao_nome || '');
+      setTransferenciaIpbOrigem(data.transferencia_ipb_origem || '');
+      setTransferenciaJurisdicaoSemCarta(data.transferencia_jurisdicao_sem_carta || '');
+      setTransferenciaObservacao(data.transferencia_observacao || '');
+      setPropositoEntrevista(data.proposito_entrevista || '');
     } catch (error) {
       console.error('Erro ao carregar membro:', error);
       setMensagem(
@@ -527,6 +654,15 @@ export default function MembroDetalhe({
           grupo_familiar_nome: grupoFamiliarNome.trim() || null,
           grupo_familiar_lider: grupoFamiliarLider.trim() || null,
           is_teste: isTeste,
+          atividade_atual: atividadeAtual.trim() || null,
+          pais_origem: paisOrigem.trim() || null,
+          uniao_estavel_tempo: uniaoEstavelTempo.trim() || null,
+          igreja_sede_congregacao: igrejaSedeCongregacao || null,
+          congregacao_nome: congregacaoNome.trim() || null,
+          transferencia_ipb_origem: transferenciaIpbOrigem.trim() || null,
+          transferencia_jurisdicao_sem_carta: transferenciaJurisdicaoSemCarta.trim() || null,
+          transferencia_observacao: transferenciaObservacao.trim() || null,
+          proposito_entrevista: propositoEntrevista || null,
           igreja_id: getStoredChurchId(),
         })
       });
@@ -876,14 +1012,51 @@ export default function MembroDetalhe({
             </div>
           </div>
           {!modoEdicao && (
-            <button
-              onClick={() => setModoEdicao(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Edit2 className="w-4 h-4" /> {tr('Editar', 'Editar', 'Edit')}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                onClick={() => setAssinaturaAberta(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
+              >
+                <PenLine className="w-4 h-4" />
+                {membro.assinatura_ficha
+                  ? tr('Reassinar ficha', 'Volver a firmar', 'Re-sign form')
+                  : tr('Assinar no tablet', 'Firmar en tablet', 'Sign on tablet')}
+              </button>
+              <button
+                onClick={() => gerarFichaCandidatoPdf(membro, { tr, intlLocale, assinanteNome: usuarioPermitido?.nome })}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
+              >
+                <Download className="w-4 h-4" /> {tr('Baixar Ficha (PDF)', 'Descargar Ficha (PDF)', 'Download Form (PDF)')}
+              </button>
+              <button
+                onClick={() => setModoEdicao(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Edit2 className="w-4 h-4" /> {tr('Editar', 'Editar', 'Edit')}
+              </button>
+            </div>
           )}
         </div>
+
+        {membro.assinatura_ficha_em && (
+          <p className="text-xs text-slate-400 -mt-4 mb-6 text-right">
+            {tr('Ficha assinada em', 'Ficha firmada el', 'Form signed on')}{' '}
+            {new Date(membro.assinatura_ficha_em).toLocaleString(intlLocale)}
+          </p>
+        )}
+
+        {assinaturaAberta && (
+          <AssinaturaFichaOverlay
+            membro={membro}
+            assinanteNome={usuarioPermitido?.nome || user?.email || ''}
+            tr={tr}
+            onFechar={() => setAssinaturaAberta(false)}
+            onSalvo={(assinaturaFicha, assinaturaFichaEm) => {
+              setMembro(prev => (prev ? { ...prev, assinatura_ficha: assinaturaFicha, assinatura_ficha_em: assinaturaFichaEm } : prev));
+              setAssinaturaAberta(false);
+            }}
+          />
+        )}
 
         {/* Mensagem */}
         {mensagem && (
@@ -1085,12 +1258,26 @@ export default function MembroDetalhe({
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Nacionalidade', 'Nacionalidad', 'Nationality')}</label>
                       <input type="text" value={nacionalidade} onChange={(e) => setNacionalidade(e.target.value)} className={inputCls} />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('País de Origem (se estrangeiro)', 'País de Origen (si extranjero)', 'Country of Origin (if foreign)')}</label>
+                      <input type="text" value={paisOrigem} onChange={(e) => setPaisOrigem(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Tempo de União Estável', 'Tiempo de Unión Estable', 'Civil Union Duration')}</label>
+                      <input type="text" value={uniaoEstavelTempo} onChange={(e) => setUniaoEstavelTempo(e.target.value)} className={inputCls} placeholder={tr('Ex.: 3 anos', 'Ej.: 3 años', 'E.g.: 3 years')} />
+                    </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Profissão', 'Profesión', 'Profession')}</label>
                       <input type="text" value={profissao} onChange={(e) => setProfissao(e.target.value)} className={inputCls} />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Atividade Atual', 'Actividad Actual', 'Current Activity')}</label>
+                      <input type="text" value={atividadeAtual} onChange={(e) => setAtividadeAtual(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Escolaridade', 'Escolaridad', 'Education')}</label>
                       <select value={escolaridade} onChange={(e) => setEscolaridade(e.target.value)} className={inputCls}>
@@ -1245,12 +1432,56 @@ export default function MembroDetalhe({
                       <span className="text-sm text-slate-700 font-medium">{tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>
                     </label>
                   </div>
-                  {!transferidoIpb && (
+                  {transferidoIpb && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferido de outra denominação', 'Transferido de otra denominación', 'Transferred from another denomination')}</label>
-                      <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação anterior', 'Nombre de la denominación anterior', 'Previous denomination name')} />
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Qual igreja IPB?', '¿Cuál iglesia IPB?', 'Which IPB church?')}</label>
+                      <input type="text" value={transferenciaIpbOrigem} onChange={(e) => setTransferenciaIpbOrigem(e.target.value)} className={inputCls} />
                     </div>
                   )}
+                  {!transferidoIpb && (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferido de outra denominação', 'Transferido de otra denominación', 'Transferred from another denomination')}</label>
+                        <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação anterior', 'Nombre de la denominación anterior', 'Previous denomination name')} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferência por jurisdição (sem carta)', 'Transferencia por jurisdicción (sin carta)', 'Transfer by jurisdiction (no letter)')}</label>
+                        <input type="text" value={transferenciaJurisdicaoSemCarta} onChange={(e) => setTransferenciaJurisdicaoSemCarta(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação', 'Nombre de la denominación', 'Denomination name')} />
+                      </div>
+                    </div>
+                  )}
+                  {(transferidoIpb || transferidoOutra || transferenciaJurisdicaoSemCarta) && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Observação da transferência', 'Observación de la transferencia', 'Transfer note')}</label>
+                      <input type="text" value={transferenciaObservacao} onChange={(e) => setTransferenciaObservacao(e.target.value)} className={inputCls} />
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Igreja Sede / Congregação', 'Iglesia Sede / Congregación', 'Main Church / Congregation')}</label>
+                      <select value={igrejaSedeCongregacao} onChange={(e) => setIgrejaSedeCongregacao(e.target.value)} className={inputCls}>
+                        <option value="">{tr('— não definida —', '— no definida —', '— not set —')}</option>
+                        <option value="sede">{tr('Igreja Sede (Central ou Pedras Vivas)', 'Iglesia Sede (Central o Pedras Vivas)', 'Main Church (Central or Pedras Vivas)')}</option>
+                        <option value="congregacao_manaus">{tr('Congregação em Manaus', 'Congregación en Manaus', 'Congregation in Manaus')}</option>
+                        <option value="congregacao_interior">{tr('Congregação no Interior', 'Congregación en el interior', 'Congregation in the countryside')}</option>
+                      </select>
+                    </div>
+                    {igrejaSedeCongregacao && igrejaSedeCongregacao !== 'sede' && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Qual congregação?', '¿Cuál congregación?', 'Which congregation?')}</label>
+                        <input type="text" value={congregacaoNome} onChange={(e) => setCongregacaoNome(e.target.value)} className={inputCls} />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Propósito da entrevista', 'Propósito de la entrevista', 'Purpose of the interview')}</label>
+                    <select value={propositoEntrevista} onChange={(e) => setPropositoEntrevista(e.target.value)} className={inputCls}>
+                      <option value="">{tr('— não definido —', '— no definido —', '— not set —')}</option>
+                      <option value="batismo_infantil">{tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism')}</option>
+                      <option value="profissao_fe">{tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')}</option>
+                      <option value="profissao_fe_e_batismo">{tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism')}</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Saúde e Observações */}
@@ -1320,13 +1551,17 @@ export default function MembroDetalhe({
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Pai', 'Padre', 'Father')} valor={membro.nome_pai} />
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Mãe', 'Madre', 'Mother')} valor={membro.nome_mae} />
                     <CampoInfo icone={<Flag className="w-5 h-5" />} label={tr('Naturalidade', 'Origen', 'Origin')} valor={[membro.naturalidade_cidade, membro.naturalidade_uf].filter(Boolean).join(' - ') || null} />
-                    <CampoInfo icone={<Globe className="w-5 h-5" />} label={tr('Nacionalidade', 'Nacionalidad', 'Nationality')} valor={membro.nacionalidade} />
+                    <CampoInfo icone={<Globe className="w-5 h-5" />} label={tr('Nacionalidade', 'Nacionalidad', 'Nationality')} valor={membro.pais_origem ? `${membro.nacionalidade} (${membro.pais_origem})` : membro.nacionalidade} />
                     <CampoInfo icone={<Briefcase className="w-5 h-5" />} label={tr('Profissão', 'Profesión', 'Profession')} valor={membro.profissao} />
+                    <CampoInfo icone={<Briefcase className="w-5 h-5" />} label={tr('Atividade Atual', 'Actividad Actual', 'Current Activity')} valor={membro.atividade_atual} />
                     <CampoInfo
                       icone={<GraduationCap className="w-5 h-5" />}
                       label={tr('Escolaridade', 'Escolaridad', 'Education')}
                       valor={getEducationLabel(membro.escolaridade)}
                     />
+                    {membro.estado_civil === 'uniao_estavel' && (
+                      <CampoInfo icone={<Heart className="w-5 h-5" />} label={tr('Tempo de União Estável', 'Tiempo de Unión Estable', 'Civil Union Duration')} valor={membro.uniao_estavel_tempo} />
+                    )}
                   </div>
 
                   {/* Endereço + Mapa */}
@@ -1358,6 +1593,26 @@ export default function MembroDetalhe({
                     <CampoInfo icone={<Calendar className="w-5 h-5" />} label={tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')} valor={formatarData(membro.data_profissao_fe)} />
                     <CampoInfo icone={<Users className="w-5 h-5" />} label={tr('Grupo Familiar', 'Grupo Familiar', 'Family Group')} valor={membro.grupo_familiar_nome} />
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Líder do Grupo', 'Líder del Grupo', 'Group Leader')} valor={membro.grupo_familiar_lider} />
+                    <CampoInfo
+                      icone={<Church className="w-5 h-5" />}
+                      label={tr('Igreja Sede / Congregação', 'Iglesia Sede / Congregación', 'Main Church / Congregation')}
+                      valor={
+                        membro.igreja_sede_congregacao === 'sede'
+                          ? tr('Igreja Sede (Central ou Pedras Vivas)', 'Iglesia Sede (Central o Pedras Vivas)', 'Main Church (Central or Pedras Vivas)')
+                          : membro.congregacao_nome
+                      }
+                    />
+                    <CampoInfo
+                      icone={<ClipboardCheck className="w-5 h-5" />}
+                      label={tr('Propósito da Entrevista', 'Propósito de la Entrevista', 'Interview Purpose')}
+                      valor={
+                        ({
+                          batismo_infantil: tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism'),
+                          profissao_fe: tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith'),
+                          profissao_fe_e_batismo: tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism'),
+                        } as Record<string, string>)[membro.proposito_entrevista || ''] || null
+                      }
+                    />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
                     {membro.classificacao_membro && (() => {
@@ -1371,13 +1626,27 @@ export default function MembroDetalhe({
                       return c ? <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${c.cls}`}>{c.label}</span> : null;
                     })()}
                     {membro.batizado && <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-300">✓ {tr('Batizado', 'Bautizado', 'Baptized')}</span>}
-                    {membro.transferido_ipb && <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">✓ {tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>}
+                    {membro.transferido_ipb && (
+                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-300">
+                        ✓ {tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}{membro.transferencia_ipb_origem ? `: ${membro.transferencia_ipb_origem}` : ''}
+                      </span>
+                    )}
                     {membro.transferido_outra_denominacao && (
                       <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
                         {tr('Transferido de:', 'Transferido de:', 'Transferred from:')} {membro.transferido_outra_denominacao}
                       </span>
                     )}
+                    {membro.transferencia_jurisdicao_sem_carta && (
+                      <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
+                        {tr('Transferência por jurisdição:', 'Transferencia por jurisdicción:', 'Transfer by jurisdiction:')} {membro.transferencia_jurisdicao_sem_carta}
+                      </span>
+                    )}
                   </div>
+                  {membro.transferencia_observacao && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {tr('Obs. da transferência:', 'Obs. de la transferencia:', 'Transfer note:')} {membro.transferencia_observacao}
+                    </p>
+                  )}
                   {membro.cursos_discipulado && membro.cursos_discipulado.length > 0 && (
                     <div className="mt-4">
                       <p className="text-xs text-slate-500 mb-2 flex items-center gap-1">

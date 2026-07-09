@@ -10,8 +10,10 @@ const supabaseAdmin = createClient(
 );
 
 // Campos que o próprio membro pode preencher pelo link público.
-// NÃO inclui cargo, status_membro, ativo, observações ou dados eclesiásticos
-// — esses são responsabilidade da liderança.
+// NÃO inclui cargo, status_membro, ativo ou observações — isso é
+// responsabilidade da liderança. Os dados da Ficha de Candidato à Membresia
+// (incl. propósito da entrevista e transferência) entram aqui por decisão
+// explícita: o próprio candidato já sabe e declara essas informações.
 const CAMPOS_PESSOA = [
   'nome', 'apelido', 'telefone', 'email', 'data_nascimento', 'sexo',
   'estado_civil', 'conjuge_nome', 'conjuge_religiao', 'data_casamento',
@@ -19,6 +21,12 @@ const CAMPOS_PESSOA = [
   'nacionalidade', 'profissao', 'escolaridade', 'logradouro', 'bairro',
   'cep', 'cidade', 'uf', 'latitude', 'longitude', 'google_place_id',
   'endereco_completo',
+  // Ficha de Candidato à Membresia
+  'atividade_atual', 'pais_origem', 'uniao_estavel_tempo',
+  'igreja_sede_congregacao', 'congregacao_nome',
+  'transferido_ipb', 'transferencia_ipb_origem',
+  'transferido_outra_denominacao', 'transferencia_jurisdicao_sem_carta',
+  'transferencia_observacao', 'proposito_entrevista',
 ] as const;
 
 const CAMPOS_FILHO = [

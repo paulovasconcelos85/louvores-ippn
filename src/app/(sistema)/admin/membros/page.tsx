@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { jsPDF } from 'jspdf';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoCor } from '@/lib/permissions';
@@ -17,7 +18,7 @@ import { useLocale } from '@/i18n/provider';
 import {
   Users, Phone, MapPin, Calendar, Heart, AlertCircle,
   Search, Filter, Cake, Church, Mail, Briefcase, Home, BookOpen, Printer,
-  LayoutList, Table2, Send, Copy,
+  LayoutList, Table2, Send, Copy, ChevronDown,
 } from 'lucide-react';
 import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
 
@@ -56,7 +57,16 @@ interface Membro {
   cadastro_token: string | null;
   is_teste: boolean;
   classificacao_membro: 'comungante' | 'nao_comungante' | 'aderente_comungante' | 'aderente_nao_comungante' | null;
+  nome_familia_customizado?: string | null;
 }
+
+type TipoRelacionamentoFamiliar =
+  | 'conjuge' | 'pai' | 'mae' | 'filho' | 'filha'
+  | 'irmao' | 'irma' | 'avo_paterno' | 'avo_paterna'
+  | 'avo_materno' | 'avo_materna' | 'neto' | 'neta'
+  | 'cunhado' | 'cunhada' | 'sogro' | 'sogra'
+  | 'genro' | 'nora' | 'tio' | 'tia'
+  | 'sobrinho' | 'sobrinha' | 'primo' | 'prima';
 
 type FiltroAniversario = 'todos' | 'hoje' | 'mes' | 'proximos7dias';
 type FiltroStatus = 'todos' | 'ativo' | 'afastado' | 'visitante' | 'congregado' | 'falecido';
@@ -66,7 +76,6 @@ type FiltroFaixaEtaria = 'todos' | 'ate_10' | '11_18' | '19_35' | '36_59' | '60_
 type FiltroEstadoCivil = 'todos' | 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
 type FiltroSexo = 'todos' | 'M' | 'F';
 type FiltroCargo = 'todos' | string;
-type TipoListaImpressao = 'membros' | 'todos';
 
 interface IgrejaResumo {
   timezone: string | null;
@@ -161,8 +170,8 @@ export default function PastorarMembrosPage() {
   const [visao, setVisao] = useState<'lista' | 'tabela' | 'familia'>('lista');
   const [filtrosExpandidos, setFiltrosExpandidos] = useState(false);
   const [igrejaResumo, setIgrejaResumo] = useState<IgrejaResumo | null>(() => membrosCache.igreja);
-  const [tipoListaImpressao, setTipoListaImpressao] = useState<TipoListaImpressao>('membros');
   const [membroSelecionadoId, setMembroSelecionadoId] = useState<string | null>(null);
+  const [gerandoPdfFamilia, setGerandoPdfFamilia] = useState(false);
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -242,6 +251,16 @@ export default function PastorarMembrosPage() {
     if (membrosCache.carregado && membrosCache.igrejaId === igrejaId) return;
     void carregarMembros();
   }, [user, podeAcessar, carregarMembros]);
+
+  // A visualização padrão é a de detalhe (lista + membro selecionado ao lado),
+  // por isso já abrimos com o primeiro membro selecionado assim que a lista chega.
+  const autoSelecaoFeitaRef = useRef(false);
+  useEffect(() => {
+    if (autoSelecaoFeitaRef.current) return;
+    if (membroSelecionadoId || membros.length === 0) return;
+    autoSelecaoFeitaRef.current = true;
+    setMembroSelecionadoId(membros[0].id);
+  }, [membros, membroSelecionadoId]);
 
   const churchTimezone = igrejaResumo?.timezone || DEFAULT_TIMEZONE;
 
@@ -432,20 +451,302 @@ export default function PastorarMembrosPage() {
   const todosParaImpressao = [...membros]
     .filter((m) => !m.is_teste)
     .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' }));
-  const pessoasParaImpressao = tipoListaImpressao === 'membros' ? membrosParaVotacao : todosParaImpressao;
   const localizacaoIgreja = [igrejaResumo?.cidade, igrejaResumo?.uf, igrejaResumo?.pais].filter(Boolean).join(', ');
-  const tituloListaImpressao =
-    tipoListaImpressao === 'membros'
-      ? tr('Lista de Membros Comungantes', 'Lista de Miembros Comulgantes', 'Communicant Member List')
-      : tr('Lista Geral de Pessoas', 'Lista General de Personas', 'Full People List');
-  const descricaoListaImpressao =
-    tipoListaImpressao === 'membros'
-      ? tr('Comungantes ativos — habilitados a votar (Art. 12–13, CI/IPB)', 'Comulgantes activos — habilitados para votar (Art. 12–13, CI/IPB)', 'Active communicants — eligible to vote (Art. 12–13, CI/IPB)')
-      : tr('Todos os cadastros (exceto testes)', 'Todos los registros (excepto pruebas)', 'All records (excluding test)');
+  const tituloListaVotacao = tr('Lista de Membros Comungantes', 'Lista de Miembros Comulgantes', 'Communicant Member List');
+  const descricaoListaVotacao = tr(
+    'Comungantes ativos — habilitados a votar (Art. 12–13, CI/IPB)',
+    'Comulgantes activos — habilitados para votar (Art. 12–13, CI/IPB)',
+    'Active communicants — eligible to vote (Art. 12–13, CI/IPB)'
+  );
 
-  const imprimirLista = (tipo: TipoListaImpressao) => {
-    flushSync(() => setTipoListaImpressao(tipo));
-    window.print();
+  const imprimirListaVotacao = () => window.print();
+
+  type ColunaImpressao = { label: string; width: number; align?: 'left' | 'center'; get: (m: Membro, numero: number) => string };
+  type BlocoImpressao =
+    | { tipo: 'secao'; texto: string }
+    | { tipo: 'linha'; membro: Membro; zebra: boolean };
+
+  const construirColunasImpressao = (): ColunaImpressao[] => [
+    { label: '#', width: 7, align: 'center', get: (_m, numero) => String(numero) },
+    { label: tr('Nome', 'Nombre', 'Name'), width: 46, get: (m) => m.nome + (m.apelido ? ` "${m.apelido}"` : '') },
+    { label: tr('Sexo', 'Sexo', 'Sex'), width: 9, align: 'center', get: (m) => (m.sexo === 'M' ? 'M' : m.sexo === 'F' ? 'F' : '—') },
+    { label: tr('Nascimento', 'Nacimiento', 'Birth'), width: 20, get: (m) => {
+      const idade = calcularIdade(m.data_nascimento);
+      return m.data_nascimento ? `${formatarData(m.data_nascimento)}${idade !== null ? ` (${idade})` : ''}` : '—';
+    } },
+    { label: tr('Estado Civil', 'Estado Civil', 'Marital'), width: 20, get: (m) => getMaritalStatusLabel(m.estado_civil) || '—' },
+    { label: tr('Telefone', 'Teléfono', 'Phone'), width: 24, get: (m) => (m.telefone ? formatPhoneNumber(m.telefone) : '—') },
+    { label: 'Email', width: 40, get: (m) => m.email || '—' },
+    { label: tr('Bairro/Cidade', 'Barrio/Ciudad', 'Neighborhood/City'), width: 32, get: (m) => enderecoResumido(m) || '—' },
+    { label: tr('Profissão', 'Profesión', 'Profession'), width: 26, get: (m) => m.profissao || '—' },
+    { label: tr('Grupo', 'Grupo', 'Group'), width: 20, get: (m) => m.grupo_familiar_nome || '—' },
+    { label: tr('Bat.', 'Baut.', 'Bap.'), width: 10, align: 'center', get: (m) => (m.batizado ? tr('Sim', 'Sí', 'Yes') : tr('Não', 'No', 'No')) },
+    { label: tr('Status', 'Estado', 'Status'), width: 20, get: (m) => getStatusLabel(m.status_membro) + (!m.ativo ? ` / ${tr('Inativo', 'Inactivo', 'Inactive')}` : '') },
+  ];
+
+  // Monta e baixa um PDF profissional (paisagem, tabela com quebra de linha
+  // automática) a partir de uma lista de blocos — linhas de pessoas e,
+  // opcionalmente, cabeçalhos de seção (usados na divisão por família).
+  const montarPdfMembros = (titulo: string, blocosEntrada: BlocoImpressao[], totalPessoas: number, nomeArquivoBase: string) => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const marginX = 10;
+    const marginBottom = 10;
+    const headerBandHeight = 22;
+    const headerRowHeight = 7;
+    const secaoRowHeight = 7.5;
+    const bodyFontSize = 7.2;
+    const lineH = 3.3;
+    const rowPadY = 1.6;
+
+    const colunas = construirColunasImpressao();
+    const tableWidth = colunas.reduce((s, c) => s + c.width, 0);
+    const startX = Math.max(marginX, (pw - tableWidth) / 2);
+    const geradoEm = new Date().toLocaleString(intlLocale);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(bodyFontSize);
+
+    // Numera apenas as linhas de pessoa, ignorando cabeçalhos de seção.
+    let numeroSeq = 0;
+    type BlocoMedido =
+      | { tipo: 'secao'; texto: string; altura: number }
+      | { tipo: 'linha'; membro: Membro; zebra: boolean; colTexts: string[][]; altura: number };
+    const blocosMedidos: BlocoMedido[] = blocosEntrada.map((bloco) => {
+      if (bloco.tipo === 'secao') return { ...bloco, altura: secaoRowHeight };
+      numeroSeq += 1;
+      const numero = numeroSeq;
+      const colTexts = colunas.map((col) => doc.splitTextToSize(col.get(bloco.membro, numero), col.width - 3) as string[]);
+      const maxLinhas = Math.max(1, ...colTexts.map((t) => t.length));
+      return { ...bloco, colTexts, altura: maxLinhas * lineH + rowPadY };
+    });
+
+    // Distribui os blocos entre páginas respeitando a altura disponível
+    // (cada linha pode ter altura diferente, por causa da quebra de texto),
+    // evitando deixar um cabeçalho de seção "órfão" no fim de uma página.
+    const alturaDisponivel = ph - headerBandHeight - 4 - headerRowHeight - marginBottom;
+    const paginasAgrupadas: BlocoMedido[][] = [];
+    let atual: BlocoMedido[] = [];
+    let usado = 0;
+    for (let i = 0; i < blocosMedidos.length; i++) {
+      const bloco = blocosMedidos[i];
+      const alturaExtra = bloco.tipo === 'secao' ? (blocosMedidos[i + 1]?.altura ?? 0) : 0;
+      if (usado + bloco.altura + alturaExtra > alturaDisponivel && atual.length > 0) {
+        paginasAgrupadas.push(atual);
+        atual = [];
+        usado = 0;
+      }
+      atual.push(bloco);
+      usado += bloco.altura;
+    }
+    if (atual.length > 0) paginasAgrupadas.push(atual);
+    if (paginasAgrupadas.length === 0) paginasAgrupadas.push([]);
+    const totalPaginas = Math.max(1, paginasAgrupadas.length);
+
+    const desenharCabecalhoPagina = (pagina: number) => {
+      doc.setFillColor(30, 64, 175);
+      doc.rect(0, 0, pw, headerBandHeight, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text(titulo, marginX, 9);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      const subtitulo = [igrejaResumo?.slug, localizacaoIgreja].filter(Boolean).join(' — ');
+      if (subtitulo) doc.text(subtitulo, marginX, 15);
+      doc.setFontSize(8);
+      doc.text(
+        `${tr('Gerado em', 'Generado el', 'Generated on')}: ${geradoEm}  •  ${tr('Total', 'Total', 'Total')}: ${totalPessoas}`,
+        marginX,
+        headerBandHeight - 3
+      );
+      doc.text(`${tr('Página', 'Página', 'Page')} ${pagina}/${totalPaginas}`, pw - marginX, headerBandHeight - 3, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+    };
+
+    const desenharCabecalhoTabela = (y: number) => {
+      doc.setFillColor(226, 232, 240);
+      doc.rect(startX, y, tableWidth, headerRowHeight, 'F');
+      doc.setDrawColor(148, 163, 184);
+      doc.setTextColor(30, 41, 59);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      let x = startX;
+      for (const col of colunas) {
+        const tx = col.align === 'center' ? x + col.width / 2 : x + 1.5;
+        doc.text(col.label, tx, y + headerRowHeight - 2, col.align === 'center' ? { align: 'center' } : undefined);
+        x += col.width;
+      }
+      doc.rect(startX, y, tableWidth, headerRowHeight);
+      x = startX;
+      for (const col of colunas) { doc.line(x, y, x, y + headerRowHeight); x += col.width; }
+      doc.line(x, y, x, y + headerRowHeight);
+      return y + headerRowHeight;
+    };
+
+    paginasAgrupadas.forEach((blocosPagina, paginaIdx) => {
+      if (paginaIdx > 0) doc.addPage();
+      desenharCabecalhoPagina(paginaIdx + 1);
+      let y = desenharCabecalhoTabela(headerBandHeight + 4);
+
+      for (const bloco of blocosPagina) {
+        if (bloco.tipo === 'secao') {
+          doc.setFillColor(191, 219, 254);
+          doc.rect(startX, y, tableWidth, bloco.altura, 'F');
+          doc.setDrawColor(148, 163, 184);
+          doc.rect(startX, y, tableWidth, bloco.altura);
+          doc.setTextColor(30, 58, 138);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.text(bloco.texto, startX + 2, y + bloco.altura - 2.2);
+          y += bloco.altura;
+          continue;
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(bodyFontSize);
+        if (bloco.zebra) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(startX, y, tableWidth, bloco.altura, 'F');
+        }
+        doc.setDrawColor(226, 232, 240);
+        doc.setTextColor(15, 23, 42);
+        let x = startX;
+        colunas.forEach((col, ci) => {
+          const tx = col.align === 'center' ? x + col.width / 2 : x + 1.5;
+          bloco.colTexts[ci].forEach((linhaTexto, li) => {
+            const ty = y + rowPadY / 2 + lineH * (li + 1) - 1.0;
+            doc.text(linhaTexto, tx, ty, col.align === 'center' ? { align: 'center' } : undefined);
+          });
+          x += col.width;
+        });
+        doc.rect(startX, y, tableWidth, bloco.altura);
+        x = startX;
+        for (const col of colunas) { doc.line(x, y, x, y + bloco.altura); x += col.width; }
+        doc.line(x, y, x, y + bloco.altura);
+        y += bloco.altura;
+      }
+    });
+
+    const dataArquivo = new Date().toISOString().slice(0, 10);
+    const slugIgreja = (igrejaResumo?.slug || 'igreja').replace(/[^a-z0-9-]+/gi, '-');
+    doc.save(`${nomeArquivoBase}-${slugIgreja}-${dataArquivo}.pdf`);
+  };
+
+  // Gera um PDF profissional (paisagem, tabela) com os dados de todos os
+  // cadastros, em vez de acionar a impressão nativa da tela (que expõe
+  // cabeçalho/rodapé do navegador).
+  const gerarPdfTodos = () => {
+    const pessoas = todosParaImpressao;
+    const blocos: BlocoImpressao[] = pessoas.map((membro, idx) => ({ tipo: 'linha', membro, zebra: idx % 2 === 1 }));
+    montarPdfMembros(
+      tr('Lista Geral de Membros', 'Lista General de Miembros', 'Full Member List'),
+      blocos,
+      pessoas.length,
+      'membros'
+    );
+  };
+
+  // Mesma lista, mas dividida por família — usando a mesma lógica de
+  // agrupamento (relacionamentos + chefe de família) da aba "Famílias".
+  const gerarPdfPorFamilia = async () => {
+    setGerandoPdfFamilia(true);
+    try {
+      const pessoas = todosParaImpressao;
+      const pessoasMap = new Map(pessoas.map((p) => [p.id, p]));
+
+      const { data: relacionamentosData, error } = await supabase
+        .from('relacionamentos')
+        .select('pessoa_id, pessoa_relacionada_id, tipo');
+      if (error) throw error;
+
+      type RelacionamentoRow = { pessoa_id: string; pessoa_relacionada_id: string; tipo: TipoRelacionamentoFamiliar };
+      const relacionamentos = (relacionamentosData || []) as RelacionamentoRow[];
+
+      const mapaRel = new Map<string, Membro[]>();
+      relacionamentos.forEach((r) => {
+        const relacionada = pessoasMap.get(r.pessoa_relacionada_id);
+        if (!relacionada) return;
+        if (!mapaRel.has(r.pessoa_id)) mapaRel.set(r.pessoa_id, []);
+        mapaRel.get(r.pessoa_id)!.push(relacionada);
+      });
+
+      const pessoasComRelacao = new Set<string>();
+      relacionamentos.forEach((r) => {
+        if (pessoasMap.has(r.pessoa_id)) pessoasComRelacao.add(r.pessoa_id);
+        if (pessoasMap.has(r.pessoa_relacionada_id)) pessoasComRelacao.add(r.pessoa_relacionada_id);
+      });
+
+      const ehDependente = new Set<string>();
+      relacionamentos.forEach((r) => {
+        if (['filho', 'filha', 'neto', 'neta'].includes(r.tipo)) ehDependente.add(r.pessoa_relacionada_id);
+      });
+
+      const conjugesLadoB = new Set<string>();
+      relacionamentos.forEach((r) => {
+        if (r.tipo === 'conjuge' && r.pessoa_id > r.pessoa_relacionada_id) conjugesLadoB.add(r.pessoa_id);
+      });
+
+      const chefesVistos = new Set<string>();
+      const familias: { chefe: Membro; membros: Membro[] }[] = [];
+      pessoas.forEach((p) => {
+        const temRelacao = pessoasComRelacao.has(p.id);
+        const eDependente = ehDependente.has(p.id);
+        const eLadoB = conjugesLadoB.has(p.id);
+        if (temRelacao && !eDependente && !eLadoB && !chefesVistos.has(p.id)) {
+          chefesVistos.add(p.id);
+          familias.push({
+            chefe: p,
+            membros: (mapaRel.get(p.id) || [])
+              .slice()
+              .sort((a, b) => a.nome.localeCompare(b.nome, intlLocale, { sensitivity: 'base' })),
+          });
+        }
+      });
+
+      const semFamilia = pessoas.filter((p) => !pessoasComRelacao.has(p.id));
+
+      const getNomeFamilia = (chefe: Membro) => {
+        const custom = chefe.nome_familia_customizado?.trim();
+        if (custom) return custom;
+        const sobrenome = chefe.nome.trim().split(' ').slice(-1)[0];
+        return `${tr('Família', 'Familia', 'Family')} ${sobrenome}`;
+      };
+
+      familias.sort((a, b) => getNomeFamilia(a.chefe).localeCompare(getNomeFamilia(b.chefe), intlLocale, { sensitivity: 'base' }));
+
+      const pessoaLabel = (n: number) => (n !== 1 ? tr('pessoas', 'personas', 'people') : tr('pessoa', 'persona', 'person'));
+      const blocos: BlocoImpressao[] = [];
+      familias.forEach((familia) => {
+        const total = familia.membros.length + 1;
+        blocos.push({ tipo: 'secao', texto: `${getNomeFamilia(familia.chefe)}  •  ${total} ${pessoaLabel(total)}` });
+        blocos.push({ tipo: 'linha', membro: familia.chefe, zebra: false });
+        familia.membros.forEach((m, i) => blocos.push({ tipo: 'linha', membro: m, zebra: i % 2 === 0 }));
+      });
+
+      if (semFamilia.length > 0) {
+        blocos.push({
+          tipo: 'secao',
+          texto: `${tr('Sem relacionamentos cadastrados', 'Sin relaciones registradas', 'No relationships registered')}  •  ${semFamilia.length} ${pessoaLabel(semFamilia.length)}`,
+        });
+        semFamilia.forEach((m, i) => blocos.push({ tipo: 'linha', membro: m, zebra: i % 2 === 1 }));
+      }
+
+      montarPdfMembros(
+        tr('Membros por Família', 'Miembros por Familia', 'Members by Family'),
+        blocos,
+        pessoas.length,
+        'membros-por-familia'
+      );
+    } catch (err) {
+      console.error('Erro ao gerar PDF por família:', err);
+      setMensagem(
+        tr('Erro ao gerar PDF por família.', 'Error al generar PDF por familia.', 'Error generating PDF by family.')
+      );
+    } finally {
+      setGerandoPdfFamilia(false);
+    }
   };
 
   const abrirWhatsApp = (telefone: string | null, nome: string) => {
@@ -584,13 +885,13 @@ export default function PastorarMembrosPage() {
       >
         <header className="mb-6 border-b-2 border-slate-900 pb-3">
           <h1 className="m-0 text-[22px] font-bold">
-            {tituloListaImpressao}
+            {tituloListaVotacao}
           </h1>
           <p className="m-0 mt-1 text-sm text-slate-600">
             {localizacaoIgreja || igrejaResumo?.slug || ''}
           </p>
           <p className="m-0 mt-1 text-sm text-slate-600">
-            {descricaoListaImpressao} · {pessoasParaImpressao.length}
+            {descricaoListaVotacao} · {membrosParaVotacao.length}
           </p>
         </header>
         <table className="w-full border-collapse text-xs">
@@ -603,51 +904,22 @@ export default function PastorarMembrosPage() {
               <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
                 {tr('Telefone', 'Teléfono', 'Phone')}
               </th>
-              {tipoListaImpressao === 'todos' && (
-                <>
-                  <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
-                    {tr('Classificação', 'Clasificación', 'Classification')}
-                  </th>
-                  <th className="border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
-                    {tr('Status', 'Estado', 'Status')}
-                  </th>
-                </>
-              )}
               <th className="w-1/3 border border-slate-300 bg-slate-100 p-2 text-left text-slate-700">
                 {tr('Assinatura', 'Firma', 'Signature')}
               </th>
             </tr>
           </thead>
           <tbody>
-            {pessoasParaImpressao.map((membro, index) => {
-              const classLabel: Record<string, string> = {
-                comungante: tr('Comungante', 'Comulgante', 'Communicant'),
-                nao_comungante: tr('Não comungante', 'No comulgante', 'Non-communicant'),
-                aderente_comungante: tr('Aderente comungante', 'Adherente comulgante', 'Adherent communicant'),
-                aderente_nao_comungante: tr('Aderente', 'Adherente', 'Adherent'),
-              };
-              return (
-                <tr key={membro.id}>
-                  <td className="border border-slate-300 p-2 text-center">{index + 1}</td>
-                  <td className="border border-slate-300 p-2">{membro.nome}</td>
-                  <td className="border border-slate-300 p-2">
-                    {membro.telefone ? formatPhoneNumber(membro.telefone) : ''}
-                  </td>
-                  {tipoListaImpressao === 'todos' && (
-                    <>
-                      <td className="border border-slate-300 p-2">
-                        {membro.classificacao_membro ? classLabel[membro.classificacao_membro] ?? '' : ''}
-                      </td>
-                      <td className="border border-slate-300 p-2">
-                        {getStatusLabel(membro.status_membro)}
-                        {!membro.ativo ? ` / ${tr('Inativo', 'Inactivo', 'Inactive')}` : ''}
-                      </td>
-                    </>
-                  )}
-                  <td className="border border-slate-300 p-2">&nbsp;</td>
-                </tr>
-              );
-            })}
+            {membrosParaVotacao.map((membro, index) => (
+              <tr key={membro.id}>
+                <td className="border border-slate-300 p-2 text-center">{index + 1}</td>
+                <td className="border border-slate-300 p-2">{membro.nome}</td>
+                <td className="border border-slate-300 p-2">
+                  {membro.telefone ? formatPhoneNumber(membro.telefone) : ''}
+                </td>
+                <td className="border border-slate-300 p-2">&nbsp;</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </section>
@@ -671,18 +943,28 @@ export default function PastorarMembrosPage() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => imprimirLista('membros')}
+              onClick={imprimirListaVotacao}
               className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-semibold text-sm shadow-sm"
             >
               <Printer className="w-4 h-4" />
               {tr('Imprimir membros', 'Imprimir miembros', 'Print members')}
             </button>
             <button
-              onClick={() => imprimirLista('todos')}
+              onClick={gerarPdfTodos}
               className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-semibold text-sm shadow-sm"
             >
               <Printer className="w-4 h-4" />
-              {tr('Imprimir todos', 'Imprimir todos', 'Print everyone')}
+              {tr('Baixar PDF (todos)', 'Descargar PDF (todos)', 'Download PDF (all)')}
+            </button>
+            <button
+              onClick={gerarPdfPorFamilia}
+              disabled={gerandoPdfFamilia}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Users className="w-4 h-4" />
+              {gerandoPdfFamilia
+                ? tr('Gerando...', 'Generando...', 'Generating...')
+                : tr('Baixar PDF (por família)', 'Descargar PDF (por familia)', 'Download PDF (by family)')}
             </button>
             <button onClick={() => router.push('/admin/membros/novo')}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold text-sm shadow-sm">
@@ -830,30 +1112,43 @@ export default function PastorarMembrosPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-          {[
-            { label: tr('Total', 'Total', 'Total'), val: membros.filter(m => !m.is_teste).length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
-            { label: tr('Ativos', 'Activos', 'Active'), val: membros.filter(m => !m.is_teste && m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
-            { label: tr('Aniv. Hoje', 'Cumpl. Hoy', 'Birthdays Today'), val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
-            { label: tr('Este Mês', 'Este Mes', 'This Month'), val: membros.filter(m => !m.is_teste && ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
-            { label: tr('Batizados', 'Bautizados', 'Baptized'), val: membros.filter(m => !m.is_teste && m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
-            { label: tr('Grupos', 'Grupos', 'Groups'), val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
-          ].map(stat => (
-            <div key={stat.label} className={`rounded-lg border p-4 ${stat.cor}`}>
-              <p className={`text-xs flex items-center gap-1 mb-1 ${stat.sub}`}>{stat.icone}{stat.label}</p>
-              <p className={`text-2xl font-bold ${stat.text}`}>{stat.val}</p>
-            </div>
-          ))}
-        </div>
+        <details className="group bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+          <summary className="cursor-pointer select-none list-none px-6 py-3 flex items-center justify-between hover:bg-slate-50">
+            <span className="font-semibold text-slate-900 flex items-center gap-2">
+              <Users className="w-4 h-4 text-slate-500" />{' '}
+              {tr('Estatísticas', 'Estadísticas', 'Statistics')}
+            </span>
+            <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 p-4 pt-1">
+            {[
+              { label: tr('Total', 'Total', 'Total'), val: membros.filter(m => !m.is_teste).length, cor: 'bg-white border-slate-200', text: 'text-slate-900', sub: 'text-slate-500', icone: <Users className="w-3.5 h-3.5" /> },
+              { label: tr('Ativos', 'Activos', 'Active'), val: membros.filter(m => !m.is_teste && m.status_membro === 'ativo').length, cor: 'bg-green-50 border-green-200', text: 'text-green-900', sub: 'text-green-600', icone: <Church className="w-3.5 h-3.5" /> },
+              { label: tr('Aniv. Hoje', 'Cumpl. Hoy', 'Birthdays Today'), val: aniversariantesHoje.length, cor: 'bg-pink-50 border-pink-200', text: 'text-pink-900', sub: 'text-pink-600', icone: <Cake className="w-3.5 h-3.5" /> },
+              { label: tr('Este Mês', 'Este Mes', 'This Month'), val: membros.filter(m => !m.is_teste && ehAniversarioNesteMes(m.data_nascimento)).length, cor: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-600', icone: <Calendar className="w-3.5 h-3.5" /> },
+              { label: tr('Batizados', 'Bautizados', 'Baptized'), val: membros.filter(m => !m.is_teste && m.batizado).length, cor: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', sub: 'text-indigo-600', icone: <Church className="w-3.5 h-3.5" /> },
+              { label: tr('Grupos', 'Grupos', 'Groups'), val: gruposUnicos.length, cor: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-600', icone: <Home className="w-3.5 h-3.5" /> },
+            ].map(stat => (
+              <div key={stat.label} className={`rounded-lg border p-4 ${stat.cor}`}>
+                <p className={`text-xs flex items-center gap-1 mb-1 ${stat.sub}`}>{stat.icone}{stat.label}</p>
+                <p className={`text-2xl font-bold ${stat.text}`}>{stat.val}</p>
+              </div>
+            ))}
+          </div>
+        </details>
 
         {/* Filtros */}
         {visao !== 'familia' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                <Filter className="w-5 h-5 text-slate-600" />{' '}
+          <details className="group bg-white rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+            <summary className="cursor-pointer select-none list-none px-6 py-3 flex items-center justify-between hover:bg-slate-50">
+              <span className="font-semibold text-slate-900 flex items-center gap-2">
+                <Filter className="w-4 h-4 text-slate-500" />{' '}
                 {tr('Filtros', 'Filtros', 'Filters')}
-              </h3>
+              </span>
+              <ChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="px-6 pb-6 pt-1">
+            <div className="flex items-center justify-end mb-3">
               <button onClick={() => setFiltrosExpandidos(!filtrosExpandidos)} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
                 {filtrosExpandidos
                   ? tr('Menos filtros ▲', 'Menos filtros ▲', 'Fewer filters ▲')
@@ -954,7 +1249,8 @@ export default function PastorarMembrosPage() {
                 </div>
               )}
             </div>
-          </div>
+            </div>
+          </details>
         )}
 
         {/* Lista / Famílias */}
