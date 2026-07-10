@@ -14,7 +14,7 @@ import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feed
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import AssinaturaCanvas, { AssinaturaCanvasHandle } from '@/components/AssinaturaCanvas';
-import { gerarFichaCandidatoPdf } from '@/lib/ficha-candidato-pdf';
+import { gerarFichaCandidatoPdf, NOME_PASTOR_PADRAO } from '@/lib/ficha-candidato-pdf';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
@@ -1023,7 +1023,7 @@ export default function MembroDetalhe({
                   : tr('Assinar no tablet', 'Firmar en tablet', 'Sign on tablet')}
               </button>
               <button
-                onClick={() => gerarFichaCandidatoPdf(membro, { tr, intlLocale, assinanteNome: usuarioPermitido?.nome })}
+                onClick={() => gerarFichaCandidatoPdf(membro, { tr, intlLocale, assinanteNome: NOME_PASTOR_PADRAO })}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
               >
                 <Download className="w-4 h-4" /> {tr('Baixar Ficha (PDF)', 'Descargar Ficha (PDF)', 'Download Form (PDF)')}
@@ -1048,7 +1048,7 @@ export default function MembroDetalhe({
         {assinaturaAberta && (
           <AssinaturaFichaOverlay
             membro={membro}
-            assinanteNome={usuarioPermitido?.nome || user?.email || ''}
+            assinanteNome={NOME_PASTOR_PADRAO}
             tr={tr}
             onFechar={() => setAssinaturaAberta(false)}
             onSalvo={(assinaturaFicha, assinaturaFichaEm) => {
