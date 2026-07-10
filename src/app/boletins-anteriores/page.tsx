@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, Calendar, ChevronRight, Clock3, MapPin, FileText } from 'lucide-react';
 import type { Locale } from '@/i18n/config';
 import { formatDateByLocale } from '@/i18n/format';
@@ -22,6 +22,24 @@ interface BoletimAnterior {
   data: string;
   imagemUrl: string | null;
   itens: BoletimAnteriorItem[];
+}
+
+function parseFormatacaoInline(texto: string) {
+  const regex = /(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)/g;
+  const partes: ReactNode[] = [];
+  let ultimoIndice = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(texto)) !== null) {
+    if (match.index > ultimoIndice) partes.push(texto.slice(ultimoIndice, match.index));
+    if (match[1]) partes.push(<strong key={match.index}>{match[2]}</strong>);
+    else if (match[3]) partes.push(<u key={match.index}>{match[4]}</u>);
+    else if (match[5]) partes.push(<em key={match.index}>{match[6]}</em>);
+    ultimoIndice = match.index + match[0].length;
+  }
+
+  if (ultimoIndice < texto.length) partes.push(texto.slice(ultimoIndice));
+  return partes.length ? partes : texto;
 }
 
 function formatarDataExtenso(valor: string, locale: Locale) {
@@ -379,7 +397,7 @@ export default function BoletinsAnterioresPage() {
                                   key={`${item.id}-${corpoIndex}`}
                                   className="whitespace-pre-line text-sm leading-7 text-slate-600"
                                 >
-                                  {corpo}
+                                  {parseFormatacaoInline(corpo)}
                                 </p>
                               ) : null
                             )}

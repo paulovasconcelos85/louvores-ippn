@@ -2508,6 +2508,15 @@ function EditorSecaoBoletimModal({
                 </p>
               </div>
 
+              <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-2">Formatação disponível</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] text-slate-500 font-mono">
+                  <span><span className="text-slate-700">**texto**</span> → <strong>Negrito</strong></span>
+                  <span><span className="text-slate-700">*texto*</span> → <em>Itálico</em></span>
+                  <span><span className="text-slate-700">__texto__</span> → <u>Sublinhado</u></span>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 {itens.map((item, index) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

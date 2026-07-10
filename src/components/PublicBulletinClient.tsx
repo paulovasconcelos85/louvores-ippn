@@ -971,7 +971,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 className={`${textoClassName} flex items-start gap-2 text-[15px] leading-7 sm:text-base break-words`}
               >
                 <span className="pt-[0.12rem] text-[#365c4d]">•</span>
-                <span className="flex-1 min-w-0 break-words">{parseInlineLinks(itemLista)}</span>
+                <span className="flex-1 min-w-0 break-words">{parseInlinePastoral(itemLista)}</span>
               </p>
             );
           }
@@ -981,7 +981,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               key={`${valor}-${index}`}
               className={`${textoClassName} text-[15px] whitespace-pre-line leading-7 sm:text-base break-words`}
             >
-              {parseInlineLinks(valor)}
+              {parseInlinePastoral(valor)}
             </p>
           );
         })}
