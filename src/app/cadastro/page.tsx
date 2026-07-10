@@ -503,32 +503,14 @@ function CadastroPublicoContent() {
       setNomeEnviado(nome.trim().split(' ')[0]); setSucesso(true); scroll();
     } catch (err: any) {
       console.error(err);
-      if (err.message?.includes('telefone'))
-        setErro(
+      setErro(
+        err.message ||
           tr(
-            'Este telefone já está cadastrado. Fale com a liderança para atualizá-lo.',
-            'Este teléfono ya está registrado. Habla con el liderazgo para actualizarlo.',
-            'This phone number is already registered. Please contact the leadership to update it.'
+            'Ocorreu um erro ao enviar. Tente novamente em instantes.',
+            'Ocurrió un error al enviar. Inténtalo nuevamente en unos momentos.',
+            'An error occurred while submitting. Please try again shortly.'
           )
-        );
-      else if (err.message?.includes('e-mail'))
-        setErro(
-          tr(
-            'Já existe um cadastro com este e-mail. Tente com outro ou deixe em branco.',
-            'Ya existe un registro con este correo. Intenta con otro o déjalo vacío.',
-            'There is already a registration with this email. Try another one or leave it blank.'
-          )
-        );
-      else {
-        setErro(
-          err.message ||
-            tr(
-              'Ocorreu um erro ao enviar. Tente novamente em instantes.',
-              'Ocurrió un error al enviar. Inténtalo nuevamente en unos momentos.',
-              'An error occurred while submitting. Please try again shortly.'
-            )
-        );
-      }
+      );
     } finally { setSalvando(false); }
   };
 

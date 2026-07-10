@@ -177,29 +177,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let pessoaExistente:
-      | {
-          id: string;
-          usuario_id: string | null;
-        }
-      | null = null;
-
-    // Telefone não identifica a pessoa: pode ser compartilhado por mais de
-    // uma pessoa (celular de família, número emprestado etc). Só o e-mail é
-    // usado para reconhecer que é a mesma pessoa preenchendo de novo.
-    if (email) {
-      const porEmail = await supabaseAdmin
-        .from('pessoas')
-        .select('id, usuario_id')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (porEmail.error) throw porEmail.error;
-      if (porEmail.data) {
-        pessoaExistente = porEmail.data;
-      }
-    }
-
     const now = new Date().toISOString();
     const payloadPessoa: Record<string, unknown> = {
       nome,
@@ -244,43 +221,33 @@ export async function POST(request: NextRequest) {
       atualizado_em: now,
     };
 
-    let pessoaId: string;
+    // Cadastro público sempre cria uma pessoa nova: e-mail, telefone e
+    // endereço podem ser compartilhados por mais de uma pessoa (família), e
+    // nenhum deles identifica com segurança "é a mesma pessoa preenchendo de
+    // novo". Update só acontece pelo link individual /completar/{token}
+    // (endpoint /api/completar-cadastro), que resolve a pessoa pelo token.
+    const { data: pessoaCriada, error: pessoaInsertError } = await supabaseAdmin
+      .from('pessoas')
+      .insert({
+        ...payloadPessoa,
+        criado_em: now,
+      })
+      .select('id')
+      .single();
 
-    if (pessoaExistente) {
-      const { error: pessoaUpdateError } = await supabaseAdmin
-        .from('pessoas')
-        .update(payloadPessoa)
-        .eq('id', pessoaExistente.id);
-
-      if (pessoaUpdateError) throw pessoaUpdateError;
-      pessoaId = pessoaExistente.id;
-    } else {
-      const { data: pessoaCriada, error: pessoaInsertError } = await supabaseAdmin
-        .from('pessoas')
-        .insert({
-          ...payloadPessoa,
-          criado_em: now,
-        })
-        .select('id')
-        .single();
-
-      if (pessoaInsertError) throw pessoaInsertError;
-      pessoaId = pessoaCriada.id;
-    }
+    if (pessoaInsertError) throw pessoaInsertError;
+    const pessoaId: string = pessoaCriada.id;
 
     const { error: vinculoError } = await supabaseAdmin
       .from('pessoas_igrejas')
-      .upsert(
-        {
-          pessoa_id: pessoaId,
-          igreja_id: igreja.id,
-          status_membro: statusMembro,
-          cargo: 'membro',
-          ativo: body.ativo !== false,
-          atualizado_em: now,
-        },
-        { onConflict: 'pessoa_id,igreja_id' }
-      );
+      .insert({
+        pessoa_id: pessoaId,
+        igreja_id: igreja.id,
+        status_membro: statusMembro,
+        cargo: 'membro',
+        ativo: body.ativo !== false,
+        atualizado_em: now,
+      });
 
     if (vinculoError) throw vinculoError;
 
@@ -291,13 +258,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro ao salvar cadastro público:', error);
-
-    if (error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Já existe um cadastro com este e-mail. Tente com outro ou deixe em branco.' },
-        { status: 409 }
-      );
-    }
 
     return NextResponse.json(
       { error: error.message || 'Ocorreu um erro ao enviar o cadastro.' },
