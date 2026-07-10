@@ -14,7 +14,8 @@ import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feed
 import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import AssinaturaCanvas, { AssinaturaCanvasHandle } from '@/components/AssinaturaCanvas';
-import { gerarFichaCandidatoPdf, NOME_PASTOR_PADRAO } from '@/lib/ficha-candidato-pdf';
+import { gerarFichaCandidatoPdf } from '@/lib/ficha-candidato-pdf';
+import { NOME_PASTOR_PADRAO, CONGREGACAO_MANAUS_PADRAO } from '@/lib/ficha-defaults';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
@@ -416,8 +417,8 @@ export default function MembroDetalhe({
   const [atividadeAtual, setAtividadeAtual] = useState('');
   const [paisOrigem, setPaisOrigem] = useState('');
   const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
-  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
-  const [congregacaoNome, setCongregacaoNome] = useState('');
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('congregacao_manaus');
+  const [congregacaoNome, setCongregacaoNome] = useState(CONGREGACAO_MANAUS_PADRAO);
   const [transferenciaIpbOrigem, setTransferenciaIpbOrigem] = useState('');
   const [transferenciaJurisdicaoSemCarta, setTransferenciaJurisdicaoSemCarta] = useState('');
   const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
@@ -550,8 +551,8 @@ export default function MembroDetalhe({
       setAtividadeAtual(data.atividade_atual || '');
       setPaisOrigem(data.pais_origem || '');
       setUniaoEstavelTempo(data.uniao_estavel_tempo || '');
-      setIgrejaSedeCongregacao(data.igreja_sede_congregacao || '');
-      setCongregacaoNome(data.congregacao_nome || '');
+      setIgrejaSedeCongregacao(data.igreja_sede_congregacao || 'congregacao_manaus');
+      setCongregacaoNome(data.congregacao_nome || CONGREGACAO_MANAUS_PADRAO);
       setTransferenciaIpbOrigem(data.transferencia_ipb_origem || '');
       setTransferenciaJurisdicaoSemCarta(data.transferencia_jurisdicao_sem_carta || '');
       setTransferenciaObservacao(data.transferencia_observacao || '');

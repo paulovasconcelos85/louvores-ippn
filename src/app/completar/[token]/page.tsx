@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useLocale } from '@/i18n/provider';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
+import { CONGREGACAO_MANAUS_PADRAO } from '@/lib/ficha-defaults';
 import {
   User, MapPin, Users, Check, AlertCircle, Plus, X, Heart, Loader2, Church, ClipboardList,
 } from 'lucide-react';
@@ -73,8 +74,8 @@ export default function CompletarCadastroPage() {
   const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
 
   // Ficha de Candidato à Membresia
-  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
-  const [congregacaoNome, setCongregacaoNome] = useState('');
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('congregacao_manaus');
+  const [congregacaoNome, setCongregacaoNome] = useState(CONGREGACAO_MANAUS_PADRAO);
   const [tipoTransferencia, setTipoTransferencia] = useState<'nenhuma' | 'ipb' | 'outra' | 'jurisdicao'>('nenhuma');
   const [transferenciaQual, setTransferenciaQual] = useState('');
   const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
@@ -128,8 +129,8 @@ export default function CompletarCadastroPage() {
         setConjugeReligiao(p.conjuge_religiao || '');
         setAtividadeAtual(p.atividade_atual || '');
         setUniaoEstavelTempo(p.uniao_estavel_tempo || '');
-        setIgrejaSedeCongregacao(p.igreja_sede_congregacao || '');
-        setCongregacaoNome(p.congregacao_nome || '');
+        setIgrejaSedeCongregacao(p.igreja_sede_congregacao || 'congregacao_manaus');
+        setCongregacaoNome(p.congregacao_nome || CONGREGACAO_MANAUS_PADRAO);
         setTransferenciaObservacao(p.transferencia_observacao || '');
         setPropositoEntrevista(p.proposito_entrevista || '');
         if (p.transferido_ipb) {

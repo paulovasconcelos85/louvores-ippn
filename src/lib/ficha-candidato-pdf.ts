@@ -1,5 +1,8 @@
 import { jsPDF } from 'jspdf';
 import { LOGO_IPM_DATA_URL, LOGO_IPM_ASPECT_RATIO } from '@/lib/logo-ipm';
+import { NOME_PASTOR_PADRAO, CONGREGACAO_MANAUS_PADRAO } from '@/lib/ficha-defaults';
+
+export { NOME_PASTOR_PADRAO, CONGREGACAO_MANAUS_PADRAO };
 
 // Dados da pessoa necessários para preencher a "Ficha de Candidato à
 // Membresia" da IPB/IPM. Mantido como um tipo próprio (em vez de importar o
@@ -56,10 +59,6 @@ export interface GerarFichaCandidatoOpts {
   assinanteNome?: string | null;
 }
 
-// Pastor titular que confirma as fichas — usado como assinante padrão
-// independentemente de quem estiver operando o sistema no momento.
-export const NOME_PASTOR_PADRAO = 'Paulo Cesar Diniz de Araújo';
-
 const COR_HEADER: [number, number, number] = [16, 60, 48];
 const COR_BORDA: [number, number, number] = [90, 90, 90];
 const COR_LABEL: [number, number, number] = [110, 110, 110];
@@ -106,11 +105,11 @@ export function gerarFichaCandidatoPdf(pessoa: FichaCandidatoPessoa, opts: Gerar
     doc.setFontSize(10.5);
     doc.setTextColor(0, 0, 0);
     doc.text(`${numero} - ${texto}`, marginX, y);
-    y += 4.5;
+    y += 4;
   };
 
   const proximaSecao = () => {
-    y += 3;
+    y += 4.5;
   };
 
   // Célula com rótulo pequeno em cima e valor embaixo (campo "de escrever").
@@ -287,7 +286,7 @@ export function gerarFichaCandidatoPdf(pessoa: FichaCandidatoPessoa, opts: Gerar
     {
       tipo: 'linha_texto',
       label: tr('Congregação em Manaus. Qual?', 'Congregación en Manaus. ¿Cuál?', 'Congregation in Manaus. Which?'),
-      valor: pessoa.igreja_sede_congregacao === 'congregacao_manaus' ? pessoa.congregacao_nome || '' : '',
+      valor: pessoa.igreja_sede_congregacao === 'congregacao_manaus' ? pessoa.congregacao_nome || CONGREGACAO_MANAUS_PADRAO : '',
     },
   ]);
   linhaMista([
@@ -305,56 +304,53 @@ export function gerarFichaCandidatoPdf(pessoa: FichaCandidatoPessoa, opts: Gerar
   proximaSecao();
 
   // ── 3. Propósito da entrevista/exame ─────────────────────────────────
+  // Deixado em branco por padrão (igual às seções 5 e 6) — por ora o foco é
+  // o cadastro em si; essa parte é preenchida manualmente depois.
   sectionTitle(3, tr('Propósito da entrevista/exame', 'Propósito de la entrevista/examen', 'Purpose of the interview/exam'));
   linhaMista([
-    { tipo: 'checkbox', label: tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism'), marcado: pessoa.proposito_entrevista === 'batismo_infantil' },
-    { tipo: 'checkbox', label: tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith'), marcado: pessoa.proposito_entrevista === 'profissao_fe' },
-    { tipo: 'checkbox', label: tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism'), marcado: pessoa.proposito_entrevista === 'profissao_fe_e_batismo' },
+    { tipo: 'checkbox', label: tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism'), marcado: false },
+    { tipo: 'checkbox', label: tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith'), marcado: false },
+    { tipo: 'checkbox', label: tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism'), marcado: false },
   ]);
 
   linhaMista([
     {
       tipo: 'checkbox',
       label: tr('Transferência entre Presbiterianas - IPB (com carta). Qual?', 'Transferencia entre Presbiterianas - IPB (con carta). ¿Cuál?', 'Transfer between Presbyterians - IPB (with letter). Which?'),
-      marcado: !!pessoa.transferido_ipb,
+      marcado: false,
     },
-    { tipo: 'linha_texto', label: '', valor: pessoa.transferido_ipb ? pessoa.transferencia_ipb_origem || '' : '' },
+    { tipo: 'linha_texto', label: '', valor: '' },
   ]);
   linhaMista([
-    { tipo: 'linha_texto', label: tr('Data do Batismo infantil', 'Fecha del Bautismo infantil', 'Infant Baptism date'), valor: formatarDataPt(pessoa.data_batismo), linhaLargura: 16 },
-    { tipo: 'linha_texto', label: tr('Data da Profissão de Fé', 'Fecha de Profesión de Fe', 'Profession of Faith date'), valor: formatarDataPt(pessoa.data_profissao_fe), linhaLargura: 16 },
-    {
-      tipo: 'linha_texto',
-      label: tr('Data da Profissão de Fé e Batismo', 'Fecha de Profesión de Fe y Bautismo', 'Profession of Faith and Baptism date'),
-      valor: pessoa.proposito_entrevista === 'profissao_fe_e_batismo' ? formatarDataPt(pessoa.data_profissao_fe || pessoa.data_batismo) : '',
-      linhaLargura: 16,
-    },
+    { tipo: 'linha_texto', label: tr('Data do Batismo infantil', 'Fecha del Bautismo infantil', 'Infant Baptism date'), valor: '', linhaLargura: 16 },
+    { tipo: 'linha_texto', label: tr('Data da Profissão de Fé', 'Fecha de Profesión de Fe', 'Profession of Faith date'), valor: '', linhaLargura: 16 },
+    { tipo: 'linha_texto', label: tr('Data da Profissão de Fé e Batismo', 'Fecha de Profesión de Fe y Bautismo', 'Profession of Faith and Baptism date'), valor: '', linhaLargura: 16 },
   ], 6);
 
   linhaMista([
     {
       tipo: 'checkbox',
       label: tr('Transferência de outra denominação. Qual?', 'Transferencia de otra denominación. ¿Cuál?', 'Transfer from another denomination. Which?'),
-      marcado: !!pessoa.transferido_outra_denominacao,
+      marcado: false,
     },
-    { tipo: 'linha_texto', label: '', valor: pessoa.transferido_outra_denominacao || '' },
+    { tipo: 'linha_texto', label: '', valor: '' },
   ]);
   linhaMista([
-    { tipo: 'linha_texto', label: tr('Data do Batismo', 'Fecha del Bautismo', 'Baptism date'), valor: !pessoa.transferido_ipb ? formatarDataPt(pessoa.data_batismo) : '', linhaLargura: 16 },
-    { tipo: 'linha_texto', label: tr('Observação', 'Observación', 'Note') + ':', valor: pessoa.transferido_outra_denominacao ? pessoa.transferencia_observacao || '' : '' },
+    { tipo: 'linha_texto', label: tr('Data do Batismo', 'Fecha del Bautismo', 'Baptism date'), valor: '', linhaLargura: 16 },
+    { tipo: 'linha_texto', label: tr('Observação', 'Observación', 'Note') + ':', valor: '' },
   ], 6);
 
   linhaMista([
     {
       tipo: 'checkbox',
       label: tr('Transferência por jurisdição (sem carta). Qual a denominação?', 'Transferencia por jurisdicción (sin carta). ¿Cuál denominación?', 'Transfer by jurisdiction (no letter). Which denomination?'),
-      marcado: !!pessoa.transferencia_jurisdicao_sem_carta,
+      marcado: false,
     },
-    { tipo: 'linha_texto', label: '', valor: pessoa.transferencia_jurisdicao_sem_carta || '' },
+    { tipo: 'linha_texto', label: '', valor: '' },
   ]);
   linhaMista([
     { tipo: 'linha_texto', label: tr('Data do Batismo', 'Fecha del Bautismo', 'Baptism date'), valor: '', linhaLargura: 16 },
-    { tipo: 'linha_texto', label: tr('Observação', 'Observación', 'Note') + ':', valor: pessoa.transferencia_jurisdicao_sem_carta ? pessoa.transferencia_observacao || '' : '' },
+    { tipo: 'linha_texto', label: tr('Observação', 'Observación', 'Note') + ':', valor: '' },
   ], 6);
 
   proximaSecao();
