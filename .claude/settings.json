@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(curl -s \"http://localhost:3000/api/places/autocomplete?input=Rua+das+Flores&sessiontoken=test123\")",
-      "Bash(curl -v \"http://localhost:3001/api/places/autocomplete?input=Rua+das+Flores&sessiontoken=test123\")"
+      "Bash(curl -v \"http://localhost:3001/api/places/autocomplete?input=Rua+das+Flores&sessiontoken=test123\")",
+      "Bash(curl -s -o /dev/null -w \"membros: %{http_code}\\\\n\" \"http://localhost:3000/admin/membros\" --max-time 15)",
+      "Read(//tmp/**)",
+      "Bash(netstat -ano)"
     ]
   }
 }
