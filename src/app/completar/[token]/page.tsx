@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useLocale } from '@/i18n/provider';
 import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
-import { CONGREGACAO_MANAUS_PADRAO } from '@/lib/ficha-defaults';
+import { CONGREGACAO_MANAUS_PADRAO, podeUsarFichaCandidato } from '@/lib/ficha-defaults';
 import {
   User, MapPin, Users, Check, AlertCircle, Plus, X, Heart, Loader2, Church, ClipboardList,
 } from 'lucide-react';
@@ -49,6 +49,7 @@ export default function CompletarCadastroPage() {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState(false);
   const [igrejaNome, setIgrejaNome] = useState('');
+  const [igrejaSlug, setIgrejaSlug] = useState('');
   const [faltandoInicial, setFaltandoInicial] = useState<string[]>([]);
 
   // Dados pessoais
@@ -74,8 +75,8 @@ export default function CompletarCadastroPage() {
   const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
 
   // Ficha de Candidato à Membresia
-  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('congregacao_manaus');
-  const [congregacaoNome, setCongregacaoNome] = useState(CONGREGACAO_MANAUS_PADRAO);
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
+  const [congregacaoNome, setCongregacaoNome] = useState('');
   const [tipoTransferencia, setTipoTransferencia] = useState<'nenhuma' | 'ipb' | 'outra' | 'jurisdicao'>('nenhuma');
   const [transferenciaQual, setTransferenciaQual] = useState('');
   const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
@@ -129,8 +130,9 @@ export default function CompletarCadastroPage() {
         setConjugeReligiao(p.conjuge_religiao || '');
         setAtividadeAtual(p.atividade_atual || '');
         setUniaoEstavelTempo(p.uniao_estavel_tempo || '');
-        setIgrejaSedeCongregacao(p.igreja_sede_congregacao || 'congregacao_manaus');
-        setCongregacaoNome(p.congregacao_nome || CONGREGACAO_MANAUS_PADRAO);
+        const ehIgrejaFicha = podeUsarFichaCandidato(payload.igreja?.slug);
+        setIgrejaSedeCongregacao(p.igreja_sede_congregacao || (ehIgrejaFicha ? 'congregacao_manaus' : ''));
+        setCongregacaoNome(p.congregacao_nome || (ehIgrejaFicha ? CONGREGACAO_MANAUS_PADRAO : ''));
         setTransferenciaObservacao(p.transferencia_observacao || '');
         setPropositoEntrevista(p.proposito_entrevista || '');
         if (p.transferido_ipb) {
@@ -157,6 +159,7 @@ export default function CompletarCadastroPage() {
         setEnderecoCompleto(p.endereco_completo || '');
         setFaltandoInicial(p.faltando || []);
         setIgrejaNome(payload.igreja?.nome_abreviado || payload.igreja?.nome || '');
+        setIgrejaSlug(payload.igreja?.slug || '');
         setFilhos(
           (payload.filhos || []).map((f: any) => ({
             id: f.id,
@@ -500,7 +503,8 @@ export default function CompletarCadastroPage() {
           </div>
         </section>
 
-        {/* Igreja / Congregação e transferência */}
+        {/* Igreja / Congregação e transferência — específico da Ficha de Candidato à Membresia (só IPPN) */}
+        {podeUsarFichaCandidato(igrejaSlug) && (
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-5">
           <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
             <Church className="w-5 h-5 text-blue-600" /> {tr('Igreja e transferência', 'Iglesia y transferencia', 'Church and transfer')}
@@ -564,8 +568,10 @@ export default function CompletarCadastroPage() {
             )}
           </div>
         </section>
+        )}
 
-        {/* Propósito da entrevista */}
+        {/* Propósito da entrevista — específico da Ficha de Candidato à Membresia (só IPPN) */}
+        {podeUsarFichaCandidato(igrejaSlug) && (
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-5">
           <h2 className="font-semibold text-slate-900 flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
             <ClipboardList className="w-5 h-5 text-blue-600" /> {tr('Propósito da entrevista', 'Propósito de la entrevista', 'Purpose of the interview')}
@@ -591,6 +597,7 @@ export default function CompletarCadastroPage() {
             ))}
           </div>
         </section>
+        )}
 
         {/* Endereço */}
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-5">

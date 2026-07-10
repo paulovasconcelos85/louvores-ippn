@@ -15,7 +15,7 @@ import RelacionamentosCard from '@/components/RelacionamentosCard';
 import EnderecoAutocomplete, { EnderecoGoogle } from '@/components/EnderecoAutocomplete';
 import AssinaturaCanvas, { AssinaturaCanvasHandle } from '@/components/AssinaturaCanvas';
 import { gerarFichaCandidatoPdf } from '@/lib/ficha-candidato-pdf';
-import { NOME_PASTOR_PADRAO, CONGREGACAO_MANAUS_PADRAO } from '@/lib/ficha-defaults';
+import { NOME_PASTOR_PADRAO, CONGREGACAO_MANAUS_PADRAO, podeUsarFichaCandidato } from '@/lib/ficha-defaults';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import {
@@ -102,6 +102,7 @@ type TipoNota = 'nota' | 'visita' | 'ligacao' | 'oracao' | 'aconselhamento' | 'u
 
 interface IgrejaResumo {
   timezone: string | null;
+  slug: string | null;
 }
 
 const DEFAULT_TIMEZONE = 'America/Manaus';
@@ -417,8 +418,8 @@ export default function MembroDetalhe({
   const [atividadeAtual, setAtividadeAtual] = useState('');
   const [paisOrigem, setPaisOrigem] = useState('');
   const [uniaoEstavelTempo, setUniaoEstavelTempo] = useState('');
-  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('congregacao_manaus');
-  const [congregacaoNome, setCongregacaoNome] = useState(CONGREGACAO_MANAUS_PADRAO);
+  const [igrejaSedeCongregacao, setIgrejaSedeCongregacao] = useState('');
+  const [congregacaoNome, setCongregacaoNome] = useState('');
   const [transferenciaIpbOrigem, setTransferenciaIpbOrigem] = useState('');
   const [transferenciaJurisdicaoSemCarta, setTransferenciaJurisdicaoSemCarta] = useState('');
   const [transferenciaObservacao, setTransferenciaObservacao] = useState('');
@@ -551,8 +552,9 @@ export default function MembroDetalhe({
       setAtividadeAtual(data.atividade_atual || '');
       setPaisOrigem(data.pais_origem || '');
       setUniaoEstavelTempo(data.uniao_estavel_tempo || '');
-      setIgrejaSedeCongregacao(data.igreja_sede_congregacao || 'congregacao_manaus');
-      setCongregacaoNome(data.congregacao_nome || CONGREGACAO_MANAUS_PADRAO);
+      const ehIgrejaFicha = podeUsarFichaCandidato(payload.igreja?.slug);
+      setIgrejaSedeCongregacao(data.igreja_sede_congregacao || (ehIgrejaFicha ? 'congregacao_manaus' : ''));
+      setCongregacaoNome(data.congregacao_nome || (ehIgrejaFicha ? CONGREGACAO_MANAUS_PADRAO : ''));
       setTransferenciaIpbOrigem(data.transferencia_ipb_origem || '');
       setTransferenciaJurisdicaoSemCarta(data.transferencia_jurisdicao_sem_carta || '');
       setTransferenciaObservacao(data.transferencia_observacao || '');
@@ -959,6 +961,9 @@ export default function MembroDetalhe({
   const enderecoVisual = [membro.logradouro, membro.bairro, membro.cidade, membro.uf]
     .filter(Boolean)
     .join(', ');
+  // A Ficha de Candidato à Membresia (PDF + assinatura + campos de
+  // Igreja Sede/Congregação e Propósito da entrevista) é específica da IPPN.
+  const podeUsarFicha = podeUsarFichaCandidato(igrejaResumo?.slug);
 
   // ──────────────────────────────────────────────────────────────────────────
   return (
@@ -1014,21 +1019,25 @@ export default function MembroDetalhe({
           </div>
           {!modoEdicao && (
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              <button
-                onClick={() => setAssinaturaAberta(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
-              >
-                <PenLine className="w-4 h-4" />
-                {membro.assinatura_ficha
-                  ? tr('Reassinar ficha', 'Volver a firmar', 'Re-sign form')
-                  : tr('Assinar no tablet', 'Firmar en tablet', 'Sign on tablet')}
-              </button>
-              <button
-                onClick={() => gerarFichaCandidatoPdf(membro, { tr, intlLocale, assinanteNome: NOME_PASTOR_PADRAO })}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
-              >
-                <Download className="w-4 h-4" /> {tr('Baixar Ficha (PDF)', 'Descargar Ficha (PDF)', 'Download Form (PDF)')}
-              </button>
+              {podeUsarFicha && (
+                <>
+                  <button
+                    onClick={() => setAssinaturaAberta(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
+                  >
+                    <PenLine className="w-4 h-4" />
+                    {membro.assinatura_ficha
+                      ? tr('Reassinar ficha', 'Volver a firmar', 'Re-sign form')
+                      : tr('Assinar no tablet', 'Firmar en tablet', 'Sign on tablet')}
+                  </button>
+                  <button
+                    onClick={() => gerarFichaCandidatoPdf(membro, { tr, intlLocale, assinanteNome: NOME_PASTOR_PADRAO })}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-sm"
+                  >
+                    <Download className="w-4 h-4" /> {tr('Baixar Ficha (PDF)', 'Descargar Ficha (PDF)', 'Download Form (PDF)')}
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setModoEdicao(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -1039,14 +1048,14 @@ export default function MembroDetalhe({
           )}
         </div>
 
-        {membro.assinatura_ficha_em && (
+        {podeUsarFicha && membro.assinatura_ficha_em && (
           <p className="text-xs text-slate-400 -mt-4 mb-6 text-right">
             {tr('Ficha assinada em', 'Ficha firmada el', 'Form signed on')}{' '}
             {new Date(membro.assinatura_ficha_em).toLocaleString(intlLocale)}
           </p>
         )}
 
-        {assinaturaAberta && (
+        {podeUsarFicha && assinaturaAberta && (
           <AssinaturaFichaOverlay
             membro={membro}
             assinanteNome={NOME_PASTOR_PADRAO}
@@ -1433,7 +1442,7 @@ export default function MembroDetalhe({
                       <span className="text-sm text-slate-700 font-medium">{tr('Transferido IPB', 'Transferido IPB', 'Transferred from IPB')}</span>
                     </label>
                   </div>
-                  {transferidoIpb && (
+                  {transferidoIpb && podeUsarFicha && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Qual igreja IPB?', '¿Cuál iglesia IPB?', 'Which IPB church?')}</label>
                       <input type="text" value={transferenciaIpbOrigem} onChange={(e) => setTransferenciaIpbOrigem(e.target.value)} className={inputCls} />
@@ -1445,44 +1454,50 @@ export default function MembroDetalhe({
                         <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferido de outra denominação', 'Transferido de otra denominación', 'Transferred from another denomination')}</label>
                         <input type="text" value={transferidoOutra} onChange={(e) => setTransferidoOutra(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação anterior', 'Nombre de la denominación anterior', 'Previous denomination name')} />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferência por jurisdição (sem carta)', 'Transferencia por jurisdicción (sin carta)', 'Transfer by jurisdiction (no letter)')}</label>
-                        <input type="text" value={transferenciaJurisdicaoSemCarta} onChange={(e) => setTransferenciaJurisdicaoSemCarta(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação', 'Nombre de la denominación', 'Denomination name')} />
-                      </div>
+                      {podeUsarFicha && (
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Transferência por jurisdição (sem carta)', 'Transferencia por jurisdicción (sin carta)', 'Transfer by jurisdiction (no letter)')}</label>
+                          <input type="text" value={transferenciaJurisdicaoSemCarta} onChange={(e) => setTransferenciaJurisdicaoSemCarta(e.target.value)} className={inputCls} placeholder={tr('Nome da denominação', 'Nombre de la denominación', 'Denomination name')} />
+                        </div>
+                      )}
                     </div>
                   )}
-                  {(transferidoIpb || transferidoOutra || transferenciaJurisdicaoSemCarta) && (
+                  {podeUsarFicha && (transferidoIpb || transferidoOutra || transferenciaJurisdicaoSemCarta) && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Observação da transferência', 'Observación de la transferencia', 'Transfer note')}</label>
                       <input type="text" value={transferenciaObservacao} onChange={(e) => setTransferenciaObservacao(e.target.value)} className={inputCls} />
                     </div>
                   )}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Igreja Sede / Congregação', 'Iglesia Sede / Congregación', 'Main Church / Congregation')}</label>
-                      <select value={igrejaSedeCongregacao} onChange={(e) => setIgrejaSedeCongregacao(e.target.value)} className={inputCls}>
-                        <option value="">{tr('— não definida —', '— no definida —', '— not set —')}</option>
-                        <option value="sede">{tr('Igreja Sede (Central ou Pedras Vivas)', 'Iglesia Sede (Central o Pedras Vivas)', 'Main Church (Central or Pedras Vivas)')}</option>
-                        <option value="congregacao_manaus">{tr('Congregação em Manaus', 'Congregación en Manaus', 'Congregation in Manaus')}</option>
-                        <option value="congregacao_interior">{tr('Congregação no Interior', 'Congregación en el interior', 'Congregation in the countryside')}</option>
-                      </select>
-                    </div>
-                    {igrejaSedeCongregacao && igrejaSedeCongregacao !== 'sede' && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Qual congregação?', '¿Cuál congregación?', 'Which congregation?')}</label>
-                        <input type="text" value={congregacaoNome} onChange={(e) => setCongregacaoNome(e.target.value)} className={inputCls} />
+                  {podeUsarFicha && (
+                    <>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Igreja Sede / Congregação', 'Iglesia Sede / Congregación', 'Main Church / Congregation')}</label>
+                          <select value={igrejaSedeCongregacao} onChange={(e) => setIgrejaSedeCongregacao(e.target.value)} className={inputCls}>
+                            <option value="">{tr('— não definida —', '— no definida —', '— not set —')}</option>
+                            <option value="sede">{tr('Igreja Sede (Central ou Pedras Vivas)', 'Iglesia Sede (Central o Pedras Vivas)', 'Main Church (Central or Pedras Vivas)')}</option>
+                            <option value="congregacao_manaus">{tr('Congregação em Manaus', 'Congregación en Manaus', 'Congregation in Manaus')}</option>
+                            <option value="congregacao_interior">{tr('Congregação no Interior', 'Congregación en el interior', 'Congregation in the countryside')}</option>
+                          </select>
+                        </div>
+                        {igrejaSedeCongregacao && igrejaSedeCongregacao !== 'sede' && (
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Qual congregação?', '¿Cuál congregación?', 'Which congregation?')}</label>
+                            <input type="text" value={congregacaoNome} onChange={(e) => setCongregacaoNome(e.target.value)} className={inputCls} />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Propósito da entrevista', 'Propósito de la entrevista', 'Purpose of the interview')}</label>
-                    <select value={propositoEntrevista} onChange={(e) => setPropositoEntrevista(e.target.value)} className={inputCls}>
-                      <option value="">{tr('— não definido —', '— no definido —', '— not set —')}</option>
-                      <option value="batismo_infantil">{tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism')}</option>
-                      <option value="profissao_fe">{tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')}</option>
-                      <option value="profissao_fe_e_batismo">{tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism')}</option>
-                    </select>
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">{tr('Propósito da entrevista', 'Propósito de la entrevista', 'Purpose of the interview')}</label>
+                        <select value={propositoEntrevista} onChange={(e) => setPropositoEntrevista(e.target.value)} className={inputCls}>
+                          <option value="">{tr('— não definido —', '— no definido —', '— not set —')}</option>
+                          <option value="batismo_infantil">{tr('Batismo Infantil', 'Bautismo Infantil', 'Infant Baptism')}</option>
+                          <option value="profissao_fe">{tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')}</option>
+                          <option value="profissao_fe_e_batismo">{tr('Profissão de Fé e Batismo', 'Profesión de Fe y Bautismo', 'Profession of Faith and Baptism')}</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Saúde e Observações */}
@@ -1594,6 +1609,7 @@ export default function MembroDetalhe({
                     <CampoInfo icone={<Calendar className="w-5 h-5" />} label={tr('Profissão de Fé', 'Profesión de Fe', 'Profession of Faith')} valor={formatarData(membro.data_profissao_fe)} />
                     <CampoInfo icone={<Users className="w-5 h-5" />} label={tr('Grupo Familiar', 'Grupo Familiar', 'Family Group')} valor={membro.grupo_familiar_nome} />
                     <CampoInfo icone={<User className="w-5 h-5" />} label={tr('Líder do Grupo', 'Líder del Grupo', 'Group Leader')} valor={membro.grupo_familiar_lider} />
+                    {podeUsarFicha && (
                     <CampoInfo
                       icone={<Church className="w-5 h-5" />}
                       label={tr('Igreja Sede / Congregação', 'Iglesia Sede / Congregación', 'Main Church / Congregation')}
@@ -1603,6 +1619,8 @@ export default function MembroDetalhe({
                           : membro.congregacao_nome
                       }
                     />
+                    )}
+                    {podeUsarFicha && (
                     <CampoInfo
                       icone={<ClipboardCheck className="w-5 h-5" />}
                       label={tr('Propósito da Entrevista', 'Propósito de la Entrevista', 'Interview Purpose')}
@@ -1614,6 +1632,7 @@ export default function MembroDetalhe({
                         } as Record<string, string>)[membro.proposito_entrevista || ''] || null
                       }
                     />
+                    )}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-3">
                     {membro.classificacao_membro && (() => {
