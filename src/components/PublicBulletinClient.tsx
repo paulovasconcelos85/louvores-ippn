@@ -15,6 +15,7 @@ import {
   Globe,
   Library,
   MapPin,
+  Menu,
   MessageCircle,
   Music,
   Phone,
@@ -360,6 +361,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [canticoAberto, setCanticoAberto] = useState<CanticoModalData | null>(null);
   const [loadingCantico, setLoadingCantico] = useState(false);
   const [sobreIgrejaAberto, setSobreIgrejaAberto] = useState(false);
+  const [menuSecoesAberto, setMenuSecoesAberto] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
@@ -469,6 +471,17 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   useEffect(() => {
     setSobreIgrejaAberto(false);
   }, [igrejaAtualId]);
+
+  useEffect(() => {
+    setMenuSecoesAberto(false);
+  }, [igrejaAtualId]);
+
+  const irParaSecao = (secaoId: string) => {
+    setMenuSecoesAberto(false);
+    requestAnimationFrame(() => {
+      document.getElementById(`secao-${secaoId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   useEffect(() => {
     if (!sobreIgrejaAberto) return;
@@ -1155,9 +1168,48 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f4efe5_0%,#f7f3eb_42%,#f2eee5_100%)] text-slate-900">
-      <header className="bg-[#17352b] text-white">
+      <header className="fixed top-0 inset-x-0 z-40 bg-[#17352b] text-white shadow-[0_4px_16px_rgba(0,0,0,0.15)]">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 flex items-center justify-between gap-2 sm:gap-3">
-          <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {boletimSecoes.length > 0 && (
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMenuSecoesAberto((aberto) => !aberto)}
+                  aria-expanded={menuSecoesAberto}
+                  aria-label={menuSecoesAberto ? 'Fechar menu de seções' : 'Abrir menu de seções'}
+                  className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+                >
+                  {menuSecoesAberto ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+
+                {menuSecoesAberto && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setMenuSecoesAberto(false)}
+                    />
+                    <div className="absolute left-0 top-full mt-2 z-20 w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-[#d8d1c4] bg-[#fffdf8] py-2 shadow-[0_16px_40px_rgba(0,0,0,0.25)]">
+                      {boletimSecoes
+                        .filter((secao) => !isImageSection(secao))
+                        .map((secao) => (
+                          <button
+                            key={secao.id}
+                            type="button"
+                            onClick={() => irParaSecao(secao.id)}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-800 hover:bg-[#f2eee5] transition-colors flex items-center gap-2"
+                          >
+                            <span className="text-[#365c4d] text-xs font-semibold flex-shrink-0">
+                              {numeracaoSecoesVisiveis.get(secao.id)}
+                            </span>
+                            <span className="truncate">{getTituloSecao(secao)}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <h1 className="text-base sm:text-xl font-bold text-white truncate">{t('home.bulletinTitle')}</h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -1191,7 +1243,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 pb-16 sm:px-6 sm:pt-8">
+      <main className="max-w-6xl mx-auto px-3 pb-16 pt-[60px] sm:px-6 sm:pt-[100px]">
         <section className="-mx-3 sm:mx-0 rounded-none sm:rounded-[30px] border-b sm:border border-[#d8d1c4] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7ef_100%)] px-4 py-5 shadow-[0_12px_40px_rgba(77,58,32,0.07)] sm:mt-6 sm:px-7 sm:py-8">
           <div className="space-y-4 sm:space-y-5">
             <div className="space-y-4 sm:space-y-5">
@@ -1380,7 +1432,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 boletimSecoes.map((secao) => (
                   <article
                     key={secao.id}
-                    className="space-y-4 sm:space-y-5"
+                    id={`secao-${secao.id}`}
+                    className="space-y-4 sm:space-y-5 scroll-mt-20 sm:scroll-mt-28"
                   >
                     {!isImageSection(secao) && (
                       <div className="space-y-2 border-b border-[#d8d1c4] pb-3">
