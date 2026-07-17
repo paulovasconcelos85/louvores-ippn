@@ -1555,7 +1555,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   width={1600}
                                   height={1200}
                                   unoptimized
-                                  className="w-full max-h-72 sm:max-h-[28rem] rounded-[18px] sm:rounded-[22px] object-contain border border-[#ece5d9] bg-white"
+                                  className="h-72 sm:h-[28rem] w-full rounded-[18px] sm:rounded-[22px] object-cover border border-[#ece5d9] bg-white"
                                 />
                               ) : (
                                 renderItemConteudo(secao, item.conteudo, item.imagem_url)
