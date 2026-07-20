@@ -25,7 +25,8 @@ import {
   FileJson,
   FileText,
   Upload,
-  Eye
+  Eye,
+  Copy
 } from 'lucide-react';
 
 interface Cantico {
@@ -309,6 +310,96 @@ export default function CanticosPage() {
 
     setHistorico(mapa);
   }, []);
+
+  const copiarUltimosCultos = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de copiar.');
+      return;
+    }
+
+    const { data: cultos, error: erroCultos } = await supabase
+      .from('Louvores IPPN')
+      .select('*')
+      .eq('igreja_id', igrejaId);
+
+    if (erroCultos || !cultos) {
+      alert('❌ Erro ao buscar cultos.');
+      return;
+    }
+
+    const cultosValidos = cultos
+      .filter((c: any) => c['Culto nr.'] != null && c.Dia)
+      .sort((a: any, b: any) => new Date(b.Dia).getTime() - new Date(a.Dia).getTime());
+
+    const ultimosTres = cultosValidos.slice(0, 3);
+    if (ultimosTres.length === 0) {
+      alert('Nenhum culto encontrado.');
+      return;
+    }
+
+    const cultoIds = ultimosTres.map((c: any) => c['Culto nr.']);
+    const diaPorCulto = new Map<number, string>();
+    ultimosTres.forEach((c: any) => diaPorCulto.set(c['Culto nr.'], c.Dia));
+
+    const { data: itens, error: erroItens } = await supabase
+      .from('louvor_itens')
+      .select('cantico_id, culto_id, tipo')
+      .in('culto_id', cultoIds)
+      .not('cantico_id', 'is', null);
+
+    if (erroItens) {
+      alert('❌ Erro ao buscar cânticos dos cultos.');
+      return;
+    }
+
+    if (!itens || itens.length === 0) {
+      alert('Nenhum cântico encontrado nos últimos 3 cultos.');
+      return;
+    }
+
+    const mapaMusicas = new Map<string, { nome: string; ocorrencias: { tipo: string; dia: string }[] }>();
+
+    itens.forEach((item: any) => {
+      const canticoId = item.cantico_id;
+      const dia = diaPorCulto.get(item.culto_id);
+      if (!canticoId || !dia) return;
+
+      const cantico = canticos.find(c => c.id === canticoId);
+      const nome = cantico?.nome || 'Cântico não identificado';
+      const tipo = typeof item.tipo === 'string' && item.tipo.trim() ? item.tipo.trim() : 'Não especificado';
+
+      if (!mapaMusicas.has(canticoId)) {
+        mapaMusicas.set(canticoId, { nome, ocorrencias: [] });
+      }
+      mapaMusicas.get(canticoId)!.ocorrencias.push({ tipo, dia });
+    });
+
+    const musicasOrdenadas = Array.from(mapaMusicas.values()).sort((a, b) =>
+      a.nome.localeCompare(b.nome, 'pt-BR')
+    );
+
+    const linhas: string[] = ['🎵 Músicas dos últimos 3 cultos', ''];
+
+    musicasOrdenadas.forEach(musica => {
+      linhas.push(musica.nome);
+      musica.ocorrencias
+        .sort((a, b) => new Date(b.dia).getTime() - new Date(a.dia).getTime())
+        .forEach(oc => {
+          linhas.push(`  ${oc.tipo} — ${formatarData(oc.dia)}`);
+        });
+      linhas.push('');
+    });
+
+    const texto = linhas.join('\n').trim();
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      alert('✅ Texto copiado!');
+    } catch {
+      alert('❌ Não foi possível copiar. Verifique as permissões do navegador.');
+    }
+  }, [canticos]);
 
   const fetchCanticos = useCallback(async (configuracao?: ConfiguracaoRepertorio | null) => {
     const configuracaoAtual = configuracao || configuracaoRepertorio;
@@ -926,9 +1017,17 @@ export default function CanticosPage() {
           </p>
         </div>
 
+        <button
+          onClick={copiarUltimosCultos}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold text-base shadow-lg mb-3 flex items-center justify-center gap-2 transition-colors"
+        >
+          <Copy size={20} />
+          Copiar músicas dos últimos 3 cultos
+        </button>
+
         {podeGerenciarCadastroLocal ? (
-          <button 
-            onClick={iniciarNovo} 
+          <button
+            onClick={iniciarNovo}
             className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-5 rounded-2xl font-bold text-lg shadow-lg mb-6 flex items-center justify-center gap-2 transition-colors"
           >
             <Plus size={24} />
