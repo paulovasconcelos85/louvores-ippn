@@ -234,6 +234,15 @@ interface AvisoItemRascunho {
   conteudo_i18n: LocalizedTextMapForm;
 }
 
+interface InformativoItemRascunho {
+  id: string;
+  titulo: string;
+  corpo: string;
+  destaque: boolean;
+  imagem_url: string;
+  conteudo_i18n: LocalizedTextMapForm;
+}
+
 interface BoletimSecaoRascunho {
   id: string;
   tipo: string;
@@ -243,6 +252,18 @@ interface BoletimSecaoRascunho {
   visivel: boolean;
   ordem: number;
   itens: BoletimItemRascunho[];
+}
+
+interface NoticiaMensal {
+  id: string;
+  igreja_id: string;
+  titulo: string;
+  corpo: string;
+  imagem_url: string | null;
+  mes_referencia: number;
+  ano_referencia: number;
+  ordem: number;
+  ativo: boolean;
 }
 
 interface ModeloLiturgiaConfig {
@@ -624,6 +645,17 @@ function getCultoDateKey(dateValue: string) {
   return String(dateValue).slice(0, 10);
 }
 
+function getMesAnoReferencia(dateValue: string): { mes: number; ano: number } | null {
+  const match = getCultoDateKey(dateValue).match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) return null;
+
+  const ano = Number(match[1]);
+  const mes = Number(match[2]);
+  if (!Number.isFinite(ano) || !Number.isFinite(mes) || mes < 1 || mes > 12) return null;
+
+  return { mes, ano };
+}
+
 function isDomingoDate(dateValue: string) {
   return new Date(`${getCultoDateKey(dateValue)}T00:00:00`).getDay() === 0;
 }
@@ -740,6 +772,17 @@ function createEmptyAvisoItem(): AvisoItemRascunho {
   };
 }
 
+function createEmptyInformativoItem(): InformativoItemRascunho {
+  return {
+    id: createDraftId('informativo-item'),
+    titulo: '',
+    corpo: '',
+    destaque: false,
+    imagem_url: '',
+    conteudo_i18n: createEmptyLocalizedTextMap(),
+  };
+}
+
 function updateLocalizedDraftValue(
   current: LocalizedTextMapForm | null | undefined,
   locale: Locale,
@@ -847,6 +890,45 @@ function parseAvisoConteudo(conteudo: string): AvisoItemRascunho {
 }
 
 function serializeAvisoConteudo(item: AvisoItemRascunho) {
+  return `${item.titulo.trim()}\n\n${item.corpo.trim()}`;
+}
+
+function parseInformativoConteudo(conteudo: string): InformativoItemRascunho {
+  const texto = conteudo.trim();
+
+  if (!texto) {
+    return createEmptyInformativoItem();
+  }
+
+  const separadorDuplo = texto.indexOf('\n\n');
+
+  if (separadorDuplo >= 0) {
+    const titulo = texto.slice(0, separadorDuplo).trim();
+    const corpo = texto.slice(separadorDuplo + 2).trim();
+
+    return {
+      id: createDraftId('informativo-item'),
+      titulo,
+      corpo,
+      destaque: false,
+      imagem_url: '',
+      conteudo_i18n: createEmptyLocalizedTextMap(),
+    };
+  }
+
+  const [titulo, ...restante] = texto.split('\n');
+
+  return {
+    id: createDraftId('informativo-item'),
+    titulo: titulo.trim(),
+    corpo: restante.join('\n').trim(),
+    destaque: false,
+    imagem_url: '',
+    conteudo_i18n: createEmptyLocalizedTextMap(),
+  };
+}
+
+function serializeInformativoConteudo(item: InformativoItemRascunho) {
   return `${item.titulo.trim()}\n\n${item.corpo.trim()}`;
 }
 
@@ -2122,6 +2204,7 @@ function EditorSecaoBoletimModal({
   const [itens, setItens] = useState<BoletimItemRascunho[]>([]);
   const [agendaItens, setAgendaItens] = useState<AgendaItemRascunho[]>([]);
   const [avisoItens, setAvisoItens] = useState<AvisoItemRascunho[]>([]);
+  const [informativoItens, setInformativoItens] = useState<InformativoItemRascunho[]>([]);
 
   useEffect(() => {
     if (!aberto || !tipo) return;
@@ -2146,6 +2229,7 @@ function EditorSecaoBoletimModal({
       setAgendaItens([...agenda, createEmptyAgendaItem()]);
       setItens([]);
       setAvisoItens([]);
+      setInformativoItens([]);
       return;
     }
 
@@ -2164,6 +2248,26 @@ function EditorSecaoBoletimModal({
       setAvisoItens([...avisos, createEmptyAvisoItem()]);
       setItens([]);
       setAgendaItens([]);
+      setInformativoItens([]);
+      return;
+    }
+
+    if (tipo === 'informativo') {
+      const informativos = itensExistentes.map((item) => {
+        const conteudoI18n = normalizeLocalizedTextMap(item.conteudo_i18n, item.conteudo);
+        const informativo = parseInformativoConteudo(resolveLocalizedText(conteudoI18n, locale, item.conteudo));
+        return {
+          ...informativo,
+          id: item.id || informativo.id,
+          destaque: item.destaque,
+          imagem_url: item.imagem_url ?? '',
+          conteudo_i18n: conteudoI18n,
+        };
+      });
+      setInformativoItens([...informativos, createEmptyInformativoItem()]);
+      setItens([]);
+      setAgendaItens([]);
+      setAvisoItens([]);
       return;
     }
 
@@ -2178,6 +2282,7 @@ function EditorSecaoBoletimModal({
     ]);
     setAgendaItens([]);
     setAvisoItens([]);
+    setInformativoItens([]);
   }, [aberto, tipo, secaoExistente, locale]);
 
   if (!aberto || !tipo) return null;
@@ -2185,6 +2290,7 @@ function EditorSecaoBoletimModal({
   const config = getBoletimTipoConfig(tipo);
   const isAgenda = tipo === 'agenda';
   const isAvisos = tipo === 'avisos';
+  const isInformativo = tipo === 'informativo';
 
   const garantirCampoTextoExtra = (lista: BoletimItemRascunho[]) => {
     const preenchidos = lista.filter((item) => item.conteudo.trim().length > 0);
@@ -2201,6 +2307,13 @@ function EditorSecaoBoletimModal({
       (item) => item.titulo.trim().length > 0 || item.corpo.trim().length > 0
     );
     return [...preenchidos, createEmptyAvisoItem()];
+  };
+
+  const garantirCampoInformativoExtra = (lista: InformativoItemRascunho[]) => {
+    const preenchidos = lista.filter(
+      (item) => item.titulo.trim().length > 0 || item.corpo.trim().length > 0
+    );
+    return [...preenchidos, createEmptyInformativoItem()];
   };
 
   const salvarSecao = () => {
@@ -2235,6 +2348,20 @@ function EditorSecaoBoletimModal({
               .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
               .map((item) => {
                 const conteudo = serializeAvisoConteudo(item);
+                const conteudoI18n = replicateLocalizedDraftValue(conteudo);
+                return {
+                  id: item.id,
+                  conteudo: conteudoI18n.pt || conteudo,
+                  conteudo_i18n: conteudoI18n,
+                  destaque: item.destaque,
+                  imagem_url: item.imagem_url.trim() || null,
+                };
+              })
+        : isInformativo
+          ? informativoItens
+              .filter((item) => item.titulo.trim().length > 0 && item.corpo.trim().length > 0)
+              .map((item) => {
+                const conteudo = serializeInformativoConteudo(item);
                 const conteudoI18n = replicateLocalizedDraftValue(conteudo);
                 return {
                   id: item.id,
@@ -2499,6 +2626,109 @@ function EditorSecaoBoletimModal({
                 ))}
               </div>
             </div>
+          ) : isInformativo ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Informativo</p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Cada item vira um bloco recolhível (dropdown) no boletim público. Título e corpo são obrigatórios; a imagem é opcional.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {informativoItens.map((item, index) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      Título do informativo
+                      <input
+                        value={item.titulo}
+                        onChange={(event) => {
+                          const atualizados = informativoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, titulo: event.target.value } : entry
+                          );
+                          setInformativoItens(garantirCampoInformativoExtra(atualizados));
+                        }}
+                        placeholder="Ex.: Congresso Nacional de Jovens"
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
+                      Corpo do informativo
+                      <AutoResizeTextarea
+                        value={item.corpo}
+                        onChange={(event) => {
+                          const atualizados = informativoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, corpo: event.target.value } : entry
+                          );
+                          setInformativoItens(garantirCampoInformativoExtra(atualizados));
+                        }}
+                        placeholder="Descreva aqui o informativo completo..."
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    <label className="mt-3 block text-sm font-semibold text-slate-700">
+                      Imagem do informativo (opcional)
+                      <input
+                        type="url"
+                        value={item.imagem_url}
+                        onChange={(event) => {
+                          const atualizados = informativoItens.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, imagem_url: event.target.value } : entry
+                          );
+                          setInformativoItens(garantirCampoInformativoExtra(atualizados));
+                        }}
+                        placeholder="https://..."
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </label>
+
+                    {item.imagem_url.trim() ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.imagem_url.trim()}
+                        alt={item.titulo.trim() || 'Pré-visualização do informativo'}
+                        className="mt-3 max-h-48 w-full rounded-xl border border-slate-200 object-contain"
+                      />
+                    ) : null}
+
+                    {(item.titulo.trim() && item.corpo.trim()) ? (
+                      <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={item.destaque}
+                          onChange={(event) => {
+                            const atualizados = informativoItens.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, destaque: event.target.checked } : entry
+                            );
+                            setInformativoItens(atualizados);
+                          }}
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+                        />
+                        Destacar este informativo
+                      </label>
+                    ) : null}
+
+                    {(item.titulo.trim() || item.corpo.trim() || informativoItens.length > 1) ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setInformativoItens(
+                              garantirCampoInformativoExtra(informativoItens.filter((entry) => entry.id !== item.id))
+                            )
+                          }
+                          className="rounded-xl px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          Remover informativo
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="mb-4">
@@ -2632,11 +2862,101 @@ function EditorBoletimDoDiaModal({
   const [tipoNovaSecao, setTipoNovaSecao] = useState<string | null>(null);
   const [secaoEditandoIndex, setSecaoEditandoIndex] = useState<number | null>(null);
   const [secoesReaproveitadasDe, setSecoesReaproveitadasDe] = useState<string | null>(null);
+  const [noticiasMensais, setNoticiasMensais] = useState<NoticiaMensal[]>([]);
+  const [loadingNoticias, setLoadingNoticias] = useState(false);
+  const [showNoticiaEditor, setShowNoticiaEditor] = useState(false);
+  const [noticiaEditando, setNoticiaEditando] = useState<NoticiaMensal | null>(null);
 
   const referencia = useMemo(() => getCultoBoletimReferencia(cultos), [cultos]);
   const cultoIds = useMemo(() => cultos.map((culto) => culto['Culto nr.']), [cultos]);
   const secaoEditando =
     secaoEditandoIndex !== null ? boletimSecoes[secaoEditandoIndex] || null : null;
+  const mesAnoReferencia = useMemo(() => getMesAnoReferencia(dia), [dia]);
+
+  const carregarNoticiasMensais = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId || !mesAnoReferencia) {
+      setNoticiasMensais([]);
+      return;
+    }
+
+    setLoadingNoticias(true);
+    try {
+      const { data, error } = await supabase
+        .from('noticias_mensais')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .eq('mes_referencia', mesAnoReferencia.mes)
+        .eq('ano_referencia', mesAnoReferencia.ano)
+        .order('ordem', { ascending: true });
+
+      if (error) throw error;
+      setNoticiasMensais((data || []) as NoticiaMensal[]);
+    } catch (error) {
+      console.error('Erro ao carregar notícias do mês:', error);
+    } finally {
+      setLoadingNoticias(false);
+    }
+  }, [mesAnoReferencia]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    carregarNoticiasMensais();
+  }, [aberto, carregarNoticiasMensais]);
+
+  const excluirNoticiaMensal = async (noticia: NoticiaMensal) => {
+    if (!confirm(`Remover a notícia "${noticia.titulo}"?`)) return;
+
+    try {
+      const { error } = await supabase.from('noticias_mensais').delete().eq('id', noticia.id);
+      if (error) throw error;
+      await carregarNoticiasMensais();
+    } catch (error) {
+      console.error('Erro ao remover notícia do mês:', error);
+      alert('❌ Erro ao remover notícia.');
+    }
+  };
+
+  const alternarAtivoNoticiaMensal = async (noticia: NoticiaMensal) => {
+    try {
+      const { error } = await supabase
+        .from('noticias_mensais')
+        .update({ ativo: !noticia.ativo })
+        .eq('id', noticia.id);
+      if (error) throw error;
+      await carregarNoticiasMensais();
+    } catch (error) {
+      console.error('Erro ao atualizar notícia do mês:', error);
+      alert('❌ Erro ao atualizar notícia.');
+    }
+  };
+
+  const moverNoticiaMensal = async (index: number, direcao: -1 | 1) => {
+    const alvo = index + direcao;
+    if (alvo < 0 || alvo >= noticiasMensais.length) return;
+
+    const atual = noticiasMensais[index];
+    const vizinho = noticiasMensais[alvo];
+
+    try {
+      const { error: erroAtual } = await supabase
+        .from('noticias_mensais')
+        .update({ ordem: vizinho.ordem })
+        .eq('id', atual.id);
+      if (erroAtual) throw erroAtual;
+
+      const { error: erroVizinho } = await supabase
+        .from('noticias_mensais')
+        .update({ ordem: atual.ordem })
+        .eq('id', vizinho.id);
+      if (erroVizinho) throw erroVizinho;
+
+      await carregarNoticiasMensais();
+    } catch (error) {
+      console.error('Erro ao reordenar notícias do mês:', error);
+      alert('❌ Erro ao reordenar notícias.');
+    }
+  };
 
   useEffect(() => {
     if (!aberto) return;
@@ -3099,6 +3419,125 @@ function EditorBoletimDoDiaModal({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
+                  Notícias do mês
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Matérias grandes (ex.: jornal Brasil Presbiteriano) que aparecem em <strong>todos</strong> os
+                  boletins {mesAnoReferencia ? `de ${String(mesAnoReferencia.mes).padStart(2, '0')}/${mesAnoReferencia.ano}` : 'deste mês'},
+                  sem precisar recadastrar a cada culto.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNoticiaEditando(null);
+                  setShowNoticiaEditor(true);
+                }}
+                disabled={!mesAnoReferencia}
+                className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+              >
+                + Nova notícia
+              </button>
+            </div>
+
+            {loadingNoticias ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                Carregando notícias do mês...
+              </div>
+            ) : noticiasMensais.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm leading-6 text-slate-500">
+                Nenhuma notícia recorrente cadastrada para este mês.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {noticiasMensais.map((noticia, index) => (
+                  <div key={noticia.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900">{noticia.titulo}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {noticia.ativo ? 'Ativa' : 'Oculta'}
+                          {noticia.imagem_url ? ' · com imagem' : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {!noticia.ativo ? (
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            Oculta
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => alternarAtivoNoticiaMensal(noticia)}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                        >
+                          {noticia.ativo ? 'Ocultar' : 'Publicar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNoticiaEditando(noticia);
+                            setShowNoticiaEditor(true);
+                          }}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (index === 0) return;
+                            moverNoticiaMensal(index, -1);
+                          }}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white disabled:opacity-40"
+                          disabled={index === 0}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (index === noticiasMensais.length - 1) return;
+                            moverNoticiaMensal(index, 1);
+                          }}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white disabled:opacity-40"
+                          disabled={index === noticiasMensais.length - 1}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => excluirNoticiaMensal(noticia)}
+                          className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <EditorNoticiaMensalModal
+            aberto={showNoticiaEditor}
+            noticiaExistente={noticiaEditando}
+            mesReferencia={mesAnoReferencia?.mes ?? null}
+            anoReferencia={mesAnoReferencia?.ano ?? null}
+            ordemPadrao={noticiasMensais.length}
+            onFechar={() => setShowNoticiaEditor(false)}
+            onSalvo={async () => {
+              setShowNoticiaEditor(false);
+              await carregarNoticiasMensais();
+            }}
+          />
+
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
                   Seções do boletim
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -3272,6 +3711,184 @@ function EditorBoletimDoDiaModal({
           setSecaoEditandoIndex(null);
         }}
       />
+    </div>
+  );
+}
+
+function EditorNoticiaMensalModal({
+  aberto,
+  noticiaExistente,
+  mesReferencia,
+  anoReferencia,
+  ordemPadrao,
+  onFechar,
+  onSalvo,
+}: {
+  aberto: boolean;
+  noticiaExistente: NoticiaMensal | null;
+  mesReferencia: number | null;
+  anoReferencia: number | null;
+  ordemPadrao: number;
+  onFechar: () => void;
+  onSalvo: () => void;
+}) {
+  const [titulo, setTitulo] = useState('');
+  const [corpo, setCorpo] = useState('');
+  const [imagemUrl, setImagemUrl] = useState('');
+  const [ativo, setAtivo] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (!aberto) return;
+    setTitulo(noticiaExistente?.titulo || '');
+    setCorpo(noticiaExistente?.corpo || '');
+    setImagemUrl(noticiaExistente?.imagem_url || '');
+    setAtivo(noticiaExistente?.ativo ?? true);
+  }, [aberto, noticiaExistente]);
+
+  if (!aberto || !mesReferencia || !anoReferencia) return null;
+
+  const salvar = async () => {
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) {
+      alert('Selecione uma igreja antes de cadastrar a notícia.');
+      return;
+    }
+
+    if (!titulo.trim() || !corpo.trim()) {
+      alert('Preencha título e corpo da notícia.');
+      return;
+    }
+
+    setSalvando(true);
+    try {
+      if (noticiaExistente) {
+        const { error } = await supabase
+          .from('noticias_mensais')
+          .update({
+            titulo: titulo.trim(),
+            corpo: corpo.trim(),
+            imagem_url: imagemUrl.trim() || null,
+            ativo,
+          })
+          .eq('id', noticiaExistente.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('noticias_mensais').insert({
+          igreja_id: igrejaId,
+          titulo: titulo.trim(),
+          corpo: corpo.trim(),
+          imagem_url: imagemUrl.trim() || null,
+          mes_referencia: mesReferencia,
+          ano_referencia: anoReferencia,
+          ordem: ordemPadrao,
+          ativo,
+        });
+
+        if (error) throw error;
+      }
+
+      onSalvo();
+    } catch (error) {
+      console.error('Erro ao salvar notícia do mês:', error);
+      alert('❌ Erro ao salvar notícia.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
+              Notícias do mês · {String(mesReferencia).padStart(2, '0')}/{anoReferencia}
+            </p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">
+              {noticiaExistente ? 'Editar notícia' : 'Nova notícia'}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            Cancelar
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-6">
+          <label className="block text-sm font-semibold text-slate-700">
+            Título da notícia
+            <input
+              value={titulo}
+              onChange={(event) => setTitulo(event.target.value)}
+              placeholder="Ex.: Congresso Nacional de Jovens Presbiterianos"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+            />
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-700">
+            Corpo da notícia
+            <AutoResizeTextarea
+              value={corpo}
+              onChange={(event) => setCorpo(event.target.value)}
+              placeholder="Cole aqui a matéria completa..."
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
+            />
+          </label>
+
+          <label className="block text-sm font-semibold text-slate-700">
+            Imagem da notícia (opcional)
+            <input
+              type="url"
+              value={imagemUrl}
+              onChange={(event) => setImagemUrl(event.target.value)}
+              placeholder="https://..."
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
+            />
+          </label>
+
+          {imagemUrl.trim() ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imagemUrl.trim()}
+              alt={titulo.trim() || 'Pré-visualização da notícia'}
+              className="max-h-48 w-full rounded-xl border border-slate-200 object-contain"
+            />
+          ) : null}
+
+          <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={ativo}
+              onChange={(event) => setAtivo(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
+            />
+            Publicar nos boletins deste mês
+          </label>
+        </div>
+
+        <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={salvando}
+            className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+          >
+            {salvando ? 'Salvando...' : 'Salvar notícia'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

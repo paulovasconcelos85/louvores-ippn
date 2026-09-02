@@ -9,6 +9,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronDown,
   Copy,
   ExternalLink,
   Eye,
@@ -776,6 +777,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isPastoralSection = (secao: BoletimSecao) => secao.tipo === 'palavra_pastoral';
   const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
   const isAvisosSection = (secao: BoletimSecao) => secao.tipo === 'avisos';
+  const isInformativoSection = (secao: BoletimSecao) => secao.tipo === 'informativo';
+  const isNoticiasMesSection = (secao: BoletimSecao) => secao.tipo === 'noticias_mes';
   const isPedidosOracaoSection = (secao: BoletimSecao) =>
     /pedido[s]?\s*de\s*ora/i.test(secao.titulo);
   const isCadaDiaSection = (secao: BoletimSecao) =>
@@ -1133,6 +1136,35 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             ) : null}
             <div>{renderBlocoTexto(aviso.corpo)}</div>
           </div>
+        );
+      }
+    }
+
+    if (isInformativoSection(secao) || isNoticiasMesSection(secao)) {
+      const item = parseAvisoBoletimItem(conteudo);
+
+      if (item) {
+        const imagem = imagemUrl?.trim();
+        return (
+          <details className="group rounded-[18px] border border-[#ece5d9] open:bg-[#faf7f0]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 break-words">{item.titulo}</span>
+              <ChevronDown className="h-4 w-4 flex-shrink-0 text-[#365c4d] transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-2 px-4 pb-4">
+              {imagem ? (
+                <Image
+                  src={imagem}
+                  alt={item.titulo}
+                  width={1200}
+                  height={900}
+                  unoptimized
+                  className="w-full max-h-96 rounded-[18px] border border-[#ece5d9] bg-white object-contain"
+                />
+              ) : null}
+              {renderBlocoTexto(item.corpo)}
+            </div>
+          </details>
         );
       }
     }
@@ -1540,13 +1572,29 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                           isPastoralSection(secao)
                             ? 'border-[#cfc4a8] bg-[linear-gradient(160deg,#fffef8_0%,#fdf5e0_60%,#f9edcc_100%)] shadow-[0_12px_36px_rgba(90,60,20,0.10)]'
                             : 'border-[#d8d1c4] bg-[#fffdf8] shadow-[0_10px_32px_rgba(77,58,32,0.05)]'
-                        } ${isPastoralSection(secao) ? 'px-5 py-6 sm:px-8 sm:py-7' : 'px-4 py-4 sm:px-6 sm:py-5'}`}
+                        } ${
+                          isPastoralSection(secao)
+                            ? 'px-5 py-6 sm:px-8 sm:py-7'
+                            : isInformativoSection(secao) || isNoticiasMesSection(secao)
+                              ? 'px-3 py-3 sm:px-4 sm:py-4'
+                              : 'px-4 py-4 sm:px-6 sm:py-5'
+                        }`}
                       >
-                        <div className="space-y-0">
+                        <div
+                          className={
+                            isInformativoSection(secao) || isNoticiasMesSection(secao)
+                              ? 'space-y-2'
+                              : 'space-y-0'
+                          }
+                        >
                           {secao.itens.map((item, itemIndex) => (
                             <div
                               key={item.id}
-                              className={`${isPastoralSection(secao) ? 'py-0' : 'py-3 sm:py-4'} ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`}
+                              className={
+                                isInformativoSection(secao) || isNoticiasMesSection(secao)
+                                  ? ''
+                                  : `${isPastoralSection(secao) ? 'py-0' : 'py-3 sm:py-4'} ${itemIndex > 0 ? 'border-t border-[#ece5d9]' : ''}`
+                              }
                             >
                               {isImageSection(secao) ? (
                                 <Image

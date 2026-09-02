@@ -759,6 +759,70 @@ async function buildCadaDiaSection(
   }
 }
 
+const NOTICIAS_MES_SECTION_TIPO = 'noticias_mes';
+
+interface NoticiaMensalRow {
+  id: string;
+  titulo: string;
+  corpo: string | null;
+  imagem_url: string | null;
+  ordem: number | null;
+}
+
+function isNoticiasMensaisSection(secao: LegacyBoletimSecao) {
+  return secao.tipo === NOTICIAS_MES_SECTION_TIPO;
+}
+
+async function buildNoticiasMensaisSection(
+  igrejaId: string,
+  mesReferencia: number,
+  anoReferencia: number,
+  secoesAtuais: LegacyBoletimSecao[]
+): Promise<LegacyBoletimSecao | null> {
+  try {
+    const { data: noticiasRaw, error } = await supabaseAdmin
+      .from('noticias_mensais')
+      .select('id, titulo, corpo, imagem_url, ordem')
+      .eq('igreja_id', igrejaId)
+      .eq('mes_referencia', mesReferencia)
+      .eq('ano_referencia', anoReferencia)
+      .eq('ativo', true)
+      .order('ordem', { ascending: true });
+
+    if (error) throw error;
+
+    const noticias = (noticiasRaw || []) as NoticiaMensalRow[];
+    if (noticias.length === 0) return null;
+
+    const secaoId = `noticias-mensais-${anoReferencia}-${mesReferencia}`;
+    const secaoExistente = secoesAtuais.find(isNoticiasMensaisSection);
+
+    return {
+      id: secaoId,
+      igreja_id: igrejaId,
+      culto_id: secaoExistente?.culto_id || null,
+      tipo: NOTICIAS_MES_SECTION_TIPO,
+      titulo: 'Notícias do Mês',
+      icone: null,
+      ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
+      visivel: true,
+      criado_em: null,
+      itens: noticias.map((noticia, index) => ({
+        id: noticia.id,
+        secao_id: secaoId,
+        conteudo: `${noticia.titulo.trim()}\n\n${(noticia.corpo || '').trim()}`,
+        destaque: false,
+        ordem: noticia.ordem ?? index,
+        criado_em: null,
+        imagem_url: noticia.imagem_url ?? null,
+      })),
+    };
+  } catch (error) {
+    console.warn('Falha ao montar notícias do mês:', error);
+    return null;
+  }
+}
+
 function isAniversariantesSection(secao: LegacyBoletimSecao) {
   const t = secao.titulo.trim().toLowerCase();
   return (
@@ -1551,6 +1615,22 @@ export async function GET(request: NextRequest) {
       if (aniversariantesSection) {
         boletimSecoes = [...boletimSecoes, aniversariantesSection]
           .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+      }
+
+      etapa = 'noticias-mensais';
+      const diaBoletimParts = parseCultoDateKey(diaBoletimSelecionado);
+      if (diaBoletimParts) {
+        const noticiasMensaisSection = await buildNoticiasMensaisSection(
+          igrejaId,
+          diaBoletimParts.month,
+          diaBoletimParts.year,
+          boletimSecoes
+        );
+        boletimSecoes = boletimSecoes.filter((secao) => !isNoticiasMensaisSection(secao));
+        if (noticiasMensaisSection) {
+          boletimSecoes = [...boletimSecoes, noticiasMensaisSection]
+            .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+        }
       }
     }
 
