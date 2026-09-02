@@ -366,6 +366,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
   const [itemCopiadoId, setItemCopiadoId] = useState<string | null>(null);
+  const [informativoAbertoId, setInformativoAbertoId] = useState<string | null>(null);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
@@ -1156,12 +1157,19 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
       if (item) {
         const imagem = imagemUrl?.trim();
-        const chaveCopia = itemId || item.titulo;
+        const chaveCopia = `${secao.id}-${itemId || item.titulo}`;
         const textoCompartilhamentoItem = `*${item.titulo}*\n\n${item.corpo}`;
         return (
-          <details className="group rounded-[18px] border border-[#ece5d9] open:bg-[#faf7f0]">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0 break-words">{item.titulo}</span>
+          <details
+            open={informativoAbertoId === chaveCopia}
+            onToggle={(event) => {
+              const aberto = (event.currentTarget as HTMLDetailsElement).open;
+              setInformativoAbertoId(aberto ? chaveCopia : null);
+            }}
+            className="group rounded-[18px] border border-[#ece5d9] open:bg-[#faf7f0]"
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 flex-1 break-words">{item.titulo}</span>
               <div className="flex flex-shrink-0 items-center gap-1">
                 <button
                   type="button"

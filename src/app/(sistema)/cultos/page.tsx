@@ -2294,26 +2294,40 @@ function EditorSecaoBoletimModal({
 
   const garantirCampoTextoExtra = (lista: BoletimItemRascunho[]) => {
     const preenchidos = lista.filter((item) => item.conteudo.trim().length > 0);
-    return [...preenchidos, createEmptyBoletimItem()];
+    const ultimo = lista[lista.length - 1];
+    const vazioFinal = ultimo && ultimo.conteudo.trim().length === 0 ? ultimo : createEmptyBoletimItem();
+    return [...preenchidos, vazioFinal];
   };
 
   const garantirCampoAgendaExtra = (lista: AgendaItemRascunho[]) => {
     const preenchidos = lista.filter((item) => item.descricao.trim().length > 0);
-    return [...preenchidos, createEmptyAgendaItem()];
+    const ultimo = lista[lista.length - 1];
+    const vazioFinal = ultimo && ultimo.descricao.trim().length === 0 ? ultimo : createEmptyAgendaItem();
+    return [...preenchidos, vazioFinal];
   };
 
   const garantirCampoAvisoExtra = (lista: AvisoItemRascunho[]) => {
     const preenchidos = lista.filter(
       (item) => item.titulo.trim().length > 0 || item.corpo.trim().length > 0
     );
-    return [...preenchidos, createEmptyAvisoItem()];
+    const ultimo = lista[lista.length - 1];
+    const vazioFinal =
+      ultimo && ultimo.titulo.trim().length === 0 && ultimo.corpo.trim().length === 0
+        ? ultimo
+        : createEmptyAvisoItem();
+    return [...preenchidos, vazioFinal];
   };
 
   const garantirCampoInformativoExtra = (lista: InformativoItemRascunho[]) => {
     const preenchidos = lista.filter(
       (item) => item.titulo.trim().length > 0 || item.corpo.trim().length > 0
     );
-    return [...preenchidos, createEmptyInformativoItem()];
+    const ultimo = lista[lista.length - 1];
+    const vazioFinal =
+      ultimo && ultimo.titulo.trim().length === 0 && ultimo.corpo.trim().length === 0
+        ? ultimo
+        : createEmptyInformativoItem();
+    return [...preenchidos, vazioFinal];
   };
 
   const salvarSecao = () => {
