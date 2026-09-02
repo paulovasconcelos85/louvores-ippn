@@ -365,6 +365,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [menuSecoesAberto, setMenuSecoesAberto] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
+  const [itemCopiadoId, setItemCopiadoId] = useState<string | null>(null);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
@@ -556,6 +557,15 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     if (copiado) {
       setCadaDiaCopiado(true);
       window.setTimeout(() => setCadaDiaCopiado(false), 2500);
+    }
+  };
+
+  const copiarItemCompartilhamento = async (itemId: string, texto: string) => {
+    const copiado = await copiarParaAreaTransferencia(texto);
+
+    if (copiado) {
+      setItemCopiadoId(itemId);
+      window.setTimeout(() => setItemCopiadoId((atual) => (atual === itemId ? null : atual)), 2500);
     }
   };
 
@@ -1092,7 +1102,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const renderItemConteudo = (
     secao: BoletimSecao,
     conteudo: string,
-    imagemUrl?: string | null
+    imagemUrl?: string | null,
+    itemId?: string
   ) => {
     if (isCadaDiaSection(secao)) {
       return renderCadaDiaConteudo(conteudo);
@@ -1145,10 +1156,45 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
       if (item) {
         const imagem = imagemUrl?.trim();
+        const chaveCopia = itemId || item.titulo;
+        const textoCompartilhamentoItem = `*${item.titulo}*\n\n${item.corpo}`;
         return (
           <details className="group rounded-[18px] border border-[#ece5d9] open:bg-[#faf7f0]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden">
               <span className="min-w-0 break-words">{item.titulo}</span>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.open(
+                      `https://wa.me/?text=${encodeURIComponent(textoCompartilhamentoItem)}`,
+                      '_blank'
+                    );
+                  }}
+                  title="Compartilhar no WhatsApp"
+                  className="inline-flex items-center rounded-full border border-transparent p-1.5 text-slate-400 transition-colors hover:border-[#d8d1c4] hover:text-[#365c4d]"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    copiarItemCompartilhamento(chaveCopia, textoCompartilhamentoItem);
+                  }}
+                  title="Copiar notícia"
+                  className="inline-flex items-center rounded-full border border-transparent p-1.5 text-slate-400 transition-colors hover:border-[#d8d1c4] hover:text-[#365c4d]"
+                >
+                  {itemCopiadoId === chaveCopia ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <ChevronDown className="h-4 w-4 flex-shrink-0 text-[#365c4d] transition-transform group-open:rotate-180" />
             </summary>
             <div className="space-y-2 px-4 pb-4">
@@ -1606,7 +1652,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   className="h-auto w-full rounded-[18px] sm:rounded-[22px] border border-[#ece5d9] bg-white"
                                 />
                               ) : (
-                                renderItemConteudo(secao, item.conteudo, item.imagem_url)
+                                renderItemConteudo(secao, item.conteudo, item.imagem_url, item.id)
                               )}
                             </div>
                           ))}
