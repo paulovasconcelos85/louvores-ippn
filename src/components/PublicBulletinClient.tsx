@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -367,6 +367,23 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
   const [itemCopiadoId, setItemCopiadoId] = useState<string | null>(null);
   const [informativoAbertoId, setInformativoAbertoId] = useState<string | null>(null);
+  const informativoRefs = useRef<Map<string, HTMLDetailsElement>>(new Map());
+  const ancoraScrollRef = useRef<{ chave: string; topAntes: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const ancora = ancoraScrollRef.current;
+    ancoraScrollRef.current = null;
+    if (!ancora) return;
+
+    const elemento = informativoRefs.current.get(ancora.chave);
+    if (!elemento) return;
+
+    const topDepois = elemento.getBoundingClientRect().top;
+    const delta = topDepois - ancora.topAntes;
+    if (delta !== 0) {
+      window.scrollBy(0, delta);
+    }
+  }, [informativoAbertoId]);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
 
   const igrejaSelecionada = useMemo(
@@ -1161,6 +1178,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         const textoCompartilhamentoItem = `*${item.titulo}*\n\n${item.corpo}`;
         return (
           <details
+            ref={(el) => {
+              if (el) informativoRefs.current.set(chaveCopia, el);
+              else informativoRefs.current.delete(chaveCopia);
+            }}
             open={informativoAbertoId === chaveCopia}
             onToggle={(event) => {
               const aberto = (event.currentTarget as HTMLDetailsElement).open;
@@ -1168,7 +1189,15 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             }}
             className="group rounded-[18px] border border-[#ece5d9] open:bg-[#faf7f0]"
           >
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden">
+            <summary
+              onClick={(event) => {
+                ancoraScrollRef.current = {
+                  chave: chaveCopia,
+                  topAntes: event.currentTarget.getBoundingClientRect().top,
+                };
+              }}
+              className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[15px] font-semibold leading-6 text-slate-900 sm:text-base [&::-webkit-details-marker]:hidden"
+            >
               <span className="min-w-0 flex-1 break-words">{item.titulo}</span>
               <div className="flex flex-shrink-0 items-center gap-1">
                 <button
