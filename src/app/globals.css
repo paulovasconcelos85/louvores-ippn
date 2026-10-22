@@ -2,21 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+body {
+  color: #2a1a0e;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'kern', 'liga', 'onum';
+  }
+
+  /* Títulos em tipo de época; Fell tem um só peso, então nada de negrito falso. */
+  h1,
+  h2,
+  h3 {
+    font-family: theme('fontFamily.fell');
+    font-weight: 400;
+    font-synthesis: none;
+    letter-spacing: 0.01em;
+  }
+
+  /* Algarismos de texto no corpo; alinhados onde se compara número com número. */
+  table,
+  input,
+  select,
+  textarea {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  th {
+    font-variant: small-caps;
+    letter-spacing: 0.04em;
+  }
+
+  ::selection {
+    background: rgba(139, 42, 29, 0.18);
+  }
 }
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -39,6 +62,7 @@ body {
 }
 
 /* Papel envelhecido: tom de pergaminho com granulação sutil. */
+body,
 .paper {
   background-color: #f4efe5;
   background-image:

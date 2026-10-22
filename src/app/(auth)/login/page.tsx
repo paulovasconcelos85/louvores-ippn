@@ -202,10 +202,10 @@ export default function LoginPage() {
 
   if (sincronizandoAcesso) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="rounded-md border border-[#1e1208]/15 bg-white outline outline-1 outline-offset-[-7px] outline-[#1e1208]/10 shadow-[0_1px_2px_rgba(30,18,8,0.04),0_24px_50px_-24px_rgba(30,18,8,0.35)] p-8 max-w-md w-full text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-700 mx-auto"></div>
-          <p className="mt-4 text-slate-700 font-semibold">{t('login.syncTitle')}</p>
+          <p className="mt-4 font-fell text-xl text-slate-900">{t('login.syncTitle')}</p>
           <p className="text-sm text-slate-500 mt-2">{t('login.syncDescription')}</p>
         </div>
       </div>
@@ -213,50 +213,52 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 left-1/2 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-emerald-400/10 blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-amber-300/10 blur-3xl"></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4 py-10">
 
       <div className="relative w-full max-w-5xl">
         <div className="text-center mb-8">
           <div className="inline-block">
-            <h1 className="text-4xl font-black tracking-tight text-white mb-2">OIKOS Hub</h1>
-            <div className="h-1 bg-gradient-to-r from-transparent via-emerald-300 to-transparent"></div>
+            <p className="font-fell text-sm tracking-[0.35em] text-rubrica">Post Tenebras Lux</p>
+            <h1 className="mt-2 text-5xl text-slate-950">OIKOS Hub</h1>
+            <div className="mt-3 flex items-center justify-center gap-3 text-rubrica" aria-hidden>
+              <span className="h-px w-16 bg-gradient-to-r from-transparent to-[#1e1208]/35" />
+              <span className="text-xl leading-none">❦</span>
+              <span className="h-px w-16 bg-gradient-to-l from-transparent to-[#1e1208]/35" />
+            </div>
           </div>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-emerald-50/85">
+          <p className="mx-auto mt-4 max-w-xl text-lg italic leading-7 text-slate-600">
             O sistema que organiza boletins, cultos, escalas, louvores e cuidado pastoral em um só lugar.
           </p>
         </div>
 
-        <div className="grid overflow-hidden rounded-2xl bg-white shadow-2xl backdrop-blur-sm lg:grid-cols-[0.85fr_1fr]">
-          <aside className="hidden bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+        <div className="relative grid overflow-hidden rounded-md border border-[#1e1208]/15 bg-white outline outline-1 outline-offset-[-7px] outline-[#1e1208]/10 shadow-[0_1px_2px_rgba(30,18,8,0.04),0_24px_50px_-24px_rgba(30,18,8,0.35)] lg:grid-cols-[0.85fr_1fr]">
+          <aside className="hidden border-r border-[#1e1208]/10 bg-[#1e1208]/[0.03] p-10 lg:flex lg:flex-col lg:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-300">Gestão para igrejas</p>
-              <h2 className="mt-5 text-3xl font-black leading-tight">
+              <p className="font-fell text-sm tracking-[0.3em] text-rubrica">Gestão para igrejas</p>
+              <h2 className="mt-4 text-3xl leading-tight text-slate-950">
                 Menos trabalho espalhado. Mais clareza para cuidar de pessoas.
               </h2>
-              <p className="mt-4 text-sm leading-6 text-slate-300">
+              <p className="mt-4 text-lg italic leading-7 text-slate-600">
                 OIKOS Hub conecta a rotina da igreja: equipe, programação, repertório, boletim público e cadastro pastoral.
               </p>
             </div>
 
             <div className="mt-8 grid gap-3">
               {['Boletim público pronto para compartilhar', 'Escalas e cultos sempre conectados', 'Cadastro pastoral com visão da comunidade'].map((item) => (
-                <div key={item} className="rounded border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-slate-100">
+                <div key={item} className="flex items-baseline gap-3 border-t border-dotted border-[#1e1208]/20 py-3 text-lg text-slate-800">
+                  <span className="text-rubrica" aria-hidden>❧</span>
                   {item}
                 </div>
               ))}
             </div>
           </aside>
 
-          <div className="p-8">
+          <div className="p-8 sm:p-10">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 mb-1">
+            <h2 className="text-3xl text-slate-950 mb-1">
               {modo === 'entrar' ? t('login.welcomeBack') : t('login.firstAccess')}
             </h2>
-            <p className="text-slate-600 text-sm">
+            <p className="text-slate-600 text-base italic">
               {modo === 'entrar'
                 ? t('login.signInDescription')
                 : t('login.signUpDescription')}
@@ -275,7 +277,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 mb-6 bg-slate-100 rounded-xl p-1">
+          <div className="grid grid-cols-2 gap-1 mb-6 border border-[#1e1208]/15 rounded-full p-1">
             <button
               type="button"
               onClick={() => {
@@ -283,8 +285,8 @@ export default function LoginPage() {
                 setError('');
                 setMensagemSucesso('');
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                modo === 'entrar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              className={`px-4 py-2 rounded-full text-base transition-colors ${
+                modo === 'entrar' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               {t('login.tabSignIn')}
@@ -296,8 +298,8 @@ export default function LoginPage() {
                 setError('');
                 setMensagemSucesso('');
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                modo === 'primeiro_acesso' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              className={`px-4 py-2 rounded-full text-base transition-colors ${
+                modo === 'primeiro_acesso' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               {t('login.tabFirstAccess')}
@@ -306,7 +308,7 @@ export default function LoginPage() {
 
           <form onSubmit={modo === 'entrar' ? handleSubmit : handlePrimeiroAcesso} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block font-fell text-sm tracking-[0.15em] text-slate-700 mb-2">
                 {t('login.email')}
               </label>
               <input
@@ -314,13 +316,13 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
+                className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900"
                 placeholder={t('login.placeholderEmail')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block font-fell text-sm tracking-[0.15em] text-slate-700 mb-2">
                 {t('login.password')}
               </label>
               <input
@@ -329,7 +331,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
+                className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900"
                 placeholder="••••••••"
               />
             </div>
@@ -337,7 +339,7 @@ export default function LoginPage() {
             {modo === 'primeiro_acesso' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block font-fell text-sm tracking-[0.15em] text-slate-700 mb-2">
                     {t('login.confirmPassword')}
                   </label>
                   <input
@@ -346,19 +348,19 @@ export default function LoginPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900"
+                    className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900"
                     placeholder="••••••••"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block font-fell text-sm tracking-[0.15em] text-slate-700 mb-2">
                     Igreja
                   </label>
                   <select
                     value={igrejaId}
                     onChange={(e) => setIgrejaId(e.target.value)}
                     required
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-none transition-all text-slate-900 bg-white"
+                    className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900 bg-white"
                   >
                     <option value="">Selecione sua igreja...</option>
                     {igrejas.map((ig) => (
@@ -372,7 +374,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-emerald-700 to-emerald-600 text-white py-3 rounded-lg font-semibold hover:from-emerald-800 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-emerald-600 text-white py-3 rounded-full text-lg hover:bg-emerald-700 hover:-translate-y-0.5 transition-all shadow-[0_10px_24px_-10px_rgba(54,92,77,0.6)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -393,7 +395,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-slate-500">{t('login.continueWith')}</span>
+              <span className="px-4 bg-white italic text-slate-500">{t('login.continueWith')}</span>
             </div>
           </div>
 
@@ -402,7 +404,7 @@ export default function LoginPage() {
               onClick={handleGoogleLogin}
               disabled={loading}
               type="button"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-700"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[#1e1208]/25 rounded-full hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-700"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -417,7 +419,7 @@ export default function LoginPage() {
               onClick={handleAzureLogin}
               disabled={loading}
               type="button"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-slate-300 rounded-lg font-medium hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-700"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[#1e1208]/25 rounded-full hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-700"
             >
               <svg className="w-5 h-5" viewBox="0 0 23 23">
                 <path fill="#f35325" d="M0 0h11v11H0z" />
@@ -434,28 +436,28 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-slate-500">{t('login.or')}</span>
+              <span className="px-4 bg-white italic text-slate-500">{t('login.or')}</span>
             </div>
           </div>
 
           <button
             onClick={() => router.push('/')}
-            className="w-full py-3 border-2 border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-all"
+            className="w-full py-3 border border-[#1e1208]/25 text-slate-700 rounded-full hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] transition-all"
           >
             {t('login.backToHome')}
           </button>
 
-          <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-900">
-              <span className="font-semibold">{t('login.firstAccessHintTitle')}</span>{' '}
+          <div className="mt-6 border-t border-dotted border-[#1e1208]/20 pt-4">
+            <p className="text-sm italic text-slate-600">
+              <span className="font-fell not-italic text-rubrica">{t('login.firstAccessHintTitle')}</span>{' '}
               {t('login.firstAccessHintBody')}
             </p>
           </div>
           </div>
         </div>
 
-        <p className="text-center text-emerald-100 text-sm mt-6">
-          OIKOS Hub
+        <p className="text-center font-fell text-lg text-slate-700 mt-8">
+          Soli Deo Gloria
         </p>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { getMessages } from '@/i18n/messages'
 import { getRequestLocale } from '@/i18n/server'
 import { createTranslator } from '@/i18n/translator'
 import { getHtmlLang } from '@/i18n/config'
+import { fell, garamond } from '@/lib/fonts'
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale()
@@ -31,7 +32,7 @@ export default async function RootLayout({
   const messages = getMessages(locale)
 
   return (
-    <html lang={getHtmlLang(locale)}>
+    <html lang={getHtmlLang(locale)} className={`${garamond.variable} ${fell.variable}`}>
       <body>
         <LocaleProvider initialLocale={locale} messages={messages}>
           {children}

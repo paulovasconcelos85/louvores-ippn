@@ -29,7 +29,6 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveLocalizedText } from '@/lib/church-i18n';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { formatIgrejaLocalizacao } from '@/lib/church-utils';
-import { fell, garamond } from '@/lib/fonts';
 
 interface BoletimItem {
   id: string;
@@ -1160,7 +1159,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     return (
       <div className="divide-y divide-dotted divide-[#1e1208]/20">
         {linhas.map((linha, index) => {
-          const valor = linha.trim();
+          const valor = extrairTextoMarcadorLista(linha) ?? linha.trim();
           if (!valor) return null;
           return (
             <div key={index} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
@@ -1341,7 +1340,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   };
 
   return (
-    <div className={`${garamond.variable} ${fell.variable} paper min-h-screen overflow-x-hidden font-garamond text-[#2a1a0e]`}>
+    <div className="paper min-h-screen overflow-x-hidden font-garamond text-[#2a1a0e]">
       <header className="fixed top-0 inset-x-0 z-40 border-b-[3px] border-double border-[#1e1208]/25 bg-[#f4efe5]/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">

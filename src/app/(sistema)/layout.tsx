@@ -11,7 +11,7 @@ export default function SistemaLayout({ children }: { children: React.ReactNode 
   return (
     <>
       <Header />
-      <main className="pt-20 min-h-screen bg-slate-50">
+      <main className="pt-20 min-h-screen">
         {children}
       </main>
     </>

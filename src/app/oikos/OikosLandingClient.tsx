@@ -350,7 +350,7 @@ export default function OikosLandingClient() {
   const labelClass = 'mb-2 block text-sm font-medium text-slate-600';
 
   return (
-    <main className="min-h-screen bg-[#f7f8f4] pb-24 text-slate-950 antialiased sm:pb-0">
+    <main className="min-h-screen bg-slate-50 pb-24 text-slate-950 antialiased sm:pb-0">
       <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3 lg:px-8">
           <Link href="/oikos" className="flex items-center gap-2.5 text-white">
@@ -506,7 +506,7 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <section id="entrega" className="scroll-mt-16 bg-[#eef3ee] py-16 sm:py-24">
+      <section id="entrega" className="scroll-mt-16 bg-emerald-50 py-16 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
             <div>
@@ -586,7 +586,7 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <section id="contato" className="scroll-mt-16 bg-[#f7f8f4] py-16 sm:py-24">
+      <section id="contato" className="scroll-mt-16 bg-slate-50 py-16 sm:py-24">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14 lg:px-8">
           <div>
             <h2 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.contactTitle}</h2>

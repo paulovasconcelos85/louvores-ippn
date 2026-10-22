@@ -107,7 +107,7 @@ export default function Header() {
       : '/';
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-white border-b shadow-sm z-50">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b-[3px] border-double border-[#1e1208]/25 bg-[#f4efe5]/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
         
         {/* Esquerda: Voltar + Logo */}
@@ -115,7 +115,7 @@ export default function Header() {
           {mostrarVoltar && (
             <button
               onClick={() => router.push('/admin')}
-              className="flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-[#1e1208]/5 rounded-full text-base transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="hidden sm:inline">{t('header.back')}</span>
@@ -126,12 +126,12 @@ export default function Header() {
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => router.push('/admin')}
           >
-            <div className="w-10 h-10 bg-emerald-700 rounded-lg flex items-center justify-center text-white shadow-sm">
+            <div className="w-10 h-10 rounded-full ring-1 ring-[#1e1208]/20 ring-offset-2 ring-offset-[#f4efe5] bg-emerald-600 flex items-center justify-center text-white">
               <Building2 className="w-5 h-5" />
             </div>
             <div className="hidden md:block">
-              <p className="font-bold leading-tight text-slate-900">OIKOS Hub</p>
-              <p className="text-xs text-slate-500">{t('app.tagline')}</p>
+              <p className="font-fell text-lg leading-tight text-slate-950">OIKOS Hub</p>
+              <p className="text-sm italic text-slate-500">{t('app.tagline')}</p>
             </div>
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.push(boletimHref)}
-            className="flex items-center gap-2 px-3 py-2 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-emerald-700 hover:bg-[#1e1208]/5 hover:text-rubrica rounded-full text-base transition-colors"
           >
             <Home className="w-4 h-4" />
             <span className="hidden sm:inline">Boletim</span>
@@ -149,12 +149,12 @@ export default function Header() {
           <div className="relative">
             <button
               onClick={() => setMenuAberto(!menuAberto)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 border border-[#1e1208]/20 hover:border-[#1e1208]/40 hover:bg-[#1e1208]/5 rounded-full transition-colors"
             >
-              <span className="w-8 h-8 bg-emerald-700 rounded-full flex items-center justify-center text-white text-sm font-bold">
+              <span className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-white font-fell text-base">
                 {inicial}
               </span>
-              <span className="hidden sm:block text-sm font-medium text-slate-700">
+              <span className="hidden sm:block text-base text-slate-800">
                 {usuarioPermitido?.nome?.split(' ')[0] || t('header.fallbackUser')}
               </span>
               <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${menuAberto ? 'rotate-180' : ''}`} />
@@ -163,14 +163,14 @@ export default function Header() {
             {menuAberto && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuAberto(false)} />
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border z-20 overflow-hidden">
-                  <div className="px-4 py-3 border-b bg-slate-50">
-                    <p className="text-sm font-semibold text-slate-900">
+                <div className="absolute right-0 mt-3 w-72 rounded-md border border-[#1e1208]/15 bg-white outline outline-1 outline-offset-[-6px] outline-[#1e1208]/10 shadow-[0_20px_44px_-22px_rgba(30,18,8,0.35)] z-20 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-dotted border-[#1e1208]/20">
+                    <p className="font-fell text-lg leading-tight text-slate-950">
                       {usuarioPermitido?.nome || user.email}
                     </p>
-                    <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+                    <p className="text-sm italic text-slate-500 mt-0.5">{user.email}</p>
                     {igrejaAtual && (
-                      <p className="text-xs text-emerald-700 mt-2 font-medium">
+                      <p className="text-sm text-rubrica mt-2">
                         {t('header.activeChurch')}: {igrejaAtual.sigla || igrejaAtual.nome}
                       </p>
                     )}
@@ -178,8 +178,8 @@ export default function Header() {
 
                   <div className="py-1">
                     {mostrarSeletorIgreja && (
-                      <div className="px-4 py-3 border-b bg-white">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <div className="px-5 py-3 border-b border-dotted border-[#1e1208]/20">
+                        <label className="font-fell text-xs tracking-[0.25em] text-rubrica">
                           {t('header.activeChurch')}
                         </label>
                         <div className="mt-2 relative">
@@ -187,7 +187,7 @@ export default function Header() {
                           <select
                             value={igrejaAtualId}
                             onChange={(e) => handleTrocarIgreja(e.target.value)}
-                            className="w-full appearance-none rounded-lg border border-slate-300 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                            className="w-full appearance-none rounded-md border border-slate-300 bg-white pl-9 pr-8 py-2 text-sm text-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                           >
                             {igrejas.map((igreja) => (
                               <option key={igreja.id} value={igreja.id}>
@@ -204,7 +204,7 @@ export default function Header() {
                         setMenuAberto(false);
                         router.push('/perfil');
                       }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700 transition-colors"
+                      className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                     >
                       <User className="w-4 h-4" />
                       {t('header.profile')}
@@ -215,7 +215,7 @@ export default function Header() {
                         setMenuAberto(false);
                         router.push('/recursos');
                       }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700 transition-colors"
+                      className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                     >
                       <Library className="w-4 h-4" />
                       Recursos
@@ -227,7 +227,7 @@ export default function Header() {
                           setMenuAberto(false);
                           router.push('/admin');
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700 transition-colors"
+                        className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                       >
                         <Settings className="w-4 h-4" />
                         {t('header.admin')}
@@ -235,14 +235,14 @@ export default function Header() {
                     )}
                   </div>
 
-                  <div className="border-t py-1">
+                  <div className="border-t border-dotted border-[#1e1208]/20 py-1">
                     <button
                       onClick={async () => {
                         setMenuAberto(false);
                         await signOut();
                         router.push('/');
                       }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                      className="w-full text-left px-5 py-2.5 text-base text-rubrica hover:bg-[#1e1208]/5 flex items-center gap-3 transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       {t('header.signOut')}
