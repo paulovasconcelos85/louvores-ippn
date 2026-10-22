@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        garamond: ['var(--font-garamond)', 'Garamond', 'Georgia', 'serif'],
+        fell: ['var(--font-fell)', 'var(--font-garamond)', 'Georgia', 'serif'],
+      },
       colors: {
         emerald: {
           50: '#ecfdf5',

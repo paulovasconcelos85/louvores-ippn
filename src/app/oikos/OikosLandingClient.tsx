@@ -17,6 +17,7 @@ import {
   Music,
   Send,
   UsersRound,
+  X,
 } from 'lucide-react';
 import { useLocale } from '@/i18n/provider';
 
@@ -344,20 +345,24 @@ export default function OikosLandingClient() {
     }
   }
 
+  const inputClass =
+    'min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-base outline-none transition duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100';
+  const labelClass = 'mb-2 block text-sm font-medium text-slate-600';
+
   return (
-    <main className="min-h-screen bg-[#f7f8f4] pb-20 text-slate-950 sm:pb-0">
-      <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/20 bg-slate-950/85 backdrop-blur">
+    <main className="min-h-screen bg-[#f7f8f4] pb-24 text-slate-950 antialiased sm:pb-0">
+      <nav className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-slate-950/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3 lg:px-8">
-          <Link href="/oikos" className="flex items-center gap-2 text-white">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-emerald-500 text-sm font-black text-slate-950 sm:h-9 sm:w-9">O</span>
-            <span className="text-sm font-bold tracking-wide sm:text-base">OIKOS Hub</span>
+          <Link href="/oikos" className="flex items-center gap-2.5 text-white">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-sm font-bold text-slate-950 shadow-lg shadow-emerald-500/20 sm:h-9 sm:w-9">O</span>
+            <span className="text-sm font-semibold tracking-wide sm:text-base">OIKOS Hub</span>
           </Link>
           <div className="flex items-center gap-2">
-            <Link href="/login" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded border border-white/25 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10 sm:gap-2 sm:px-4 sm:text-sm">
+            <Link href="/login" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white/90 transition duration-200 hover:border-white/30 hover:bg-white/10 hover:text-white sm:gap-2 sm:text-sm">
               <LogIn className="h-4 w-4 shrink-0" />
               <span>{copy.loginCta}</span>
             </Link>
-            <a href="#contato" className="hidden min-h-10 items-center justify-center gap-1.5 rounded bg-emerald-400 px-3 py-2 text-center text-xs font-bold leading-tight text-slate-950 transition hover:bg-emerald-300 sm:inline-flex sm:max-w-none sm:gap-2 sm:px-4 sm:text-sm">
+            <a href="#contato" className="hidden min-h-10 items-center justify-center gap-1.5 rounded-full bg-emerald-400 px-4 py-2 text-center text-xs font-semibold leading-tight text-slate-950 transition duration-200 hover:bg-emerald-300 sm:inline-flex sm:gap-2 sm:px-5 sm:text-sm">
               <span>{copy.navCta}</span>
               <ArrowRight className="h-4 w-4" />
             </a>
@@ -372,43 +377,45 @@ export default function OikosLandingClient() {
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[58%_center] opacity-42 sm:opacity-45"
+          className="object-cover object-[58%_center] opacity-50"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.96)_0%,rgba(2,6,23,0.88)_45%,rgba(2,6,23,0.76)_100%)] lg:bg-[linear-gradient(90deg,rgba(2,6,23,0.94)_0%,rgba(2,6,23,0.75)_48%,rgba(2,6,23,0.25)_100%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 pb-10 pt-8 sm:px-6 sm:pb-14 sm:pt-10 lg:min-h-[calc(92vh-5rem)] lg:grid-cols-[1fr_0.85fr] lg:px-8">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.9)_0%,rgba(2,6,23,0.8)_45%,rgba(2,6,23,0.7)_100%)] lg:bg-[linear-gradient(90deg,rgba(2,6,23,0.9)_0%,rgba(2,6,23,0.65)_50%,rgba(2,6,23,0.2)_100%)]" />
+        <div className="pointer-events-none absolute -left-32 top-24 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-slate-950/40" />
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-12 lg:min-h-[calc(92vh-5rem)] lg:grid-cols-[1fr_0.8fr] lg:px-8">
           <div className="max-w-3xl">
-            <p className="mb-4 inline-flex max-w-full items-center gap-2 rounded border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 sm:mb-5 sm:text-sm">
+            <p className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3.5 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur sm:mb-6 sm:text-sm">
               <HeartHandshake className="h-4 w-4 shrink-0" />
               <span className="truncate">{copy.eyebrow}</span>
             </p>
-            <h1 className="max-w-4xl text-[2.45rem] font-black leading-[1.03] sm:text-6xl lg:text-7xl">
+            <h1 className="max-w-4xl text-[2.35rem] font-semibold leading-[1.08] tracking-tight sm:text-6xl lg:text-[4.25rem]">
               {copy.title}
             </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200 sm:mt-6 sm:text-xl sm:leading-8">
+            <p className="mt-5 max-w-2xl text-base font-light leading-7 text-slate-300 sm:mt-7 sm:text-xl sm:leading-8">
               {copy.subtitle}
             </p>
-            <div className="mt-7 grid gap-3 sm:mt-9 sm:flex sm:flex-row">
-              <a href="#contato" className="inline-flex min-h-12 items-center justify-center gap-2 rounded bg-emerald-400 px-5 py-3 text-center text-sm font-bold text-slate-950 transition hover:bg-emerald-300 sm:px-6 sm:text-base">
+            <div className="mt-8 grid gap-3 sm:mt-10 sm:flex sm:flex-row sm:flex-wrap">
+              <a href="#contato" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-center text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-xl hover:shadow-emerald-500/30 sm:text-base">
                 {copy.primaryCta}
                 <Send className="h-4 w-4 shrink-0" />
               </a>
-              <a href="#entrega" className="inline-flex min-h-12 items-center justify-center gap-2 rounded border border-white/25 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-white/10 sm:px-6 sm:text-base">
+              <a href="#entrega" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-center text-sm font-medium text-white backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10 sm:text-base">
                 {copy.secondaryCta}
                 <ArrowRight className="h-4 w-4 shrink-0" />
               </a>
-              <Link href="/login" className="inline-flex min-h-12 items-center justify-center gap-2 rounded border border-emerald-300/45 bg-white/5 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-white/10 sm:px-6 sm:text-base">
+              <Link href="/login" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-center text-sm font-medium text-emerald-100 transition duration-200 hover:bg-white/5 hover:text-white sm:text-base">
                 {copy.loginCta}
                 <LogIn className="h-4 w-4 shrink-0" />
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-2 sm:hidden">
+            <div className="mt-8 grid gap-2 sm:hidden">
               {stats.map((item, index) => (
-                <div key={item} className="flex items-center gap-3 rounded border border-white/10 bg-white/[0.08] p-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-emerald-300/15 text-xs font-black text-emerald-200">
+                <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-3 backdrop-blur">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-300/15 text-xs font-semibold text-emerald-200">
                     {index + 1}
                   </span>
-                  <span className="min-w-0 text-sm font-semibold text-slate-100">{item}</span>
+                  <span className="min-w-0 text-sm font-medium text-slate-100">{item}</span>
                   <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-emerald-300" />
                 </div>
               ))}
@@ -416,22 +423,24 @@ export default function OikosLandingClient() {
           </div>
 
           <div className="hidden lg:block">
-            <div className="rounded border border-white/15 bg-white/10 p-4 shadow-2xl backdrop-blur-md">
-              <div className="rounded bg-slate-950/85 p-5">
-                <div className="mb-5 flex items-center justify-between">
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-3 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <div className="rounded-3xl bg-slate-950/70 p-6">
+                <div className="mb-6 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase text-emerald-200">OIKOS Hub</p>
-                    <p className="text-lg font-bold">Semana da igreja</p>
+                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-200/80">OIKOS Hub</p>
+                    <p className="mt-1 text-lg font-semibold">Semana da igreja</p>
                   </div>
-                  <ClipboardList className="h-6 w-6 text-emerald-300" />
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-300/10">
+                    <ClipboardList className="h-5 w-5 text-emerald-300" />
+                  </span>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {stats.map((item, index) => (
-                    <div key={item} className="flex items-center gap-3 rounded bg-white/[0.08] p-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded bg-emerald-300/15 text-sm font-black text-emerald-200">
+                    <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/[0.05] p-3.5 transition duration-200 hover:bg-white/[0.09]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-300/15 text-sm font-semibold text-emerald-200">
                         {index + 1}
                       </span>
-                      <span className="font-semibold text-slate-100">{item}</span>
+                      <span className="font-medium text-slate-100">{item}</span>
                       <CheckCircle2 className="ml-auto h-5 w-5 text-emerald-300" />
                     </div>
                   ))}
@@ -442,16 +451,16 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <section id="igrejas" className="bg-white py-12 sm:py-20">
+      <section id="igrejas" className="scroll-mt-16 bg-white py-16 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <p className="inline-flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-800 sm:text-sm">
+          <p className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3.5 py-1.5 text-xs font-medium uppercase tracking-wide text-emerald-800 sm:text-sm">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             {copy.churchesEyebrow}
           </p>
-          <h2 className="mt-4 max-w-3xl text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">
+          <h2 className="mt-4 max-w-3xl text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">
             {copy.churchesTitle}
           </h2>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600 sm:mt-4 sm:text-lg sm:leading-8">
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-500 sm:mt-5 sm:text-lg sm:leading-8">
             {copy.churchesText}
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:mt-10">
@@ -459,15 +468,15 @@ export default function OikosLandingClient() {
               <Link
                 key={igreja.slug}
                 href={`/${igreja.slug}`}
-                className="group flex items-center gap-4 rounded border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-400 hover:bg-emerald-50 sm:p-5"
+                className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 sm:p-6"
               >
-                <span className="relative flex h-14 w-14 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white sm:h-16 sm:w-16">
+                <span className="relative flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-white ring-4 ring-white shadow-md shadow-slate-200 sm:h-16 sm:w-16">
                   <Image src={igreja.logo} alt={igreja.nome} fill sizes="64px" className="object-cover" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-black text-slate-950 sm:text-lg">{igreja.sigla}</span>
+                  <span className="block truncate text-base font-semibold text-slate-950 sm:text-lg">{igreja.sigla}</span>
                   <span className="block truncate text-xs text-slate-500 sm:text-sm">{igreja.local}</span>
-                  <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 sm:text-sm">
+                  <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 sm:text-sm">
                     {copy.churchesCta}
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
                   </span>
@@ -478,31 +487,33 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <section className="bg-white py-12 sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-7 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10 lg:px-8">
+      <section className="bg-white py-16 sm:py-24">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14 lg:px-8">
           <div>
-            <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.problemTitle}</h2>
-            <p className="mt-3 text-base leading-7 text-slate-600 sm:mt-4 sm:text-lg sm:leading-8">{copy.problemText}</p>
+            <h2 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.problemTitle}</h2>
+            <p className="mt-4 text-base leading-7 text-slate-500 sm:mt-5 sm:text-lg sm:leading-8">{copy.problemText}</p>
           </div>
-          <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             {copy.problems.map((item) => (
-              <div key={item} className="rounded border border-slate-200 bg-slate-50 p-4 sm:p-5">
-                <CheckCircle2 className="mb-3 h-5 w-5 text-emerald-600 sm:mb-4" />
-                <p className="text-sm font-semibold leading-6 text-slate-700">{item}</p>
+              <div key={item} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5 transition duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 sm:p-6">
+                <span className="mb-4 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                </span>
+                <p className="text-sm font-medium leading-6 text-slate-700">{item}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="entrega" className="bg-[#eef3ee] py-12 sm:py-20">
+      <section id="entrega" className="scroll-mt-16 bg-[#eef3ee] py-16 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid items-end gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <div className="grid items-center gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14">
             <div>
-              <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.valueTitle}</h2>
-              <p className="mt-3 text-base leading-7 text-slate-700 sm:mt-4 sm:text-lg sm:leading-8">{copy.valueText}</p>
+              <h2 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.valueTitle}</h2>
+              <p className="mt-4 text-base leading-7 text-slate-600 sm:mt-5 sm:text-lg sm:leading-8">{copy.valueText}</p>
             </div>
-            <div className="relative min-h-[220px] overflow-hidden rounded border border-slate-200 bg-slate-900 sm:min-h-[280px]">
+            <div className="relative min-h-[220px] overflow-hidden rounded-3xl bg-slate-900 shadow-xl shadow-slate-900/10 sm:min-h-[300px]">
               <Image
                 src="/oikos/image-3-1.jpg"
                 alt="Aplicativo da igreja no celular"
@@ -513,17 +524,19 @@ export default function OikosLandingClient() {
             </div>
           </div>
 
-          <div className="mt-10 sm:mt-12">
-            <h3 className="text-2xl font-black leading-tight text-slate-950">{copy.featuresTitle}</h3>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">{copy.featuresText}</p>
-            <div className="mt-6 grid gap-3 md:grid-cols-2 lg:mt-8 lg:grid-cols-3 lg:gap-4">
+          <div className="mt-14 sm:mt-20">
+            <h3 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950">{copy.featuresTitle}</h3>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-500">{copy.featuresText}</p>
+            <div className="mt-8 grid gap-4 md:grid-cols-2 lg:mt-10 lg:grid-cols-3 lg:gap-5">
               {copy.features.map((feature, index) => {
                 const Icon = featureIcons[index] || CheckCircle2;
                 return (
-                  <article key={feature.title} className="rounded border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                    <Icon className="mb-4 h-6 w-6 text-emerald-700 sm:mb-5" />
-                    <h4 className="text-lg font-black text-slate-950">{feature.title}</h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{feature.text}</p>
+                  <article key={feature.title} className="group rounded-3xl border border-white bg-white/80 p-6 shadow-sm shadow-slate-200/50 transition duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-slate-200/70 sm:p-7">
+                    <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 transition duration-300 group-hover:bg-emerald-100">
+                      <Icon className="h-6 w-6 text-emerald-700" />
+                    </span>
+                    <h4 className="text-lg font-semibold text-slate-950">{feature.title}</h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{feature.text}</p>
                   </article>
                 );
               })}
@@ -532,46 +545,53 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <section className="bg-slate-950 py-12 text-white sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-7 px-4 sm:px-6 lg:grid-cols-3 lg:gap-10 lg:px-8">
+      <section className="relative overflow-hidden bg-slate-950 py-16 text-white sm:py-24">
+        <div className="pointer-events-none absolute -right-40 top-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="relative mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-3 lg:gap-14 lg:px-8">
           <div className="lg:col-span-1">
-            <h2 className="text-2xl font-black leading-tight sm:text-4xl">{copy.audienceTitle}</h2>
+            <h2 className="text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">{copy.audienceTitle}</h2>
           </div>
           <div className="grid gap-3 lg:col-span-2 lg:gap-4">
             {copy.audience.map((item) => (
-              <div key={item.title} className="rounded border border-white/10 bg-white/[0.08] p-4 sm:p-5">
-                <h3 className="text-lg font-black text-emerald-200 sm:text-xl">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-200 sm:text-base sm:leading-7">{item.text}</p>
+              <div key={item.title} className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 transition duration-300 hover:border-white/15 hover:bg-white/[0.07] sm:p-6">
+                <h3 className="text-lg font-semibold text-emerald-200 sm:text-xl">{item.title}</h3>
+                <p className="mt-2 text-sm font-light leading-6 text-slate-300 sm:text-base sm:leading-7">{item.text}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-12 sm:py-20">
+      <section className="bg-white py-16 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.beforeTitle}</h2>
-          <div className="mt-6 grid gap-4 lg:mt-8 lg:grid-cols-2 lg:gap-5">
-            <div className="rounded border border-red-100 bg-red-50 p-4 sm:p-5">
+          <h2 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.beforeTitle}</h2>
+          <div className="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-2 lg:gap-6">
+            <div className="rounded-3xl bg-red-50/70 p-5 sm:p-7">
               {copy.before.map((item) => (
-                <p key={item} className="border-b border-red-100 py-2.5 text-sm font-bold text-red-950 last:border-b-0 sm:py-3">{item}</p>
+                <p key={item} className="flex items-center gap-3 border-b border-red-100/70 py-3 text-sm font-medium text-red-950/80 last:border-b-0 sm:py-3.5">
+                  <X className="h-4 w-4 shrink-0 text-red-400" />
+                  {item}
+                </p>
               ))}
             </div>
-            <div className="rounded border border-emerald-100 bg-emerald-50 p-4 sm:p-5">
+            <div className="rounded-3xl bg-emerald-50/80 p-5 sm:p-7">
               {copy.after.map((item) => (
-                <p key={item} className="border-b border-emerald-100 py-2.5 text-sm font-bold text-emerald-950 last:border-b-0 sm:py-3">{item}</p>
+                <p key={item} className="flex items-center gap-3 border-b border-emerald-100/70 py-3 text-sm font-medium text-emerald-950 last:border-b-0 sm:py-3.5">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  {item}
+                </p>
               ))}
             </div>
           </div>
         </div>
       </section>
 
-      <section id="contato" className="bg-[#f7f8f4] py-12 sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-7 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-10 lg:px-8">
+      <section id="contato" className="scroll-mt-16 bg-[#f7f8f4] py-16 sm:py-24">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:gap-14 lg:px-8">
           <div>
-            <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.contactTitle}</h2>
-            <p className="mt-3 text-base leading-7 text-slate-700 sm:mt-4 sm:text-lg sm:leading-8">{copy.contactText}</p>
-            <div className="mt-6 overflow-hidden rounded border border-slate-200 sm:mt-8">
+            <h2 className="text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">{copy.contactTitle}</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600 sm:mt-5 sm:text-lg sm:leading-8">{copy.contactText}</p>
+            <div className="mt-8 overflow-hidden rounded-3xl shadow-xl shadow-slate-900/10 sm:mt-10">
               <Image
                 src="/oikos/image-2-1.jpg"
                 alt="Pastor revisando informações da semana"
@@ -582,35 +602,35 @@ export default function OikosLandingClient() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded border border-slate-200 bg-white p-4 shadow-sm sm:p-7">
-            <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-4">
+          <form onSubmit={handleSubmit} className="self-start rounded-3xl border border-white bg-white p-5 shadow-xl shadow-slate-200/60 sm:p-8">
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">{copy.name} *</span>
-                <input value={nome} onChange={(event) => setNome(event.target.value)} className="min-h-12 w-full rounded border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                <span className={labelClass}>{copy.name} *</span>
+                <input value={nome} onChange={(event) => setNome(event.target.value)} className={inputClass} />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">{copy.contact} *</span>
-                <input value={contato} onChange={(event) => setContato(event.target.value)} placeholder={copy.contactPlaceholder} className="min-h-12 w-full rounded border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                <span className={labelClass}>{copy.contact} *</span>
+                <input value={contato} onChange={(event) => setContato(event.target.value)} placeholder={copy.contactPlaceholder} className={inputClass} />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">{copy.church}</span>
-                <input value={igreja} onChange={(event) => setIgreja(event.target.value)} className="min-h-12 w-full rounded border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                <span className={labelClass}>{copy.church}</span>
+                <input value={igreja} onChange={(event) => setIgreja(event.target.value)} className={inputClass} />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-bold text-slate-700">{copy.role}</span>
-                <input value={funcao} onChange={(event) => setFuncao(event.target.value)} className="min-h-12 w-full rounded border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+                <span className={labelClass}>{copy.role}</span>
+                <input value={funcao} onChange={(event) => setFuncao(event.target.value)} className={inputClass} />
               </label>
             </div>
             <label className="mt-4 block">
-              <span className="mb-2 block text-sm font-bold text-slate-700">{copy.message}</span>
-              <textarea value={mensagem} onChange={(event) => setMensagem(event.target.value)} rows={4} className="w-full resize-none rounded border border-slate-300 px-4 py-3 text-base outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 sm:rows-5" />
+              <span className={labelClass}>{copy.message}</span>
+              <textarea value={mensagem} onChange={(event) => setMensagem(event.target.value)} rows={4} className={`${inputClass} resize-none`} />
             </label>
             {feedback ? (
-              <p className={`mt-4 rounded px-4 py-3 text-sm font-semibold ${status === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+              <p className={`mt-4 rounded-xl px-4 py-3 text-sm font-medium ${status === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
                 {feedback}
               </p>
             ) : null}
-            <button type="submit" disabled={status === 'loading'} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded bg-slate-950 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="submit" disabled={status === 'loading'} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 font-medium text-white shadow-lg shadow-slate-900/15 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0">
               {status === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5" />}
               {status === 'loading' ? copy.sending : copy.submit}
             </button>
@@ -618,8 +638,8 @@ export default function OikosLandingClient() {
         </div>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur sm:hidden">
-        <a href="#contato" className="flex min-h-12 items-center justify-center gap-2 rounded bg-emerald-500 px-4 py-3 text-center text-sm font-black text-slate-950">
+      <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:hidden">
+        <a href="#contato" className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-slate-950 shadow-xl shadow-emerald-900/25">
           {copy.primaryCta}
           <ArrowRight className="h-4 w-4 shrink-0" />
         </a>
