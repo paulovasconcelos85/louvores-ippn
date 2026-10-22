@@ -1093,56 +1093,25 @@ type EntradaAniv = {
   }
 }
 
-async function fetchLatestCultosDoBoletim(
-  igrejaId: string,
-  diaReferencia?: string | null
-) {
-  const queryCultoReferencia = supabaseAdmin
-    .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
-    .eq('igreja_id', igrejaId);
+const CULTO_COLUNAS =
+  '"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor';
+const LOUVOR_ITEM_COLUNAS =
+  'id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario';
+const IGREJA_DETALHES_COLUNAS = [
+  'id', 'nome', 'nome_abreviado', 'nome_completo', 'cidade', 'uf', 'pais', 'regiao', 'endereco_completo',
+  'logradouro', 'complemento', 'bairro', 'telefone', 'email', 'site', 'instagram', 'youtube', 'whatsapp',
+  'logo_url', 'horario_publicacao_boletim', 'dia_publicacao_boletim', 'timezone_boletim', 'apresentacao_titulo',
+  'apresentacao_texto', 'apresentacao_titulo_i18n', 'apresentacao_texto_i18n', 'apresentacao_imagem_url',
+  'apresentacao_youtube_url', 'apresentacao_galeria',
+] as const;
 
-  const { data: cultoAtualRaw, error: cultoAtualError } = diaReferencia
-    ? await queryCultoReferencia
-        .eq('Dia', getCultoDateKey(diaReferencia))
-        .limit(1)
-        .maybeSingle()
-    : await queryCultoReferencia
-        .order('Dia', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-  if (cultoAtualError) throw cultoAtualError;
-  if (!cultoAtualRaw?.Dia) return [];
-
-  const { data: cultosRaw, error: cultosError } = await supabaseAdmin
-    .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
-    .eq('igreja_id', igrejaId)
-    .eq('Dia', cultoAtualRaw.Dia);
-
-  if (cultosError) throw cultosError;
-
-  return ((cultosRaw || []) as LegacyCultoRow[]).sort(
-    (a, b) => a['Culto nr.'] - b['Culto nr.']
-  );
-}
-
-async function fetchCultosDoBoletimDisponivel(
-  igrejaId: string,
+// Escolhe o dia do boletim olhando só as datas; os textos (palavra pastoral etc.)
+// são buscados depois, apenas para os cultos desse dia.
+function escolherCultosDoBoletim(
+  cultosRecentes: Array<{ 'Culto nr.': number; Dia: string }>,
   config: BoletimPublicacaoConfig,
   includeInternal: boolean
 ) {
-  const { data: cultosRecentesRaw, error: cultosRecentesError } = await supabaseAdmin
-    .from('Louvores IPPN')
-    .select('"Culto nr.", Dia, imagem_url, palavra_pastoral, palavra_pastoral_i18n, palavra_pastoral_autor')
-    .eq('igreja_id', igrejaId)
-    .order('Dia', { ascending: false })
-    .limit(80);
-
-  if (cultosRecentesError) throw cultosRecentesError;
-
-  const cultosRecentes = (cultosRecentesRaw || []) as LegacyCultoRow[];
   const datasRecentes = Array.from(new Set(cultosRecentes.map((culto) => getCultoDateKey(culto.Dia))));
   const diaDisponivel = includeInternal
     ? datasRecentes[0]
@@ -1152,31 +1121,44 @@ async function fetchCultosDoBoletimDisponivel(
 
   return cultosRecentes
     .filter((culto) => getCultoDateKey(culto.Dia) === diaDisponivel)
-    .sort((a, b) => a['Culto nr.'] - b['Culto nr.']);
+    .map((culto) => culto['Culto nr.'])
+    .sort((a, b) => a - b);
+}
+
+// Cultos do dia do boletim e todos os itens deles, numa só ida ao banco cada.
+// Liturgia, fallback legado e seções extras saem dessa mesma lista.
+async function carregarDiaDoBoletim(cultoIds: number[]) {
+  if (cultoIds.length === 0) {
+    return { cultos: [] as LegacyCultoRow[], itens: [] as LegacyLouvorItemRow[] };
+  }
+
+  const [{ data: cultosRaw, error: cultosError }, { data: itensRaw, error: itensError }] = await Promise.all([
+    supabaseAdmin.from('Louvores IPPN').select(CULTO_COLUNAS).in('"Culto nr."', cultoIds),
+    supabaseAdmin
+      .from('louvor_itens')
+      .select(LOUVOR_ITEM_COLUNAS)
+      .in('culto_id', cultoIds)
+      .order('ordem', { ascending: true }),
+  ]);
+
+  if (cultosError) throw cultosError;
+  if (itensError) throw itensError;
+
+  return {
+    cultos: ((cultosRaw || []) as LegacyCultoRow[]).sort((a, b) => a['Culto nr.'] - b['Culto nr.']),
+    itens: (itensRaw || []) as LegacyLouvorItemRow[],
+  };
 }
 
 async function buildLatestLiturgiaSection(
-  igrejaId: string,
+  cultos: LegacyCultoRow[],
+  itens: LegacyLouvorItemRow[],
   locale: Locale,
-  includeInternal = false,
-  diaReferencia?: string | null
+  includeInternal = false
 ): Promise<LegacyBoletimSecao | null> {
-  if (diaReferencia === null) return null;
-
-  const cultos = await fetchLatestCultosDoBoletim(igrejaId, diaReferencia);
   if (cultos.length === 0) return null;
   const cultoReferencia = cultos[0];
-  const cultoIds = cultos.map((culto) => culto['Culto nr.']);
 
-  const { data: itensRaw, error: itensError } = await supabaseAdmin
-    .from('louvor_itens')
-    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-    .in('culto_id', cultoIds)
-    .order('ordem', { ascending: true });
-
-  if (itensError) throw itensError;
-
-  const itens = (itensRaw || []) as LegacyLouvorItemRow[];
   const itensLiturgia = itens.filter((item) => !isBoletimFallbackTipo(item.tipo));
 
   if (itensLiturgia.length === 0) return null;
@@ -1222,20 +1204,19 @@ async function buildLatestLiturgiaSection(
   };
 }
 
-async function buildLegacyBoletimFallback(
-  igrejaId: string,
+function buildLegacyBoletimFallback(
+  cultos: LegacyCultoRow[],
+  itens: LegacyLouvorItemRow[],
   locale: Locale,
-  includeInternal = false,
-  diaReferencia?: string | null
+  liturgiaSecao: LegacyBoletimSecao | null,
+  temDiaSelecionado: boolean
 ) {
-  if (diaReferencia === null) {
+  if (!temDiaSelecionado) {
     return {
       boletimSecoes: [],
       legacyMessage: 'O boletim ainda nao foi publicado.',
     };
   }
-
-  const cultos = await fetchLatestCultosDoBoletim(igrejaId, diaReferencia);
 
   if (cultos.length === 0) {
     return {
@@ -1245,18 +1226,6 @@ async function buildLegacyBoletimFallback(
   }
 
   const culto = cultos.find((item) => item.palavra_pastoral?.trim() || item.imagem_url) || cultos[0];
-  const cultoIds = cultos.map((item) => item['Culto nr.']);
-
-  const { data: itensRaw, error: itensError } = await supabaseAdmin
-    .from('louvor_itens')
-    .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-    .in('culto_id', cultoIds)
-    .order('ordem', { ascending: true });
-
-  if (itensError) throw itensError;
-
-  const itens = (itensRaw || []) as LegacyLouvorItemRow[];
-  const liturgiaSecao = await buildLatestLiturgiaSection(igrejaId, locale, includeInternal, culto.Dia);
 
   const secoes: LegacyBoletimSecao[] = [];
 
@@ -1330,12 +1299,24 @@ async function buildLegacyBoletimFallback(
   };
 }
 
+// Seção extra (Cada Dia, aniversariantes, notícias) que não existia na lista
+// recebe a próxima ordem livre; as existentes mantêm a sua.
+function aplicarSecaoExtra(
+  secoesAtuais: LegacyBoletimSecao[],
+  secao: LegacyBoletimSecao | null,
+  pertenceAoTipo: (secao: LegacyBoletimSecao) => boolean
+) {
+  const existente = secoesAtuais.find(pertenceAoTipo);
+  const semAnterior = secoesAtuais.filter((item) => !pertenceAoTipo(item));
+  if (!secao) return semAnterior;
+
+  const ordem = existente ? secao.ordem : getNextSectionOrder(secoesAtuais);
+  return [...semAnterior, { ...secao, ordem }].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+}
+
 export async function GET(request: NextRequest) {
   let etapa = 'iniciando';
   try {
-    etapa = 'auth';
-    const user = await getAuthenticatedUserFromServerCookies(request);
-    const includeInternal = Boolean(user?.id);
     const locale = getRequestedLocale(request);
     const igrejaId = request.nextUrl.searchParams.get('igreja_id');
 
@@ -1346,70 +1327,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Rodada 1: tudo que só depende da igreja, em paralelo.
     etapa = 'buscar-igreja';
-    const { data: igrejaRaw, error: igrejaError } = await supabaseAdmin
-      .from('igrejas')
-      .select('*')
-      .eq('id', igrejaId)
-      .maybeSingle();
-
-    if (igrejaError) throw igrejaError;
-
-    const igreja = igrejaRaw ? normalizeIgreja(igrejaRaw) : null;
-
-    if (!igreja) {
-      return NextResponse.json(
-        { error: 'Igreja nao encontrada.' },
-        { status: 404 }
-      );
-    }
-
-    etapa = 'buscar-culto-atual';
-    const cultosBoletimDisponiveis = await fetchCultosDoBoletimDisponivel(
-      igrejaId,
-      igrejaRaw as BoletimPublicacaoConfig,
-      includeInternal
-    );
-    const cultoAtualRaw = cultosBoletimDisponiveis[0] || null;
-
-    const cultoAtualId =
-      typeof cultoAtualRaw?.['Culto nr.'] === 'number' ? cultoAtualRaw['Culto nr.'] : null;
-    const diaBoletimSelecionado = cultoAtualRaw?.Dia || null;
-
-    etapa = 'buscar-secoes';
-    const { data: secoesRaw, error: secoesError } = await supabaseAdmin
-      .from('boletim_secoes')
-      .select('*')
-      .eq('igreja_id', igrejaId)
-      .eq('visivel', true)
-      .order('ordem', { ascending: true })
-      .order('criado_em', { ascending: true });
-
-    if (secoesError) throw secoesError;
-
-    const secoes = diaBoletimSelecionado
-      ? filtrarSecoesEstruturadasAtuais(
-          (secoesRaw || []) as BoletimSecaoRow[],
-          cultoAtualId
-        )
-      : [];
-    const secaoIds = secoes.map((secao) => secao.id);
-
-    etapa = 'buscar-detalhes-relacionados';
     const [
-      { data: itensRaw, error: itensError },
+      user,
+      { data: igrejaRaw, error: igrejaError },
+      { data: cultosRecentesRaw, error: cultosRecentesError },
       { data: cultosRaw, error: cultosError },
       { data: redesRaw, error: redesError },
-      { data: igrejaDetalhes, error: detalhesError },
     ] = await Promise.all([
-      secaoIds.length > 0
-        ? supabaseAdmin
-            .from('boletim_itens')
-            .select('*')
-            .in('secao_id', secaoIds)
-            .order('ordem', { ascending: true })
-            .order('criado_em', { ascending: true })
-        : Promise.resolve({ data: [], error: null }),
+      getAuthenticatedUserFromServerCookies(request),
+      supabaseAdmin.from('igrejas').select('*').eq('id', igrejaId).maybeSingle(),
+      supabaseAdmin
+        .from('Louvores IPPN')
+        .select('"Culto nr.", Dia')
+        .eq('igreja_id', igrejaId)
+        .order('Dia', { ascending: false })
+        .limit(80),
       supabaseAdmin
         .from('igreja_cultos')
         .select('*')
@@ -1423,19 +1357,75 @@ export async function GET(request: NextRequest) {
         .eq('igreja_id', igrejaId)
         .eq('ativo', true)
         .order('ordem', { ascending: true }),
-      supabaseAdmin
-        .from('igrejas')
-        .select(
-          'id, nome, nome_abreviado, nome_completo, cidade, uf, pais, regiao, endereco_completo, logradouro, complemento, bairro, telefone, email, site, instagram, youtube, whatsapp, logo_url, horario_publicacao_boletim, dia_publicacao_boletim, timezone_boletim, apresentacao_titulo, apresentacao_texto, apresentacao_titulo_i18n, apresentacao_texto_i18n, apresentacao_imagem_url, apresentacao_youtube_url, apresentacao_galeria'
-        )
-        .eq('id', igrejaId)
-        .maybeSingle(),
+    ]);
+
+    if (igrejaError) throw igrejaError;
+    if (cultosRecentesError) throw cultosRecentesError;
+    if (cultosError) throw cultosError;
+    if (redesError) throw redesError;
+
+    const includeInternal = Boolean(user?.id);
+    const igreja = igrejaRaw ? normalizeIgreja(igrejaRaw) : null;
+
+    if (!igreja) {
+      return NextResponse.json(
+        { error: 'Igreja nao encontrada.' },
+        { status: 404 }
+      );
+    }
+
+    const igrejaDetalhes = Object.fromEntries(
+      IGREJA_DETALHES_COLUNAS.map((coluna) => [coluna, (igrejaRaw as Record<string, unknown>)[coluna] ?? null])
+    ) as Record<(typeof IGREJA_DETALHES_COLUNAS)[number], any>;
+
+    etapa = 'buscar-culto-atual';
+    const cultoIdsDoBoletim = escolherCultosDoBoletim(
+      (cultosRecentesRaw || []) as Array<{ 'Culto nr.': number; Dia: string }>,
+      igrejaRaw as BoletimPublicacaoConfig,
+      includeInternal
+    );
+    const cultoAtualId = cultoIdsDoBoletim[0] ?? null;
+
+    // Rodada 2: cultos e itens do dia escolhido + seções desse culto (ou globais).
+    etapa = 'buscar-secoes';
+    const [diaDoBoletim, { data: secoesRaw, error: secoesError }] = await Promise.all([
+      carregarDiaDoBoletim(cultoIdsDoBoletim),
+      cultoAtualId !== null
+        ? supabaseAdmin
+            .from('boletim_secoes')
+            .select('*')
+            .eq('igreja_id', igrejaId)
+            .eq('visivel', true)
+            .or(`culto_id.eq.${cultoAtualId},culto_id.is.null`)
+            .order('ordem', { ascending: true })
+            .order('criado_em', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (secoesError) throw secoesError;
+
+    const cultosDoDia = diaDoBoletim.cultos;
+    const diaBoletimSelecionado = cultosDoDia[0]?.Dia || null;
+    const secoes = diaBoletimSelecionado
+      ? filtrarSecoesEstruturadasAtuais((secoesRaw || []) as BoletimSecaoRow[], cultoAtualId)
+      : [];
+    const secaoIds = secoes.map((secao) => secao.id);
+
+    // Rodada 3: itens das seções + liturgia (cânticos) em paralelo.
+    etapa = 'buscar-detalhes-relacionados';
+    const [{ data: itensRaw, error: itensError }, liturgiaSecaoAtual] = await Promise.all([
+      secaoIds.length > 0
+        ? supabaseAdmin
+            .from('boletim_itens')
+            .select('*')
+            .in('secao_id', secaoIds)
+            .order('ordem', { ascending: true })
+            .order('criado_em', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      buildLatestLiturgiaSection(cultosDoDia, diaDoBoletim.itens, locale, includeInternal),
     ]);
 
     if (itensError) throw itensError;
-    if (cultosError) throw cultosError;
-    if (redesError) throw redesError;
-    if (detalhesError) throw detalhesError;
     const itens = (itensRaw || []) as BoletimItemRow[];
     const itensPorSecao = new Map<string, BoletimItemRow[]>();
 
@@ -1462,28 +1452,24 @@ export async function GET(request: NextRequest) {
 
     if (boletimSecoes.length === 0 || secoesComConteudo.length === 0) {
       etapa = 'fallback-legado';
-      const fallback = await buildLegacyBoletimFallback(
-        igrejaId,
+      const fallback = buildLegacyBoletimFallback(
+        cultosDoDia,
+        diaDoBoletim.itens,
         locale,
-        false,
-        diaBoletimSelecionado
+        liturgiaSecaoAtual,
+        Boolean(diaBoletimSelecionado)
       );
       boletimSecoes = fallback.boletimSecoes;
       message = fallback.legacyMessage;
     } else if (cultoAtualId !== null) {
       etapa = 'mesclar-fallback-legado';
-      const { data: fallbackRowsRaw, error: fallbackRowsError } = await supabaseAdmin
-        .from('louvor_itens')
-        .select('id, culto_id, ordem, tipo, tom, cantico_id, conteudo_publico, conteudo_publico_i18n, descricao, horario')
-        .eq('culto_id', cultoAtualId)
-        .like('tipo', `${BOLETIM_FALLBACK_TIPO_PREFIX}%`)
-        .order('ordem', { ascending: true });
-
-      if (fallbackRowsError) throw fallbackRowsError;
+      const fallbackRowsRaw = diaDoBoletim.itens.filter(
+        (item) => item.culto_id === cultoAtualId && isBoletimFallbackTipo(item.tipo)
+      );
 
       const tiposEstruturados = new Set(boletimSecoes.map((secao) => secao.tipo));
       const secoesFallback = buildExtraSectionsFromFallbackRows(
-        (fallbackRowsRaw || []) as LegacyLouvorItemRow[],
+        fallbackRowsRaw,
         cultoAtualId,
         locale
       ).filter((secao) => !tiposEstruturados.has(secao.tipo));
@@ -1492,8 +1478,8 @@ export async function GET(request: NextRequest) {
       // Quando existem seções estruturadas, o fallback legacy não é chamado, então
       // precisamos injetar esses campos manualmente se ainda não houver seção desses tipos.
       const cultoRef =
-        cultosBoletimDisponiveis.find((c) => c.palavra_pastoral?.trim() || c.imagem_url) ||
-        cultosBoletimDisponiveis[0];
+        cultosDoDia.find((c) => c.palavra_pastoral?.trim() || c.imagem_url) ||
+        cultosDoDia[0];
 
       const secoesFromCulto: any[] = [];
 
@@ -1564,78 +1550,36 @@ export async function GET(request: NextRequest) {
     }
 
     etapa = 'sincronizar-liturgia';
-    const liturgiaSecaoAtual = await buildLatestLiturgiaSection(
-      igrejaId,
-      locale,
-      includeInternal,
-      diaBoletimSelecionado
-    );
     boletimSecoes = mergeLiturgiaSecao(boletimSecoes, liturgiaSecaoAtual);
 
-    if (includeInternal && boletimSecoes.some((secao) => secao.id.startsWith('legacy-'))) {
-      etapa = 'fallback-legado-interno';
-      const liturgiaSecaoInterna = await buildLatestLiturgiaSection(
-        igrejaId,
-        locale,
-        true,
-        diaBoletimSelecionado
-      );
-
-      if (liturgiaSecaoInterna) {
-        boletimSecoes = boletimSecoes.map((secao) => {
-          if (secao.tipo !== 'liturgia') return secao;
-
-          return {
-            ...secao,
-            itens: liturgiaSecaoInterna.itens,
-          };
-        });
-      }
-    }
-
     if (diaBoletimSelecionado) {
-      etapa = 'cada-dia';
-      const cadaDiaSection = await buildCadaDiaSection(boletimSecoes);
-      if (cadaDiaSection) {
-        boletimSecoes = [
-          ...boletimSecoes.filter((secao) => !isCadaDiaSection(secao)),
-          cadaDiaSection,
-        ]
-          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-      }
-
-      etapa = 'aniversariantes-mes';
-      const aniversariantesSection = await buildAniversariantesSection(
-        igrejaId,
-        igrejaDetalhes?.timezone_boletim,
-        boletimSecoes,
-        diaBoletimSelecionado
-      );
-      boletimSecoes = boletimSecoes.filter((secao) => !isAniversariantesSection(secao));
-      if (aniversariantesSection) {
-        boletimSecoes = [...boletimSecoes, aniversariantesSection]
-          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-      }
-
-      etapa = 'noticias-mensais';
+      // Rodada 4: seções extras em paralelo; a ordem é aplicada em sequência depois.
+      etapa = 'secoes-extras';
       const diaBoletimParts = parseCultoDateKey(diaBoletimSelecionado);
-      if (diaBoletimParts) {
-        const noticiasMensaisSection = await buildNoticiasMensaisSection(
+      const [cadaDiaSection, aniversariantesSection, noticiasMensaisSection] = await Promise.all([
+        buildCadaDiaSection(boletimSecoes),
+        buildAniversariantesSection(
           igrejaId,
-          diaBoletimParts.month,
-          diaBoletimParts.year,
-          boletimSecoes
-        );
-        boletimSecoes = boletimSecoes.filter((secao) => !isNoticiasMensaisSection(secao));
-        if (noticiasMensaisSection) {
-          boletimSecoes = [...boletimSecoes, noticiasMensaisSection]
-            .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-        }
+          igrejaDetalhes.timezone_boletim,
+          boletimSecoes,
+          diaBoletimSelecionado
+        ),
+        diaBoletimParts
+          ? buildNoticiasMensaisSection(igrejaId, diaBoletimParts.month, diaBoletimParts.year, boletimSecoes)
+          : Promise.resolve(null),
+      ]);
+
+      if (cadaDiaSection) {
+        boletimSecoes = aplicarSecaoExtra(boletimSecoes, cadaDiaSection, isCadaDiaSection);
+      }
+      boletimSecoes = aplicarSecaoExtra(boletimSecoes, aniversariantesSection, isAniversariantesSection);
+      if (diaBoletimParts) {
+        boletimSecoes = aplicarSecaoExtra(boletimSecoes, noticiasMensaisSection, isNoticiasMensaisSection);
       }
     }
 
     etapa = 'resposta';
-    return NextResponse.json({
+    const response = NextResponse.json({
       igreja,
       igrejaDetalhes,
       agendaCultos: cultosRaw || [],
@@ -1644,6 +1588,16 @@ export async function GET(request: NextRequest) {
       totalSecoes: boletimSecoes.length,
       message,
     });
+
+    // Visitante anônimo recebe a mesma resposta: a CDN pode servi-la por 1 min.
+    // Quem está logado pede com ?sessao=1 (outra chave de cache) e nunca é cacheado.
+    response.headers.set(
+      'Cache-Control',
+      includeInternal
+        ? 'private, no-store'
+        : 'public, max-age=0, s-maxage=60, stale-while-revalidate=300'
+    );
+    return response;
   } catch (error: any) {
     console.error('Erro ao carregar boletim da home:', { etapa, error });
     return NextResponse.json(

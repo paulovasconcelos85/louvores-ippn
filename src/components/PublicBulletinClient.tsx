@@ -759,6 +759,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         setLoadingBoletim(true);
 
         const params = new URLSearchParams({ igreja_id: igrejaAtualId, locale });
+        // Chave de cache separada: a CDN guarda só a versão pública do boletim.
+        if (user?.id) params.set('sessao', '1');
         const response = await fetch(`/api/boletins-home?${params.toString()}`, {
           headers: await buildAuthenticatedHeaders(),
         });
@@ -793,7 +795,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     return () => {
       active = false;
     };
-  }, [igrejaAtualId, authLoading, locale]);
+  }, [igrejaAtualId, authLoading, locale, user?.id]);
 
   useEffect(() => {
     if (loadingIgreja || igrejaAtualId) return;

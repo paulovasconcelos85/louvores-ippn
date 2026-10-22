@@ -136,11 +136,14 @@ function extrairMensagemDeTextoBlockquote(textoBlockquote: string) {
 }
 
 export async function buscarDevocionalCadaDia(): Promise<CadaDiaDevocional | null> {
+  // O devocional muda uma vez por dia: guarda por 1h no Data Cache do Next,
+  // em vez de buscar no site da LPC a cada visita ao boletim.
   const response = await fetch(CADA_DIA_SOURCE_URL, {
     headers: {
       'User-Agent': 'OIKOS Hub boletim publico (+https://www.lpc.org.br/cadadia/site/)',
     },
     signal: AbortSignal.timeout(8000),
+    next: { revalidate: 3600 },
   });
 
   if (!response.ok) {
