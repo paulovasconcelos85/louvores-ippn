@@ -21,6 +21,7 @@ import {
   LayoutList, Table2, Send, Copy, ChevronDown,
 } from 'lucide-react';
 import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
+import { buscarRelacionamentosDasPessoas } from '@/lib/relacionamentos';
 
 interface Membro {
   id: string;
@@ -656,10 +657,7 @@ export default function PastorarMembrosPage() {
       const pessoas = todosParaImpressao;
       const pessoasMap = new Map(pessoas.map((p) => [p.id, p]));
 
-      const { data: relacionamentosData, error } = await supabase
-        .from('relacionamentos')
-        .select('pessoa_id, pessoa_relacionada_id, tipo');
-      if (error) throw error;
+      const relacionamentosData = await buscarRelacionamentosDasPessoas(pessoas.map((p) => p.id));
 
       type RelacionamentoRow = { pessoa_id: string; pessoa_relacionada_id: string; tipo: TipoRelacionamentoFamiliar };
       const relacionamentos = (relacionamentosData || []) as RelacionamentoRow[];

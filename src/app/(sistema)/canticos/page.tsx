@@ -252,21 +252,11 @@ export default function CanticosPage() {
       return;
     }
 
-    const { data: louvoresItens, error: erroItens } = await supabase
-      .from('louvor_itens')
-      .select('cantico_id, culto_id')
-      .not('cantico_id', 'is', null);
-
-    if (erroItens) {
-      console.error('Erro ao buscar louvor_itens:', erroItens);
-      return;
-    }
-
-    if (!louvoresItens || louvoresItens.length === 0) return;
-
+    // Primeiro os cultos desta igreja; depois só os itens deles, em lotes,
+    // para não esbarrar no limite de 1000 linhas por consulta.
     const { data: cultos, error: erroCultos } = await supabase
       .from('Louvores IPPN')
-      .select('*')
+      .select('"Culto nr.", Dia')
       .eq('igreja_id', igrejaId);
 
     if (erroCultos) {
@@ -274,7 +264,7 @@ export default function CanticosPage() {
       return;
     }
 
-    if (!cultos) return;
+    if (!cultos || cultos.length === 0) return;
 
     const cultosMap = new Map<number, string>();
     cultos.forEach((culto: any) => {
@@ -282,6 +272,30 @@ export default function CanticosPage() {
         cultosMap.set(culto['Culto nr.'], culto.Dia);
       }
     });
+
+    const cultoIds = [...cultosMap.keys()];
+    const lotes: number[][] = [];
+    for (let inicio = 0; inicio < cultoIds.length; inicio += 50) {
+      lotes.push(cultoIds.slice(inicio, inicio + 50));
+    }
+
+    const resultadosItens = await Promise.all(
+      lotes.map((lote) =>
+        supabase
+          .from('louvor_itens')
+          .select('cantico_id, culto_id')
+          .in('culto_id', lote)
+          .not('cantico_id', 'is', null)
+      )
+    );
+
+    const erroItens = resultadosItens.find((resultado) => resultado.error)?.error;
+    if (erroItens) {
+      console.error('Erro ao buscar louvor_itens:', erroItens);
+      return;
+    }
+
+    const louvoresItens = resultadosItens.flatMap((resultado) => resultado.data || []);
 
     const mapa = new Map<string, string[]>();
 
@@ -320,8 +334,10 @@ export default function CanticosPage() {
 
     const { data: cultos, error: erroCultos } = await supabase
       .from('Louvores IPPN')
-      .select('*')
-      .eq('igreja_id', igrejaId);
+      .select('"Culto nr.", Dia')
+      .eq('igreja_id', igrejaId)
+      .order('Dia', { ascending: false })
+      .limit(10);
 
     if (erroCultos || !cultos) {
       alert('❌ Erro ao buscar cultos.');

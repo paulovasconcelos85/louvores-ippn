@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { buscarRelacionamentosDasPessoas } from '@/lib/relacionamentos';
 import { useLocale } from '@/i18n/provider';
 import { Users, ChevronDown, ChevronUp, Cake, Heart, Pencil, Check, X } from 'lucide-react';
 
@@ -110,16 +110,8 @@ export default function FamiliaView({ podeEditar = false }: FamiliaViewProps) {
       const todasPessoas = (pessoasPayload.data || []) as MembroSimples[];
       const pessoasMap = new Map(todasPessoas.map((pessoa) => [pessoa.id, pessoa]));
 
-      // Carrega todos os relacionamentos
-      const { data: relacionamentos, error: errRel } = await supabase
-        .from('relacionamentos')
-        .select(`
-          pessoa_id,
-          pessoa_relacionada_id,
-          tipo
-        `);
-
-      if (errRel) throw errRel;
+      // Relacionamentos só das pessoas desta igreja
+      const relacionamentos = await buscarRelacionamentosDasPessoas(todasPessoas.map((pessoa) => pessoa.id));
 
       // Monta mapa de relacionamentos: pessoa_id → lista de relacionados
       const mapaRel = new Map<string, MembroComRelacao[]>();
