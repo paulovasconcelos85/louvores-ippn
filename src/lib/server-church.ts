@@ -71,7 +71,22 @@ async function getAuthenticatedUserFromCookies() {
   return user;
 }
 
-async function getAuthenticatedUser(request?: Request | null) {
+// Cada auth.getUser() é uma ida ao servidor de autenticação. Rotas que chamam
+// vários helpers (usuário, igreja, permissões) reaproveitam o mesmo resultado.
+const usuarioPorRequisicao = new WeakMap<Request, ReturnType<typeof buscarUsuarioAutenticado>>();
+
+function getAuthenticatedUser(request?: Request | null) {
+  if (!request) return buscarUsuarioAutenticado(null);
+
+  const emAndamento = usuarioPorRequisicao.get(request);
+  if (emAndamento) return emAndamento;
+
+  const busca = buscarUsuarioAutenticado(request);
+  usuarioPorRequisicao.set(request, busca);
+  return busca;
+}
+
+async function buscarUsuarioAutenticado(request?: Request | null) {
   const bearerToken = getBearerToken(request);
 
   if (bearerToken) {
