@@ -157,13 +157,13 @@ const folha =
 
 // Capitular rubricada no primeiro parágrafo.
 const capitular =
-  'first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-fell first-letter:text-[3.7rem] first-letter:leading-[0.8] first-letter:text-[#8b2a1d]';
+  'first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-fell first-letter:text-[4.81rem] first-letter:leading-[0.8] first-letter:text-[#8b2a1d]';
 
 const linkCanal =
-  'flex items-center justify-between gap-3 px-1 py-3 text-[17px] text-[#2a1a0e] transition-colors hover:text-[#8b2a1d]';
+  'flex items-center justify-between gap-3 px-1 py-3 text-[22px] text-[#2a1a0e] transition-colors hover:text-[#8b2a1d]';
 
 const botaoDiscreto =
-  'inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm italic text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]';
+  'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[1.219rem]/[1.44] italic text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]';
 
 function paraRomano(numero: number) {
   const tabela: Array<[number, string]> = [
@@ -186,7 +186,7 @@ function Ornamento({ className = '', pequeno = false }: { className?: string; pe
   return (
     <div className={`flex items-center justify-center gap-3 text-[#8b2a1d] ${className}`} aria-hidden>
       <span className={`h-px ${filete} bg-gradient-to-r from-transparent to-[#1e1208]/35`} />
-      <span className={pequeno ? 'text-sm leading-none' : 'text-xl leading-none'}>❦</span>
+      <span className={pequeno ? 'text-[1.219rem]/[1.44] leading-none' : 'text-[1.625rem]/[1.4] leading-none'}>❦</span>
       <span className={`h-px ${filete} bg-gradient-to-l from-transparent to-[#1e1208]/35`} />
     </div>
   );
@@ -194,7 +194,7 @@ function Ornamento({ className = '', pequeno = false }: { className?: string; pe
 
 // Florões nos cantos da folha.
 function Cantoneiras() {
-  const base = 'pointer-events-none absolute text-[13px] leading-none text-[#8b2a1d]/60';
+  const base = 'pointer-events-none absolute text-[17px] leading-none text-[#8b2a1d]/60';
   return (
     <>
       <span className={`${base} left-3 top-2.5`} aria-hidden>✥</span>
@@ -980,30 +980,30 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           if (!v) return <div key={i} className="h-2" />;
 
           if (v.startsWith('# ')) return (
-            <h2 key={i} className="font-fell text-[24px] sm:text-[28px] leading-snug text-center text-[#1e1208]">
+            <h2 key={i} className="font-fell text-[31px] sm:text-[36px] leading-snug text-center text-[#1e1208]">
               {parseInlinePastoral(v.slice(2))}
             </h2>
           );
           if (v.startsWith('## ')) return (
-            <h3 key={i} className="font-fell text-[20px] sm:text-[23px] leading-snug text-[#2a1a0e]">
+            <h3 key={i} className="font-fell text-[26px] sm:text-[30px] leading-snug text-[#2a1a0e]">
               {parseInlinePastoral(v.slice(3))}
             </h3>
           );
           if (v.startsWith('### ')) return (
-            <h4 key={i} className={`${serifBase} font-semibold text-[16px] sm:text-[18px] leading-snug text-[#3a2a1e]`}>
+            <h4 key={i} className={`${serifBase} font-semibold text-[21px] sm:text-[23px] leading-snug text-[#3a2a1e]`}>
               {parseInlinePastoral(v.slice(4))}
             </h4>
           );
           if (v.startsWith('> ')) return (
             <blockquote key={i} className="border-l-2 border-[#8b2a1d]/50 pl-5 py-0.5 my-2">
-              <p className={`${serifBase} italic text-[18px] sm:text-[20px] leading-8 text-[#4a3020]`}>
+              <p className={`${serifBase} italic text-[23px] sm:text-[26px] leading-[2.6rem] text-[#4a3020]`}>
                 {parseInlinePastoral(v.slice(2))}
               </p>
             </blockquote>
           );
 
           return (
-            <p key={i} className={`${serifBase} text-[18px] sm:text-[20px] leading-[1.85] text-[#2a1a0e] whitespace-pre-line ${i === indicePrimeiroParagrafo ? capitular : ''}`}>
+            <p key={i} className={`${serifBase} text-[23px] sm:text-[26px] leading-[1.85] text-[#2a1a0e] whitespace-pre-line ${i === indicePrimeiroParagrafo ? capitular : ''}`}>
               {parseInlinePastoral(v)}
             </p>
           );
@@ -1011,7 +1011,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
         {autor && (
           <div className="mt-4 pt-4 border-t border-dotted border-[#1e1208]/25 flex items-center justify-end gap-2">
-            <p className={`${serifBase} italic text-[16px] sm:text-[18px] text-[#7a5c40]`}>
+            <p className={`${serifBase} italic text-[21px] sm:text-[23px] text-[#7a5c40]`}>
               — {autor}
             </p>
           </div>
@@ -1054,7 +1054,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     rotulo: cantico.rotulo,
                   })
                 }
-                className="inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-full bg-[#365c4d]/[0.07] px-4 py-1 text-left text-[16px] sm:text-[17px] text-[#365c4d] transition-colors hover:bg-[#365c4d]/[0.13]"
+                className="inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-full bg-[#365c4d]/[0.07] px-4 py-1 text-left text-[21px] sm:text-[22px] text-[#365c4d] transition-colors hover:bg-[#365c4d]/[0.13]"
               >
                 <span className="font-fell">{cantico.rotulo}:</span>
                 <span className="italic underline decoration-[#365c4d]/40 underline-offset-2 break-words">{cantico.nome}</span>
@@ -1069,7 +1069,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             return (
               <p
                 key={`${itemLista}-${index}`}
-                className={`${textoClassName} flex items-start gap-2.5 text-[17px] leading-[1.75] sm:text-[18px] break-words`}
+                className={`${textoClassName} flex items-start gap-2.5 text-[22px] leading-[1.75] sm:text-[23px] break-words`}
               >
                 <span className="text-[#8b2a1d]" aria-hidden>❧</span>
                 <span className="flex-1 min-w-0 break-words">{parseInlinePastoral(itemLista)}</span>
@@ -1080,7 +1080,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           return (
             <p
               key={`${valor}-${index}`}
-              className={`${textoClassName} text-[17px] whitespace-pre-line leading-[1.75] sm:text-[18px] break-words`}
+              className={`${textoClassName} text-[22px] whitespace-pre-line leading-[1.75] sm:text-[23px] break-words`}
             >
               {parseInlinePastoral(valor)}
             </p>
@@ -1111,7 +1111,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               href={fonteUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex flex-wrap items-center gap-2 italic text-[15px] text-[#365c4d] underline decoration-[#365c4d]/40 underline-offset-4 break-all"
+              className="inline-flex flex-wrap items-center gap-2 italic text-[20px] text-[#365c4d] underline decoration-[#365c4d]/40 underline-offset-4 break-all"
             >
               <span className="break-all">Fonte: {fonteUrl}</span>
               <ExternalLink className="h-4 w-4 flex-shrink-0" />
@@ -1147,7 +1147,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             </div>
           </div>
           {credito ? (
-            <p className="mt-2 italic text-[15px] leading-6 text-[#7a5c40] break-words">{credito}</p>
+            <p className="mt-2 italic text-[20px] leading-[1.95rem] text-[#7a5c40] break-words">{credito}</p>
           ) : null}
         </div>
       </div>
@@ -1164,7 +1164,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           return (
             <div key={index} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
               <span className="flex-shrink-0 text-[#8b2a1d]" aria-hidden>✠</span>
-              <p className="text-[17px] leading-[1.75] text-[#2a1a0e] sm:text-[18px] break-words">
+              <p className="text-[22px] leading-[1.75] text-[#2a1a0e] sm:text-[23px] break-words">
                 {parseInlineLinks(valor)}
               </p>
             </div>
@@ -1190,11 +1190,11 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       if (agenda) {
         return (
           <div>
-            <p className="font-fell text-[15px] sm:text-base tracking-[0.12em] text-[#8b2a1d]">
+            <p className="font-fell text-[20px] sm:text-[1.381rem]/[1.553] tracking-[0.12em] text-[#8b2a1d]">
               {formatarDataAgenda(agenda.data, locale)}
               {agenda.temHora ? ` · ${agenda.hora}` : ''}
             </p>
-            <p className="mt-1 text-[17px] leading-[1.75] text-[#2a1a0e] sm:text-[18px]">{agenda.descricao}</p>
+            <p className="mt-1 text-[22px] leading-[1.75] text-[#2a1a0e] sm:text-[23px]">{agenda.descricao}</p>
           </div>
         );
       }
@@ -1207,7 +1207,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         const imagem = imagemUrl?.trim();
         return (
           <div className="space-y-2">
-            <p className="font-fell text-[20px] leading-snug text-[#1e1208] sm:text-[22px]">
+            <p className="font-fell text-[26px] leading-snug text-[#1e1208] sm:text-[29px]">
               {aviso.titulo}
             </p>
             {imagem ? (
@@ -1253,7 +1253,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   topAntes: event.currentTarget.getBoundingClientRect().top,
                 };
               }}
-              className="flex cursor-pointer list-none items-center gap-3 px-3 py-3.5 text-[18px] leading-snug text-[#1e1208] transition-colors hover:text-[#8b2a1d] sm:text-[19px] [&::-webkit-details-marker]:hidden"
+              className="flex cursor-pointer list-none items-center gap-3 px-3 py-3.5 text-[23px] leading-snug text-[#1e1208] transition-colors hover:text-[#8b2a1d] sm:text-[25px] [&::-webkit-details-marker]:hidden"
             >
               <span className="text-[#8b2a1d]" aria-hidden>❧</span>
               <span className="min-w-0 flex-1 break-words">{item.titulo}</span>
@@ -1327,7 +1327,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
     return (
       <div className="space-y-1.5">
-        <p className="text-[17px] font-semibold text-[#1e1208] leading-snug sm:text-lg">{titulo}</p>
+        <p className="text-[22px] font-semibold text-[#1e1208] leading-snug sm:text-[1.544rem]/[1.474]">{titulo}</p>
         {corpo ? renderBlocoTexto(corpo) : null}
       </div>
     );
@@ -1363,7 +1363,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       onClick={() => setMenuSecoesAberto(false)}
                     />
                     <div className={`absolute left-0 top-full mt-3 z-20 w-72 max-h-[70vh] overflow-y-auto py-3 ${folha}`}>
-                      <p className="px-5 pb-2 font-fell text-xs tracking-[0.3em] text-[#8b2a1d]">Índice</p>
+                      <p className="px-5 pb-2 font-fell text-[1.056rem]/[1.415] tracking-[0.3em] text-[#8b2a1d]">Índice</p>
                       {boletimSecoes
                         .filter((secao) => !isImageSection(secao))
                         .map((secao) => (
@@ -1371,9 +1371,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                             key={secao.id}
                             type="button"
                             onClick={() => irParaSecao(secao.id)}
-                            className="w-full text-left px-5 py-2 text-[17px] text-[#2a1a0e] hover:bg-[#1e1208]/[0.04] hover:text-[#8b2a1d] transition-colors flex items-baseline gap-3"
+                            className="w-full text-left px-5 py-2 text-[22px] text-[#2a1a0e] hover:bg-[#1e1208]/[0.04] hover:text-[#8b2a1d] transition-colors flex items-baseline gap-3"
                           >
-                            <span className="w-8 flex-shrink-0 text-right font-fell text-sm text-[#8b2a1d]">
+                            <span className="w-8 flex-shrink-0 text-right font-fell text-[1.219rem]/[1.44] text-[#8b2a1d]">
                               {paraRomano(numeracaoSecoesVisiveis.get(secao.id) ?? 0)}
                             </span>
                             <span className="truncate">{getTituloSecao(secao)}</span>
@@ -1385,10 +1385,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-fell text-[11px] sm:text-xs tracking-[0.25em] text-[#8b2a1d]">
+              <p className="font-fell text-[14px] sm:text-[1.056rem]/[1.415] tracking-[0.25em] text-[#8b2a1d]">
                 OIKOS Hub
               </p>
-              <h1 className="font-fell text-base sm:text-lg text-[#1e1208] truncate">
+              <h1 className="font-fell text-[1.381rem]/[1.553] sm:text-[1.544rem]/[1.474] text-[#1e1208] truncate">
                 {t('home.bulletinTitle')}
                 {igrejaSelecionada && (
                   <span className="hidden sm:inline font-garamond italic text-[#7a5c40]"> · {nomeExibicaoIgreja}</span>
@@ -1401,7 +1401,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <>
                 <button
                   onClick={() => router.push('/admin')}
-                  className="text-sm sm:text-base text-[#365c4d] hover:text-[#1e1208] px-3 sm:px-4 py-1.5 rounded-full hover:bg-[#1e1208]/5 transition-colors"
+                  className="text-[1.219rem]/[1.44] sm:text-[1.381rem]/[1.553] text-[#365c4d] hover:text-[#1e1208] px-3 sm:px-4 py-1.5 rounded-full hover:bg-[#1e1208]/5 transition-colors"
                 >
                   {t('home.panel')}
                 </button>
@@ -1410,7 +1410,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     await signOut();
                     window.location.reload();
                   }}
-                  className="text-sm sm:text-base text-[#7a5c40] hover:text-[#1e1208] px-3 sm:px-4 py-1.5 rounded-full hover:bg-[#1e1208]/5 transition-colors"
+                  className="text-[1.219rem]/[1.44] sm:text-[1.381rem]/[1.553] text-[#7a5c40] hover:text-[#1e1208] px-3 sm:px-4 py-1.5 rounded-full hover:bg-[#1e1208]/5 transition-colors"
                 >
                   {t('home.signOut')}
                 </button>
@@ -1418,7 +1418,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             ) : (
               <button
                 onClick={() => router.push('/login')}
-                className="text-sm sm:text-base text-[#1e1208] border border-[#1e1208]/25 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/5 px-4 sm:px-5 py-1.5 rounded-full transition-colors whitespace-nowrap"
+                className="text-[1.219rem]/[1.44] sm:text-[1.381rem]/[1.553] text-[#1e1208] border border-[#1e1208]/25 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/5 px-4 sm:px-5 py-1.5 rounded-full transition-colors whitespace-nowrap"
               >
                 {t('home.signIn')}
               </button>
@@ -1427,10 +1427,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 pb-16 pt-[68px] sm:px-6 sm:pt-[84px]">
+      <main className="max-w-6xl mx-auto px-3 pb-16 pt-[88px] sm:px-6 sm:pt-[100px]">
         <section className={`fade-up -mx-3 sm:mx-0 sm:mt-6 px-6 py-10 sm:px-14 sm:py-14 text-center ${folha}`}>
           <Cantoneiras />
-          <p className="font-fell text-xs sm:text-sm tracking-[0.35em] text-[#8b2a1d]">
+          <p className="font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.35em] text-[#8b2a1d]">
             Post Tenebras Lux
           </p>
 
@@ -1443,16 +1443,16 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             />
           )}
 
-          <h2 className="mt-6 font-fell text-[2rem] sm:text-5xl lg:text-[3.5rem] leading-[1.1] text-[#1e1208] break-words">
+          <h2 className="mt-6 font-fell text-[2.6rem] sm:text-[3.9rem]/[1] lg:text-[4.55rem] leading-[1.1] text-[#1e1208] break-words">
             {nomeExibicaoIgreja}
           </h2>
 
           <Ornamento className="my-5 sm:my-6" />
 
-          <p className="italic text-lg sm:text-xl text-[#5a4030] break-words">
+          <p className="italic text-[1.544rem]/[1.474] sm:text-[1.625rem]/[1.4] text-[#5a4030] break-words">
             {dataEdicao ? t('home.editionOf', { date: dataEdicao }) : t('home.publicBulletin')}
           </p>
-          <p className="mt-2 inline-flex items-start justify-center gap-1.5 text-[15px] sm:text-base text-[#7a5c40] break-words">
+          <p className="mt-2 inline-flex items-start justify-center gap-1.5 text-[20px] sm:text-[1.381rem]/[1.553] text-[#7a5c40] break-words">
             <MapPin className="w-4 h-4 mt-1 flex-shrink-0" />
             <span className="break-words">{enderecoFormatado || localizacao || t('home.locationUnknown')}</span>
           </p>
@@ -1460,7 +1460,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <div className="mt-8 grid grid-cols-1 gap-2.5 sm:flex sm:flex-wrap sm:justify-center sm:gap-3">
             <Link
               href={pedidosPastoraisHref}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] px-6 py-2.5 text-base sm:text-lg text-[#fffcf4] shadow-[0_10px_24px_-10px_rgba(54,92,77,0.6)] transition-all duration-200 hover:-translate-y-0.5 sm:min-w-[200px]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] px-6 py-2.5 text-[1.381rem]/[1.553] sm:text-[1.544rem]/[1.474] text-[#fffcf4] shadow-[0_10px_24px_-10px_rgba(54,92,77,0.6)] transition-all duration-200 hover:-translate-y-0.5 sm:min-w-[200px]"
             >
               <span className="truncate">Pedidos de oração</span>
               <ArrowRight className="w-4 h-4 flex-shrink-0" />
@@ -1469,7 +1469,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <button
                 type="button"
                 onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1e1208]/25 px-6 py-2.5 text-base sm:text-lg text-[#1e1208] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] sm:min-w-[200px]"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1e1208]/25 px-6 py-2.5 text-[1.381rem]/[1.553] sm:text-[1.544rem]/[1.474] text-[#1e1208] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] sm:min-w-[200px]"
               >
                 <span className="truncate">{sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}</span>
                 <ArrowRight className={`w-4 h-4 flex-shrink-0 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
@@ -1477,7 +1477,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             ) : null}
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[15px]">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[20px]">
             <button
               onClick={compartilharBoletimWhatsApp}
               disabled={!igrejaSelecionada}
@@ -1517,7 +1517,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         {user && (
           <div className="mt-4 sm:mt-6 -mx-3 sm:mx-0 flex items-start gap-3 border-y sm:border border-[#1e1208]/10 bg-[#fffcf4]/70 px-4 py-3 sm:rounded-md">
             <Eye className="w-4 h-4 text-[#7a5c40] flex-shrink-0 mt-1" />
-            <p className="italic text-[15px] text-[#5a4030]">
+            <p className="italic text-[20px] text-[#5a4030]">
               Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
             </p>
           </div>
@@ -1532,15 +1532,15 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             <div className="grid gap-6 sm:gap-10 px-5 py-8 sm:px-10 sm:py-12 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] xl:items-start">
               <div className="space-y-5 min-w-0">
                 <div className="space-y-2">
-                  <p className="font-fell text-xs sm:text-sm tracking-[0.3em] text-[#8b2a1d]">
+                  <p className="font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.3em] text-[#8b2a1d]">
                     Sobre a igreja
                   </p>
-                  <h3 className="font-fell text-3xl sm:text-4xl leading-tight text-[#1e1208] break-words">
+                  <h3 className="font-fell text-[2.438rem]/[1.2] sm:text-[2.925rem]/[1.111] leading-tight text-[#1e1208] break-words">
                     {apresentacaoTitulo || nomeExibicaoIgreja}
                   </h3>
                 </div>
 
-                <div className="space-y-4 text-[17px] sm:text-[18px] leading-[1.8] text-[#2a1a0e] break-words">
+                <div className="space-y-4 text-[22px] sm:text-[23px] leading-[1.8] text-[#2a1a0e] break-words">
                   {paragrafosApresentacao.map((paragrafo, index) => (
                     <p key={`apresentacao-${index}`} className={index === 0 ? capitular : undefined}>{paragrafo}</p>
                   ))}
@@ -1615,14 +1615,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   <article
                     key={secao.id}
                     id={`secao-${secao.id}`}
-                    className="fade-up space-y-5 sm:space-y-6 scroll-mt-24 sm:scroll-mt-28"
+                    className="fade-up space-y-5 sm:space-y-6 scroll-mt-28 sm:scroll-mt-32"
                   >
                     {!isImageSection(secao) && (
                       <div className="text-center px-2">
-                        <p className="font-fell text-sm sm:text-base tracking-[0.3em] text-[#8b2a1d]">
+                        <p className="font-fell text-[1.219rem]/[1.44] sm:text-[1.381rem]/[1.553] tracking-[0.3em] text-[#8b2a1d]">
                           {paraRomano(numeracaoSecoesVisiveis.get(secao.id) ?? 0)}
                         </p>
-                        <h3 className="mt-1 font-fell text-[1.7rem] sm:text-[2.1rem] leading-tight text-[#1e1208] break-words">
+                        <h3 className="mt-1 font-fell text-[2.21rem] sm:text-[2.73rem] leading-tight text-[#1e1208] break-words">
                           {getTituloSecao(secao)}
                         </h3>
                         <Ornamento className="mt-3" />
@@ -1640,14 +1640,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                           >
                             <div className="space-y-0">
                               <div className="relative border-b border-[#1e1208]/15 pb-4 text-center">
-                                <p className="font-fell text-xl sm:text-2xl text-[#1e1208] px-12">
+                                <p className="font-fell text-[1.625rem]/[1.4] sm:text-[1.95rem]/[1.333] text-[#1e1208] px-12">
                                   {getTituloCardLiturgia(card.nome)}
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => imprimirLiturgiaPdf(card)}
                                   title="Imprimir PDF"
-                                  className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm italic text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]"
+                                  className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[1.219rem]/[1.44] italic text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]"
                                 >
                                   <Printer className="h-3.5 w-3.5" />
                                   <span className="hidden sm:inline">PDF</span>
@@ -1660,7 +1660,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   className={`py-5 ${itemIndex > 0 ? 'border-t border-dotted border-[#1e1208]/20' : ''}`}
                                 >
                                   <div className="space-y-3">
-                                    <p className="flex items-baseline gap-2 text-[17px] sm:text-lg font-semibold leading-snug text-[#1e1208]">
+                                    <p className="flex items-baseline gap-2 text-[22px] sm:text-[1.544rem]/[1.474] font-semibold leading-snug text-[#1e1208]">
                                       <span className="text-[#8b2a1d] font-normal" aria-hidden>¶</span>
                                       {grupo.titulo}
                                     </p>
@@ -1680,16 +1680,16 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                     {user && (grupo.internos.length > 0 || grupo.horario) ? (
                                       <div className="ml-5 rounded-sm border-l-2 border-[#1e1208]/15 bg-[#1e1208]/[0.03] px-4 py-3">
                                         <div className="flex flex-wrap items-baseline gap-2">
-                                          <p className="font-fell text-xs tracking-[0.25em] text-[#7a5c40]">
+                                          <p className="font-fell text-[1.056rem]/[1.415] tracking-[0.25em] text-[#7a5c40]">
                                             Interno
                                           </p>
-                                          <p className="italic text-sm text-[#7a5c40]/80">
+                                          <p className="italic text-[1.219rem]/[1.44] text-[#7a5c40]/80">
                                             Visível só para quem está logado
                                           </p>
                                         </div>
 
                                         {grupo.horario ? (
-                                          <p className="mt-2 text-[15px] text-[#7a5c40]">
+                                          <p className="mt-2 text-[20px] text-[#7a5c40]">
                                             Horário: {grupo.horario}
                                           </p>
                                         ) : null}
@@ -1763,10 +1763,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               )}
             </section>
 
-            <aside className="fade-up space-y-6 min-w-0 xl:sticky xl:top-24">
+            <aside className="fade-up space-y-6 min-w-0 xl:sticky xl:top-28">
               <section className={`p-6 sm:p-7 ${folha}`}>
                 <div className="mb-4 text-center">
-                  <h3 className="font-fell text-xl text-[#1e1208]">Agenda</h3>
+                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">Agenda</h3>
                   <Ornamento className="mt-2" pequeno />
                 </div>
 
@@ -1779,12 +1779,12 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                         key={culto.id}
                         className="border-t border-dotted border-[#1e1208]/20 px-1 py-3 first:border-t-0 first:pt-0"
                       >
-                        <p className="text-[17px] font-semibold text-[#1e1208]">{culto.nome}</p>
-                        <p className="italic text-[15px] text-[#8b2a1d] mt-0.5">
+                        <p className="text-[22px] font-semibold text-[#1e1208]">{culto.nome}</p>
+                        <p className="italic text-[20px] text-[#8b2a1d] mt-0.5">
                           {culto.dia_semana} às {culto.horario.slice(0, 5)}
                         </p>
                         {culto.descricao && (
-                          <p className="text-[15px] text-[#5a4030] mt-1.5">{culto.descricao}</p>
+                          <p className="text-[20px] text-[#5a4030] mt-1.5">{culto.descricao}</p>
                         )}
                       </div>
                     ))}
@@ -1794,7 +1794,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
               <section className={`p-6 sm:p-7 ${folha}`}>
                 <div className="mb-4 text-center">
-                  <h3 className="font-fell text-xl text-[#1e1208]">Canais</h3>
+                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">Canais</h3>
                   <Ornamento className="mt-2" pequeno />
                 </div>
 
@@ -1833,18 +1833,18 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               </section>
 
               <section className={`p-6 sm:p-7 text-center ${folha}`}>
-                <p className="font-fell text-xs tracking-[0.3em] text-[#8b2a1d]">
+                <p className="font-fell text-[1.056rem]/[1.415] tracking-[0.3em] text-[#8b2a1d]">
                   Atendimento
                 </p>
-                <h3 className="mt-2 font-fell text-xl text-[#1e1208]">
+                <h3 className="mt-2 font-fell text-[1.625rem]/[1.4] text-[#1e1208]">
                   Quer compartilhar um pedido?
                 </h3>
-                <p className="mt-2 italic text-[15px] leading-6 text-[#5a4030]">
+                <p className="mt-2 italic text-[20px] leading-[1.95rem] text-[#5a4030]">
                   Envie um pedido de oração, aconselhamento ou visita.
                 </p>
                 <Link
                   href={pedidosPastoraisHref}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#365c4d] px-5 py-2 text-base text-[#fffcf4] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#28463b]"
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#365c4d] px-5 py-2 text-[1.381rem]/[1.553] text-[#fffcf4] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#28463b]"
                 >
                   Abrir pedidos
                   <ArrowRight className="h-4 w-4" />
@@ -1858,8 +1858,8 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       <footer className="mt-16 sm:mt-24">
         <div className="max-w-6xl mx-auto px-4 pb-10 sm:pb-14 text-center">
           <Ornamento />
-          <p className="mt-4 font-fell text-lg sm:text-xl text-[#1e1208]">Soli Deo Gloria</p>
-          <p className="mt-2 italic text-sm text-[#7a5c40] break-words">
+          <p className="mt-4 font-fell text-[1.544rem]/[1.474] sm:text-[1.625rem]/[1.4] text-[#1e1208]">Soli Deo Gloria</p>
+          <p className="mt-2 italic text-[1.219rem]/[1.44] text-[#7a5c40] break-words">
             OIKOS Hub
             {igrejaSelecionada ? ` · ${igrejaSelecionada.nome}` : ''}
           </p>
@@ -1871,14 +1871,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <div className={`flex max-h-[95vh] sm:max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden ${folha}`}>
             <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-[#1e1208]/15 px-5 py-4 sm:px-8 sm:py-5">
               <div className="space-y-1 min-w-0 flex-1">
-                <p className="font-fell text-xs sm:text-sm tracking-[0.3em] text-[#8b2a1d]">
+                <p className="font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.3em] text-[#8b2a1d]">
                   {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
                 </p>
-                <h2 className="font-fell text-2xl sm:text-3xl text-[#1e1208] break-words">
+                <h2 className="font-fell text-[1.95rem]/[1.333] sm:text-[2.438rem]/[1.2] text-[#1e1208] break-words">
                   {canticoAberto?.nome || canticoAbertoRef.nome}
                 </h2>
                 {canticoAberto?.referencia ? (
-                  <p className="italic text-[15px] text-[#7a5c40] break-words">{canticoAberto.referencia}</p>
+                  <p className="italic text-[20px] text-[#7a5c40] break-words">{canticoAberto.referencia}</p>
                 ) : null}
               </div>
               <button
@@ -1899,12 +1899,12 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               ) : (
                 <div className="space-y-5 sm:space-y-6">
                   {(canticoAberto.autor_letra || canticoAberto.compositor) && (
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 italic text-[15px] text-[#7a5c40]">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 italic text-[20px] text-[#7a5c40]">
                       {canticoAberto.autor_letra ? <p>Letra: {canticoAberto.autor_letra}</p> : null}
                       {canticoAberto.compositor ? <p>Música: {canticoAberto.compositor}</p> : null}
                     </div>
                   )}
-                  <div className="whitespace-pre-wrap break-words text-lg leading-8 text-[#1e1208] sm:text-xl sm:leading-9 lg:text-[1.4rem]">
+                  <div className="whitespace-pre-wrap break-words text-[1.544rem]/[1.474] leading-[2.6rem] text-[#1e1208] sm:text-[1.625rem]/[1.4] sm:leading-[2.925rem] lg:text-[1.82rem]">
                     {canticoAberto.letra}
                   </div>
                 </div>
