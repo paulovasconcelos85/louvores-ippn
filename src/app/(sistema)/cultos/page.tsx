@@ -72,7 +72,7 @@ function mapHinarioNovoCanticoToCantico(
     id: string | number;
     numero: string | null;
     titulo: string | null;
-    letra: string | null;
+    letra?: string | null;
   }
 ): Cantico {
   return {
@@ -80,7 +80,7 @@ function mapHinarioNovoCanticoToCantico(
     numero: item.numero || null,
     nome: item.titulo?.trim() || 'Hino sem título',
     tipo: 'hinario',
-    letra: item.letra,
+    letra: item.letra ?? null,
   };
 }
 
@@ -413,12 +413,8 @@ function filtrarCanticosPorConfiguracao(
   let lista = [...canticos];
 
   if (modoRepertorio === 'hinario') {
-    lista = lista.filter(
-      (cantico) =>
-        cantico.tipo === 'hinario' &&
-        typeof cantico.letra === 'string' &&
-        cantico.letra.trim().length > 0
-    );
+    // Hinos sem letra já vêm excluídos pela consulta (ver consultarHinario).
+    lista = lista.filter((cantico) => cantico.tipo === 'hinario');
   } else if (modoRepertorio === 'livre' || modoRepertorio === 'canticos') {
     lista = lista.filter((cantico) => cantico.tipo !== 'hinario');
   }
@@ -620,7 +616,7 @@ function modeloPadrao(dia: string, config?: LiturgiaChurchConfig | null): Louvor
 }
 
 function getStatusMusica(dataStr: string | null | undefined) {
-  if (!dataStr) return { label: 'PRIMEIRA VEZ', cor: 'text-blue-600', bg: 'bg-blue-50', dias: -1, dataFormatada: 'Nunca tocada' };
+  if (!dataStr) return { label: 'SEM USO RECENTE', cor: 'text-blue-600', bg: 'bg-blue-50', dias: -1, dataFormatada: `Não tocada nos últimos ${MESES_HISTORICO_CANTICOS} meses` };
   const data = new Date(dataStr + 'T00:00:00');
   const dias = Math.floor((Date.now() - data.getTime()) / 86400000);
   const fmt = data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -4828,6 +4824,53 @@ async function anexarNomesLiturgia(cultosBase: Culto[], locale: Locale): Promise
   }
 }
 
+const MESES_HISTORICO_CANTICOS = 12;
+
+// Busca o hinário só quando o modo de repertório o usa, e sem trazer as letras.
+async function consultarHinario(modoRepertorioRaw: unknown) {
+  const modo = normalizeModoRepertorio(modoRepertorioRaw);
+  if (modo === 'livre' || modo === 'canticos') return { data: [] };
+
+  let query = supabase.from('hinario_novo_cantico').select('id, numero, titulo').order('numero');
+  if (modo === 'hinario') {
+    query = query.not('letra', 'is', null).neq('letra', '');
+  }
+  const { data } = await query;
+  return { data };
+}
+
+// Última vez que cada cântico foi usado nesta igreja, olhando só os últimos meses.
+async function carregarUltimoUsoCanticos(igrejaId: string) {
+  const inicio = new Date();
+  inicio.setMonth(inicio.getMonth() - MESES_HISTORICO_CANTICOS);
+
+  const { data: cultosRecentes, error: cultosError } = await supabase
+    .from('Louvores IPPN')
+    .select('"Culto nr.", Dia')
+    .eq('igreja_id', igrejaId)
+    .gte('Dia', inicio.toISOString().slice(0, 10));
+  if (cultosError) throw cultosError;
+  if (!cultosRecentes || cultosRecentes.length === 0) return new Map<string, string>();
+
+  const diaPorCulto = new Map(cultosRecentes.map((culto: any) => [culto['Culto nr.'], culto.Dia as string]));
+  const { data: itens, error: itensError } = await supabase
+    .from('louvor_itens')
+    .select('cantico_id, culto_id')
+    .in('culto_id', [...diaPorCulto.keys()])
+    .not('cantico_id', 'is', null);
+  if (itensError) throw itensError;
+
+  const ultimoUso = new Map<string, string>();
+  (itens || []).forEach((item: any) => {
+    const dia = diaPorCulto.get(item.culto_id);
+    const chave = String(item.cantico_id);
+    if (dia && (!ultimoUso.has(chave) || dia > ultimoUso.get(chave)!)) {
+      ultimoUso.set(chave, dia);
+    }
+  });
+  return ultimoUso;
+}
+
 export default function CultosPage() {
   const router = useRouter();
   const locale = useLocale();
@@ -4878,33 +4921,33 @@ export default function CultosPage() {
         return;
       }
 
+      const igrejaPromise = supabase
+        .from('igrejas')
+        .select('slug, tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
+        .eq('id', igrejaId)
+        .maybeSingle();
+
       const [
         { data: canticosBaseRaw },
         { data: hinarioNovoCanticosRaw },
         { data: cultosData },
         { data: igrejaRaw },
         { data: modelosLiturgiaRaw },
+        pastorPadrao,
       ] = await Promise.all([
         supabase
           .from('canticos')
-          .select('id, nome, letra, igreja_id')
+          .select('id, nome, igreja_id')
           .eq('igreja_id', igrejaId)
           .order('nome'),
-        supabase
-          .from('hinario_novo_cantico')
-          .select('id, numero, titulo, letra')
-          .order('numero'),
+        igrejaPromise.then(({ data }) => consultarHinario(data?.modo_repertorio)),
         supabase
           .from('Louvores IPPN')
           .select('*')
           .eq('igreja_id', igrejaId)
           .order('Dia', { ascending: false })
           .limit(LIMITE_CULTOS_RECENTES),
-        supabase
-          .from('igrejas')
-          .select('slug, tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
-          .eq('id', igrejaId)
-          .maybeSingle(),
+        igrejaPromise,
         supabase
           .from('modelos_liturgia')
           .select(
@@ -4912,12 +4955,12 @@ export default function CultosPage() {
           )
           .eq('igreja_id', igrejaId)
           .order('ordem', { ascending: true }),
+        isUuid(igrejaId) ? buscarPastorPadrao(igrejaId) : Promise.resolve(null),
       ]);
 
-      const pastorPadrao = isUuid(igrejaId) ? await buscarPastorPadrao(igrejaId) : null;
       setIgrejaPublicSlug(typeof igrejaRaw?.slug === 'string' && igrejaRaw.slug.trim() ? igrejaRaw.slug.trim() : null);
       const canticosBaseNormalizados = (
-        (canticosBaseRaw || []) as Array<{ id: string; nome: string; letra: string | null; igreja_id: string | null }>
+        (canticosBaseRaw || []) as Array<{ id: string; nome: string; igreja_id: string | null }>
       ).map((cantico) => ({
         ...cantico,
         tipo: 'cantico' as const,
@@ -4928,7 +4971,6 @@ export default function CultosPage() {
           id: string | number;
           numero: string | null;
           titulo: string | null;
-          letra: string | null;
         }>
       ).map(mapHinarioNovoCanticoToCantico);
       const todosCanticos = [...canticosBaseNormalizados, ...hinarioNovoCanticos].sort((a, b) =>
@@ -5020,30 +5062,15 @@ export default function CultosPage() {
       );
       setCanticos(canticosFiltrados.map((cantico) => ({ ...cantico, ultima_vez: null })));
 
-      if (todosCanticos.length > 0) {
-        try {
-          const { data: itens } = await supabase.from('louvor_itens').select('cantico_id, culto_id').not('cantico_id', 'is', null);
-          const { data: todosCultos } = await supabase
-            .from('Louvores IPPN')
-            .select('"Culto nr.", Dia')
-            .eq('igreja_id', igrejaId);
-          if (itens && todosCultos) {
-            const mapaCultos = new Map(todosCultos.map((c: any) => [c['Culto nr.'], c.Dia]));
-            const mapaUltimas = new Map<string, string>();
-            itens.forEach((it: any) => {
-              const dia = mapaCultos.get(it.culto_id);
-              if (!dia) return;
-              if (!mapaUltimas.has(it.cantico_id) || dia > mapaUltimas.get(it.cantico_id)!) {
-                mapaUltimas.set(it.cantico_id, dia as string);
-              }
-            });
-            setCanticos(canticosFiltrados.map(c => ({ ...c, ultima_vez: mapaUltimas.get(String(c.id)) || null })));
-          }
-        } catch (error) {
-          console.warn('Falha ao carregar histórico dos cânticos:', error);
-        }
-      } else {
-        setCanticos([]);
+      // Em segundo plano: a página abre sem esperar o histórico dos cânticos.
+      if (canticosFiltrados.length > 0) {
+        carregarUltimoUsoCanticos(igrejaId)
+          .then((ultimoUso) => {
+            setCanticos(
+              canticosFiltrados.map((cantico) => ({ ...cantico, ultima_vez: ultimoUso.get(String(cantico.id)) || null }))
+            );
+          })
+          .catch((error) => console.warn('Falha ao carregar histórico dos cânticos:', error));
       }
     } catch (error) {
       console.error('Falha ao carregar a página de cultos:', error);
