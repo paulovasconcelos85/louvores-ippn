@@ -4775,6 +4775,59 @@ function CultoCard({
 }
 
 // --- PÁGINA PRINCIPAL ---
+// A tela abre para criar o boletim novo; os antigos só são buscados quando alguém pede.
+const LIMITE_CULTOS_RECENTES = 12;
+
+// Com limite por linha, o dia mais antigo pode vir pela metade; descarta-o para não exibir um boletim incompleto.
+function recortarDiaIncompleto(cultos: Culto[], limite: number) {
+  if (cultos.length < limite) return cultos;
+
+  const diaMaisAntigo = getCultoDateKey(cultos[cultos.length - 1].Dia);
+  const completos = cultos.filter((culto) => getCultoDateKey(culto.Dia) !== diaMaisAntigo);
+  return completos.length > 0 ? completos : cultos;
+}
+
+async function anexarNomesLiturgia(cultosBase: Culto[], locale: Locale): Promise<Culto[]> {
+  if (cultosBase.length === 0) return cultosBase;
+
+  try {
+    const { data: nomesLiturgiaRows, error: nomesLiturgiaError } = await supabase
+      .from('louvor_itens')
+      .select('culto_id, conteudo_publico, conteudo_publico_i18n, ordem')
+      .in('culto_id', cultosBase.map((culto) => culto['Culto nr.']))
+      .eq('tipo', LITURGIA_META_TIPO)
+      .order('ordem', { ascending: true });
+
+    if (nomesLiturgiaError) {
+      console.warn('Falha ao carregar nomes das liturgias:', nomesLiturgiaError);
+      return cultosBase;
+    }
+
+    const nomesPorCulto = new Map<number, string>();
+
+    (nomesLiturgiaRows || []).forEach((row: any) => {
+      const cultoId = typeof row.culto_id === 'number' ? row.culto_id : Number(row.culto_id);
+      const nome = resolveLocalizedText(
+        row.conteudo_publico_i18n,
+        locale,
+        typeof row.conteudo_publico === 'string' ? row.conteudo_publico.trim() : ''
+      );
+
+      if (Number.isFinite(cultoId) && nome && !nomesPorCulto.has(cultoId)) {
+        nomesPorCulto.set(cultoId, nome);
+      }
+    });
+
+    return cultosBase.map((culto) => ({
+      ...culto,
+      nome_liturgia: nomesPorCulto.get(culto['Culto nr.']) || null,
+    }));
+  } catch (error) {
+    console.warn('Falha inesperada ao carregar nomes das liturgias:', error);
+    return cultosBase;
+  }
+}
+
 export default function CultosPage() {
   const router = useRouter();
   const locale = useLocale();
@@ -4789,6 +4842,9 @@ export default function CultosPage() {
   const [cultoExcluindoId, setCultoExcluindoId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [paginaAnteriores, setPaginaAnteriores] = useState(0);
+  const [podeHaverAnteriores, setPodeHaverAnteriores] = useState(false);
+  const [anterioresCarregados, setAnterioresCarregados] = useState(false);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
   const totalLoading = loading || permLoading;
   const gruposCultos = useMemo(() => buildCultoDayGroups(cultos), [cultos]);
@@ -4796,7 +4852,7 @@ export default function CultosPage() {
   const GRUPOS_RECENTES = 3;
   const GRUPOS_POR_PAGINA = 5;
   const gruposRecentes = gruposCultos.slice(0, GRUPOS_RECENTES);
-  const gruposAnteriores = gruposCultos.slice(GRUPOS_RECENTES);
+  const gruposAnteriores = anterioresCarregados ? gruposCultos.slice(GRUPOS_RECENTES) : [];
   const totalPaginasAnteriores = Math.ceil(gruposAnteriores.length / GRUPOS_POR_PAGINA);
   const gruposAnterioresVisiveis = gruposAnteriores.slice(
     paginaAnteriores * GRUPOS_POR_PAGINA,
@@ -4842,7 +4898,8 @@ export default function CultosPage() {
           .from('Louvores IPPN')
           .select('*')
           .eq('igreja_id', igrejaId)
-          .order('Dia', { ascending: false }),
+          .order('Dia', { ascending: false })
+          .limit(LIMITE_CULTOS_RECENTES),
         supabase
           .from('igrejas')
           .select('slug, tipos_liturgicos, modelo_liturgico_padrao, modo_repertorio, permite_cadastro_canticos')
@@ -4879,49 +4936,14 @@ export default function CultosPage() {
       );
 
       setCanticos(todosCanticos.map(c => ({ ...c, ultima_vez: null })));
-      const cultosBase = (cultosData || []) as Culto[];
-      let cultosComNome = cultosBase;
-
-      if (cultosBase.length > 0) {
-        const cultoIds = cultosBase.map((culto) => culto['Culto nr.']);
-
-        try {
-          const { data: nomesLiturgiaRows, error: nomesLiturgiaError } = await supabase
-            .from('louvor_itens')
-            .select('culto_id, conteudo_publico, conteudo_publico_i18n, ordem')
-            .in('culto_id', cultoIds)
-            .eq('tipo', LITURGIA_META_TIPO)
-            .order('ordem', { ascending: true });
-
-          if (nomesLiturgiaError) {
-            console.warn('Falha ao carregar nomes das liturgias:', nomesLiturgiaError);
-          } else {
-            const nomesPorCulto = new Map<number, string>();
-
-            (nomesLiturgiaRows || []).forEach((row: any) => {
-              const cultoId = typeof row.culto_id === 'number' ? row.culto_id : Number(row.culto_id);
-              const nome = resolveLocalizedText(
-                row.conteudo_publico_i18n,
-                locale,
-                typeof row.conteudo_publico === 'string' ? row.conteudo_publico.trim() : ''
-              );
-
-              if (Number.isFinite(cultoId) && nome && !nomesPorCulto.has(cultoId)) {
-                nomesPorCulto.set(cultoId, nome);
-              }
-            });
-
-            cultosComNome = cultosBase.map((culto) => ({
-              ...culto,
-              nome_liturgia: nomesPorCulto.get(culto['Culto nr.']) || null,
-            }));
-          }
-        } catch (error) {
-          console.warn('Falha inesperada ao carregar nomes das liturgias:', error);
-        }
-      }
-
+      const cultosComNome = await anexarNomesLiturgia(
+        recortarDiaIncompleto((cultosData || []) as Culto[], LIMITE_CULTOS_RECENTES),
+        locale
+      );
       setCultos(cultosComNome);
+      setPodeHaverAnteriores((cultosData || []).length >= LIMITE_CULTOS_RECENTES || buildCultoDayGroups(cultosComNome).length > GRUPOS_RECENTES);
+      setAnterioresCarregados(false);
+      setPaginaAnteriores(0);
       const modelosFallback = extractModeloLiturgicoPadrao(
         igrejaRaw?.modelo_liturgico_padrao,
         locale
@@ -5033,6 +5055,41 @@ export default function CultosPage() {
       setLoading(false);
     }
   }, [locale]);
+
+  const carregarAnteriores = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+    if (!igrejaId) return;
+
+    setCarregandoAnteriores(true);
+    try {
+      const datasCarregadas = cultos.map((culto) => getCultoDateKey(culto.Dia)).sort();
+      let query = supabase
+        .from('Louvores IPPN')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .order('Dia', { ascending: false });
+
+      if (datasCarregadas.length > 0) {
+        query = query.lt('Dia', datasCarregadas[0]);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const anteriores = await anexarNomesLiturgia((data || []) as Culto[], locale);
+      setCultos((atuais) => {
+        const idsAtuais = new Set(atuais.map((culto) => culto['Culto nr.']));
+        return [...atuais, ...anteriores.filter((culto) => !idsAtuais.has(culto['Culto nr.']))];
+      });
+      setAnterioresCarregados(true);
+      setPaginaAnteriores(0);
+    } catch (error) {
+      console.error('Falha ao carregar boletins anteriores:', error);
+      alert('Não foi possível carregar os boletins anteriores.');
+    } finally {
+      setCarregandoAnteriores(false);
+    }
+  }, [cultos, locale]);
 
   const getPublicBulletinUrl = useCallback(() => {
     if (!igrejaPublicSlug) return null;
@@ -5649,6 +5706,19 @@ export default function CultosPage() {
               })()}
             </section>
           ))}
+
+          {!anterioresCarregados && podeHaverAnteriores && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={carregarAnteriores}
+                disabled={carregandoAnteriores}
+                className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm italic text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-wait disabled:opacity-60"
+              >
+                {carregandoAnteriores ? 'Carregando boletins anteriores…' : 'Ver boletins anteriores'}
+              </button>
+            </div>
+          )}
 
           {gruposAnteriores.length > 0 && (
             <div className="space-y-6">
