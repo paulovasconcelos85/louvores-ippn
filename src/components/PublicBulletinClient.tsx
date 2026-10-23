@@ -19,6 +19,7 @@ import {
   Music,
   Phone,
   Printer,
+  Smartphone,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -416,6 +417,10 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [sobreIgrejaAberto, setSobreIgrejaAberto] = useState(false);
   const [menuSecoesAberto, setMenuSecoesAberto] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState(false);
+  const [instalacao, setInstalacao] = useState<{ prompt: () => Promise<void> } | null>(null);
+  const [ehIos, setEhIos] = useState(false);
+  const [jaInstalado, setJaInstalado] = useState(false);
+  const [dicaIosAberta, setDicaIosAberta] = useState(false);
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
   const [itemCopiadoId, setItemCopiadoId] = useState<string | null>(null);
   const [informativoAbertoId, setInformativoAbertoId] = useState<string | null>(null);
@@ -437,6 +442,48 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     }
   }, [informativoAbertoId]);
   const sobreIgrejaRef = useRef<HTMLElement | null>(null);
+
+  // App da igreja (PWA): service worker para abrir sem internet e convite para instalar.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => {
+        console.warn('Falha ao registrar o service worker:', error);
+      });
+    }
+
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setJaInstalado(standalone);
+    setEhIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
+
+    const aoOferecerInstalacao = (event: Event) => {
+      event.preventDefault();
+      setInstalacao(event as unknown as { prompt: () => Promise<void> });
+    };
+    const aoInstalar = () => {
+      setJaInstalado(true);
+      setInstalacao(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', aoOferecerInstalacao);
+    window.addEventListener('appinstalled', aoInstalar);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', aoOferecerInstalacao);
+      window.removeEventListener('appinstalled', aoInstalar);
+    };
+  }, []);
+
+  const instalarApp = async () => {
+    if (instalacao) {
+      await instalacao.prompt();
+      setInstalacao(null);
+      return;
+    }
+    setDicaIosAberta((aberta) => !aberta);
+  };
+
+  const podeInstalar = !jaInstalado && (Boolean(instalacao) || ehIos);
 
   const igrejaSelecionada = useMemo(
     () => igrejas.find((igreja) => igreja.id === igrejaAtualId) || null,
@@ -1513,7 +1560,23 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <Library className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{t('home.resources')}</span>
             </Link>
+            {podeInstalar ? (
+              <button
+                type="button"
+                onClick={instalarApp}
+                className="inline-flex items-center gap-1.5 italic text-[#365c4d] hover:text-[#8b2a1d] transition-colors"
+              >
+                <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Instalar app</span>
+              </button>
+            ) : null}
           </div>
+          {dicaIosAberta ? (
+            <p className="mx-auto mt-4 max-w-md border-t border-dotted border-[#1e1208]/25 pt-4 italic text-[#5a4030]">
+              No iPhone, toque em <span className="not-italic">Compartilhar</span> (o quadrado com a seta) e depois em{' '}
+              <span className="not-italic">Adicionar à Tela de Início</span>.
+            </p>
+          ) : null}
         </section>
 
         {user && (

@@ -14,6 +14,7 @@ import {
   Loader2,
   LogIn,
   Mail,
+  MapPin,
   Music,
   Send,
   UsersRound,
@@ -28,6 +29,11 @@ const IGREJAS_PARCEIRAS = [
     local: 'Manaus, Brasil',
     slug: 'ippn-manaus',
     logo: '/oikos/igrejas/ippn-manaus.jpg',
+    endereco: [
+      'Av. Coronel Teixeira, 5982 – Ponta Negra',
+      'Dulcila Festas e Convenções, salão Delta',
+      'Manaus – AM, 69037-032',
+    ],
   },
   {
     nome: 'Igreja Cristã Presbiteriana do Barreiro',
@@ -35,6 +41,7 @@ const IGREJAS_PARCEIRAS = [
     local: 'Barreiro, Portugal',
     slug: 'icpb',
     logo: '/oikos/igrejas/icpb.jpg',
+    endereco: ['Rua Heliodoro Salgado, 25A – Verderena', '2830-311 Barreiro'],
   },
   {
     nome: 'Igreja Cristã Presbiteriana de Telheiras',
@@ -42,6 +49,7 @@ const IGREJAS_PARCEIRAS = [
     local: 'Telheiras, Portugal',
     slug: 'icpt',
     logo: '/oikos/igrejas/icpt.jpg',
+    endereco: ['Rua Professor Fernando da Fonseca, 28A', '1600-673 Lisboa'],
   },
 ];
 
@@ -60,6 +68,7 @@ type Copy = {
   churchesTitle: string;
   churchesText: string;
   churchesCta: string;
+  churchesMap: string;
   problemTitle: string;
   problemText: string;
   problems: string[];
@@ -106,6 +115,7 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     churchesText:
       'Três igrejas, em dois países, já publicam o boletim semanal e organizam a vida da comunidade pelo OIKOS Hub. Escolha uma abaixo e veja o boletim ao vivo.',
     churchesCta: 'Ver boletim',
+    churchesMap: 'Abrir no mapa',
     problemTitle: 'O problema não é falta de zelo. É trabalho espalhado.',
     problemText:
       'Toda semana alguém refaz boletim, confere escala, procura aviso, cobra voluntário e tenta manter tudo alinhado em grupos e planilhas.',
@@ -170,6 +180,7 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     churchesText:
       'Tres iglesias, en dos países, ya publican el boletín semanal y organizan la vida de la comunidad con OIKOS Hub. Elige una abajo y mira el boletín en vivo.',
     churchesCta: 'Ver boletín',
+    churchesMap: 'Abrir en el mapa',
     problemTitle: 'El problema no es falta de dedicación. Es trabajo disperso.',
     problemText:
       'Cada semana alguien rehace el boletín, revisa turnos, busca avisos, recuerda voluntarios y mantiene todo alineado entre grupos y hojas de cálculo.',
@@ -234,6 +245,7 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
     churchesText:
       'Three churches, in two countries, already publish their weekly bulletin and run community life through OIKOS Hub. Pick one below and see the live bulletin.',
     churchesCta: 'View bulletin',
+    churchesMap: 'Open in maps',
     problemTitle: 'The problem is not lack of care. It is scattered work.',
     problemText:
       'Every week someone rebuilds the bulletin, checks schedules, finds announcements, reminds volunteers, and keeps everything aligned across chats and spreadsheets.',
@@ -465,23 +477,41 @@ export default function OikosLandingClient() {
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 lg:mt-10">
             {IGREJAS_PARCEIRAS.map((igreja) => (
-              <Link
+              <article
                 key={igreja.slug}
-                href={`/${igreja.slug}`}
-                className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 sm:p-6"
+                className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/70 p-5 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 sm:p-6"
               >
-                <span className="relative flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-white ring-4 ring-white shadow-md shadow-slate-200 sm:h-16 sm:w-16">
-                  <Image src={igreja.logo} alt={igreja.nome} fill sizes="64px" className="object-cover" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-semibold text-slate-950 sm:text-lg">{igreja.sigla}</span>
-                  <span className="block truncate text-xs text-slate-500 sm:text-sm">{igreja.local}</span>
-                  <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 sm:text-sm">
-                    {copy.churchesCta}
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
+                <Link href={`/${igreja.slug}`} className="group flex items-center gap-4">
+                  <span className="relative flex h-14 w-14 shrink-0 overflow-hidden rounded-full bg-white ring-4 ring-white shadow-md shadow-slate-200 sm:h-16 sm:w-16">
+                    <Image src={igreja.logo} alt={igreja.nome} fill sizes="64px" className="object-cover" />
                   </span>
-                </span>
-              </Link>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-semibold text-slate-950 sm:text-lg">{igreja.sigla}</span>
+                    <span className="block truncate text-xs text-slate-500 sm:text-sm">{igreja.local}</span>
+                    <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 sm:text-sm">
+                      {copy.churchesCta}
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
+                    </span>
+                  </span>
+                </Link>
+                <address className="mt-4 flex flex-1 gap-2.5 border-t border-slate-200/70 pt-4 text-sm not-italic leading-6 text-slate-600">
+                  <MapPin className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="min-w-0">
+                    {igreja.endereco.map((linha) => (
+                      <span key={linha} className="block">{linha}</span>
+                    ))}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${igreja.nome}, ${igreja.endereco.join(', ')}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 sm:text-sm"
+                    >
+                      {copy.churchesMap}
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                    </a>
+                  </span>
+                </address>
+              </article>
             ))}
           </div>
         </div>
