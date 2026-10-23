@@ -32,6 +32,7 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import PerfilRepertorioResumo from '@/components/PerfilRepertorioResumo';
 
 interface MinhaProximaEscala {
   escala_id: string;
@@ -317,6 +318,8 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
+
+        {igrejaAtual?.id ? <PerfilRepertorioResumo igrejaId={igrejaAtual.id} /> : null}
 
         {/* Aviso de Próxima Escala */}
         {proximaEscala && (

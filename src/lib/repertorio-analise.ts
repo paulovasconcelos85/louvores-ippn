@@ -20,6 +20,8 @@ type Rotulo = { pt: string; es: string; en: string };
 type TemaDefinicao = {
   id: TemaId;
   rotulo: Rotulo;
+  // Forma usada no meio de frases ("canta sobretudo adoração, graça e cruz").
+  curto: Rotulo;
   // Expressões aplicadas ao texto já sem acentos e em minúsculas.
   padroes: RegExp[];
   // Assuntos do Hinário Novo Cântico que pertencem ao tema.
@@ -30,78 +32,95 @@ export const TEMAS: TemaDefinicao[] = [
   {
     id: 'adoracao',
     rotulo: { pt: 'Adoração e majestade', es: 'Adoración y majestad', en: 'Worship and majesty' },
+    curto: { pt: 'adoração', es: 'adoración', en: 'worship' },
     padroes: [/\bglori/g, /\blouv/g, /\bexalt/g, /\badora/g, /\bmajestad/g, /\breina/g, /\btrono/g, /\baleluia/g, /\bhosana/g, /\bdigno\b/g, /\bmagnific/g, /\bsanto,? santo/g, /\brei dos reis/g, /\bsoberan/g, /\bonipotent/g],
     assuntos: ['Intróitos', 'Deus Santo', 'Deus Senhor', 'Deus Soberano', 'Deus Trino', 'Deus Criador', 'Deus Vencedor', 'Dia do Senhor'],
   },
   {
     id: 'confissao',
     rotulo: { pt: 'Confissão e arrependimento', es: 'Confesión y arrepentimiento', en: 'Confession and repentance' },
+    curto: { pt: 'confissão', es: 'confesión', en: 'confession' },
     padroes: [/\bpecad/g, /\bpecador/g, /\barrepend/g, /\bculpa/g, /\bconfess/g, /\bcontri/g, /\bpurific/g, /\blava-me/g, /\bsonda/g, /\bperdoa/g, /\bperdao/g, /\biniquidad/g, /\btransgress/g],
     assuntos: ['Contrição e Arrependimento', 'Perdão'],
   },
   {
     id: 'cruz',
     rotulo: { pt: 'Cruz e ressurreição', es: 'Cruz y resurrección', en: 'Cross and resurrection' },
+    curto: { pt: 'cruz', es: 'cruz', en: 'the cross' },
     padroes: [/\bcruz\b/g, /\bsangue/g, /\bcordeiro/g, /\bcalvario/g, /\bmorreu/g, /\bressurre/g, /\bressuscit/g, /\btumulo/g, /\bsepulcro/g, /\bredim/g, /\bredenc/g, /\bresgat/g, /\bcrucific/g],
     assuntos: ['Paixão e Morte', 'Ressurreição', 'Ceia do Senhor', 'Entrada Triunfal'],
   },
   {
     id: 'graca',
     rotulo: { pt: 'Graça e salvação', es: 'Gracia y salvación', en: 'Grace and salvation' },
+    curto: { pt: 'graça', es: 'gracia', en: 'grace' },
     padroes: [/\bgraca\b/g, /\bsalv/g, /\bmisericord/g, /\bjustific/g, /\bamor de deus/g, /\bteu amor/g, /\bseu amor/g, /\bimerecid/g, /\bnovo nascimento/g, /\bescolhid/g],
     assuntos: ['Deus Salvador', 'Salvação', 'Amor de Deus', 'Convertidos'],
   },
   {
     id: 'confianca',
     rotulo: { pt: 'Confiança e refúgio', es: 'Confianza y refugio', en: 'Trust and refuge' },
+    curto: { pt: 'confiança', es: 'confianza', en: 'trust' },
     padroes: [/\brefugio/g, /\brocha/g, /\bfortaleza/g, /\bescudo/g, /\babrigo/g, /\bconfi/g, /\btemerei/g, /\bmedo\b/g, /\bfiel\b/g, /\bfidelidade/g, /\bsocorr/g, /\bdescans/g, /\bguarda/g, /\bcuida/g, /\bpastor\b/g, /\bfirme/g],
     assuntos: ['Confiança', 'Proteção', 'Deus Fiel', 'Deus Providente', 'Companhia do Senhor', 'Fé'],
   },
   {
     id: 'espirito',
     rotulo: { pt: 'Espírito e santificação', es: 'Espíritu y santificación', en: 'Spirit and sanctification' },
+    curto: { pt: 'o Espírito Santo', es: 'el Espíritu Santo', en: 'the Holy Spirit' },
     padroes: [/\bespirito/g, /\bsantific/g, /\bconsolador/g, /\buncao/g, /\btransforma/g, /\bsantidade/g, /\bpureza/g, /\bcoracao puro/g],
     assuntos: ['Espírito Consolador', 'Espírito Instruidor', 'Espírito Vivificador', 'Santificação', 'Aspiração'],
   },
   {
     id: 'entrega',
     rotulo: { pt: 'Consagração e entrega', es: 'Consagración y entrega', en: 'Consecration and surrender' },
+    curto: { pt: 'consagração', es: 'consagración', en: 'consecration' },
     padroes: [/\bentreg/g, /\brend/g, /\bconsagr/g, /\baltar/g, /\bseguir/g, /\bservir/g, /\bobedec/g, /\bminha vida/g, /\bdedic/g, /\bsubmet/g],
     assuntos: ['Dedicação', 'Decisão', 'Submissão', 'Discipulado e Serviço', 'Profissão de Fé', 'Fidelidade', 'Ministério', 'Trabalho Cristão'],
   },
   {
     id: 'missao',
     rotulo: { pt: 'Missão e evangelização', es: 'Misión y evangelización', en: 'Mission and evangelism' },
+    curto: { pt: 'missão', es: 'misión', en: 'mission' },
     padroes: [/\bnacoes/g, /\bpovos/g, /\banunci/g, /\bproclam/g, /\bevangelho/g, /\bmissao/g, /\bide\b/g, /\btestemunh/g, /\bperdidos/g, /\bcolheita/g, /\bseara/g, /\btoda a terra/g],
     assuntos: ['A Grande Comissão', 'Evangelização', 'Convite', 'Testemunho'],
   },
   {
     id: 'esperanca',
     rotulo: { pt: 'Esperança e eternidade', es: 'Esperanza y eternidad', en: 'Hope and eternity' },
+    curto: { pt: 'esperança', es: 'esperanza', en: 'hope' },
     padroes: [/\bvoltar/g, /\bvinda\b/g, /\bceu\b/g, /\bceus\b/g, /\beterni/g, /\bpara sempre/g, /\bcoroa/g, /\bjerusalem/g, /\besperanc/g, /\bnao havera mais/g, /\bface a face/g],
     assuntos: ['Esperança', 'Segunda Vinda', 'Lar Celestial', 'Advento'],
   },
   {
     id: 'gratidao',
     rotulo: { pt: 'Gratidão', es: 'Gratitud', en: 'Gratitude' },
+    curto: { pt: 'gratidão', es: 'gratitud', en: 'gratitude' },
     padroes: [/\bgratid/g, /\bgrat[oa]s?\b/g, /\bagradec/g, /\bgracas\b/g, /\bobrigad/g],
     assuntos: ['Gratidão', 'Ano Novo'],
   },
   {
     id: 'igreja',
     rotulo: { pt: 'Igreja e comunhão', es: 'Iglesia y comunión', en: 'Church and fellowship' },
+    curto: { pt: 'comunhão', es: 'comunión', en: 'fellowship' },
     padroes: [/\bigreja/g, /\birmaos/g, /\bcomunh/g, /\bunidade/g, /\bunidos/g, /\bpovo de deus/g, /\bteu povo/g, /\bfamilia/g, /\bjuntos/g],
     assuntos: ['Fraternidade', 'Igreja Militante', 'Lar Cristão'],
   },
   {
     id: 'palavra',
     rotulo: { pt: 'Palavra de Deus', es: 'Palabra de Dios', en: 'Word of God' },
+    curto: { pt: 'a Palavra', es: 'la Palabra', en: 'the Word' },
     padroes: [/\bpalavra/g, /\bescritura/g, /\bbiblia/g, /\bverdade/g, /\bteus preceitos/g, /\btua lei/g, /\bpromessa/g],
     assuntos: ['Bíblia', 'Escola Dominical'],
   },
 ];
 
 export const ROTULO_TEMA = Object.fromEntries(TEMAS.map((tema) => [tema.id, tema.rotulo])) as Record<
+  TemaId,
+  Rotulo
+>;
+
+export const ROTULO_CURTO_TEMA = Object.fromEntries(TEMAS.map((tema) => [tema.id, tema.curto])) as Record<
   TemaId,
   Rotulo
 >;
@@ -126,18 +145,6 @@ const PRIMEIRA_PLURAL = new Set(['nos', 'nosso', 'nossa', 'nossos', 'nossas', 'c
 const SEGUNDA_PESSOA = new Set(['tu', 'te', 'ti', 'teu', 'tua', 'teus', 'tuas', 'contigo', 'vos']);
 const TERCEIRA_PESSOA = new Set(['ele', 'dele', 'nele', 'seu', 'seus']);
 
-const STOPWORDS = new Set(
-  `a o as os um uma uns umas de da do das dos em na no nas nos por pra pro para com sem sob sobre
-  e ou mas que se ja nao sim mais menos tao tal como quando onde quem qual quais cada todo toda todos
-  todas tudo nada este esta isto esse essa isso aquele aquela aquilo ao aos la lo lhe lhes me te se nos
-  vos eu tu ele ela eles elas meu minha meus minhas teu tua teus tuas seu sua seus suas nosso nossa nossos
-  nossas dele dela mim ti si sou es e somos
-  sao foi era ser estar estou esta estamos vai vou vem ha ter tem tenho tens temos pois porque entao
-  ate apos entre desde ainda so sempre aqui ali la oh ah ate assim tambem muito muita bem quero
-  estrofe coro refrao ponte verso final bis mesmo outro outra deste desta neste nesta num numa pelo pela
-  pelos pelas seja sera serei fez faz fazer pode posso diz dize`.split(/\s+/)
-);
-
 function semAcentos(texto: string) {
   return texto.normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
@@ -161,7 +168,6 @@ export type AnaliseLetra = {
   trindade: Record<PessoaTrindade, boolean>;
   voz: Voz | null;
   direcao: Direcao | null;
-  palavras: string[];
 };
 
 function classificar<T extends string>(a: number, b: number, rotulos: [T, T, T]) {
@@ -186,8 +192,7 @@ export function analisarLetra(letra: string | null, assunto: string | null): Ana
     }
   });
 
-  const palavrasOriginais = letra?.toLowerCase().match(/\p{L}+(?:-\p{L}+)*/gu) || [];
-  const tokens = palavrasOriginais.map(semAcentos);
+  const tokens = texto.match(/[a-z]+(?:-[a-z]+)*/g) || [];
   let singular = 0;
   let plural = 0;
   let segunda = 0;
@@ -209,14 +214,6 @@ export function analisarLetra(letra: string | null, assunto: string | null): Ana
     },
     voz: texto ? classificar(singular, plural, ['individual', 'comunitaria', 'equilibrada']) : null,
     direcao: texto ? classificar(segunda, terceira, ['a_deus', 'sobre_deus', 'misto']) : null,
-    // Palavras distintas por música, para que um refrão repetido não domine o vocabulário.
-    palavras: [
-      ...new Set(
-        palavrasOriginais.filter(
-          (palavra, indice) => palavra.length >= 4 && !STOPWORDS.has(tokens[indice])
-        )
-      ),
-    ],
   };
 }
 

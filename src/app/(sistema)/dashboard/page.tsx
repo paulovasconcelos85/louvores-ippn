@@ -79,6 +79,9 @@ type DashboardResponse = {
   };
 };
 
+const ABAS = ['pessoas', 'louvor', 'repertorio'] as const;
+type AbaDashboard = (typeof ABAS)[number];
+
 const STATUS_COLORS: Record<string, string> = {
   ativo: '#0f766e',
   congregado: '#2563eb',
@@ -170,6 +173,21 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [aba, setAba] = useState<AbaDashboard>('pessoas');
+  const tr = (pt: string, es: string, en: string) => (locale === 'es' ? es : locale === 'en' ? en : pt);
+
+  // ?aba=repertorio abre direto na aba (link do resumo na tela admin).
+  useEffect(() => {
+    const abaUrl = new URLSearchParams(window.location.search).get('aba');
+    if (abaUrl && (ABAS as readonly string[]).includes(abaUrl)) setAba(abaUrl as AbaDashboard);
+  }, []);
+
+  const trocarAba = (proxima: AbaDashboard) => {
+    setAba(proxima);
+    const url = new URL(window.location.href);
+    url.searchParams.set('aba', proxima);
+    window.history.replaceState(null, '', url.toString());
+  };
 
   const monthFormatter = useMemo(
     () => new Intl.DateTimeFormat(intlLocale, { month: 'short' }),
@@ -514,7 +532,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur md:p-5">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className={`grid gap-3 ${aba === 'repertorio' ? '' : 'md:grid-cols-2'}`}>
                 <div>
                   <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
                     <Church className="h-4 w-4" />
@@ -537,7 +555,7 @@ export default function DashboardPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className={aba === 'repertorio' ? 'hidden' : ''}>
                   <label className="mb-2 flex items-center gap-2 text-sm text-slate-300">
                     <CalendarDays className="h-4 w-4" />
                     {t('dashboard.filters.year')}
@@ -558,34 +576,32 @@ export default function DashboardPage() {
                   </select>
                 </div>
               </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
-                    {t('dashboard.hero.servicesInYear', { year: selectedYearLabel || '-' })}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold">
-                    {summary?.activity.servicesInYear ?? 0}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
-                    {t('dashboard.hero.lastService')}
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-white">
-                    {formatDate(summary?.activity.latestServiceDate || null)}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-300">
-                    {t('dashboard.hero.accessCoverage')}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold">{accessCoverage}</p>
-                </div>
-              </div>
             </div>
           </div>
         </section>
+
+        <nav
+          aria-label={tr('Seções das estatísticas', 'Secciones de las estadísticas', 'Statistics sections')}
+          className="flex w-full gap-1 self-start overflow-x-auto rounded-full border border-slate-200 bg-white p-1 shadow-sm sm:w-auto"
+        >
+          {[
+            { id: 'pessoas' as const, rotulo: tr('Pessoas', 'Personas', 'People') },
+            { id: 'louvor' as const, rotulo: tr('Louvor', 'Alabanza', 'Music') },
+            { id: 'repertorio' as const, rotulo: tr('Repertório', 'Repertorio', 'Repertoire') },
+          ].map((opcao) => (
+            <button
+              key={opcao.id}
+              type="button"
+              onClick={() => trocarAba(opcao.id)}
+              aria-pressed={aba === opcao.id}
+              className={`flex-1 whitespace-nowrap rounded-full px-5 py-2 text-sm font-medium transition sm:flex-none ${
+                aba === opcao.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {opcao.rotulo}
+            </button>
+          ))}
+        </nav>
 
         {loading ? (
           <section className="flex min-h-[320px] flex-col items-center justify-center rounded-[28px] border border-white/80 bg-white/90 text-center shadow-sm shadow-slate-200/70">
@@ -603,397 +619,411 @@ export default function DashboardPage() {
           </section>
         ) : (
           <>
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <MetricCard
-                icon={<Users className="h-5 w-5 text-slate-700" />}
-                label={t('dashboard.cards.totalRegistered')}
-                value={summary.overview.totalRegistered}
-                accent="bg-slate-100"
-              />
-              <MetricCard
-                icon={<Users className="h-5 w-5 text-cyan-700" />}
-                label={t('dashboard.cards.activeRecords')}
-                value={summary.overview.totalPeople}
-                accent="bg-cyan-100"
-              />
-              <MetricCard
-                icon={<Church className="h-5 w-5 text-emerald-700" />}
-                label={t('dashboard.cards.activeMembers')}
-                value={summary.overview.activeMembers}
-                accent="bg-emerald-100"
-              />
-              <MetricCard
-                icon={<Home className="h-5 w-5 text-sky-700" />}
-                label={t('dashboard.cards.families')}
-                value={summary.overview.families}
-                accent="bg-sky-100"
-              />
-              <MetricCard
-                icon={<UserRoundCheck className="h-5 w-5 text-amber-700" />}
-                label={t('dashboard.cards.congregants')}
-                value={summary.overview.congregants}
-                accent="bg-amber-100"
-              />
-              <MetricCard
-                icon={<Activity className="h-5 w-5 text-orange-700" />}
-                label={t('dashboard.cards.visitors')}
-                value={summary.overview.visitors}
-                accent="bg-orange-100"
-              />
-              <MetricCard
-                icon={<HeartHandshake className="h-5 w-5 text-violet-700" />}
-                label={t('dashboard.cards.servingPeople')}
-                value={summary.overview.servingPeople}
-                accent="bg-violet-100"
-              />
-              <MetricCard
-                icon={<ShieldCheck className="h-5 w-5 text-indigo-700" />}
-                label={t('dashboard.cards.withAccess')}
-                value={summary.overview.withAccess}
-                accent="bg-indigo-100"
-              />
-              <MetricCard
-                icon={<CalendarDays className="h-5 w-5 text-blue-700" />}
-                label={t('dashboard.cards.servicesInYear', { year: selectedYearLabel || '-' })}
-                value={summary.activity.servicesInYear}
-                accent="bg-blue-100"
-              />
-              <MetricCard
-                icon={<TrendingUp className="h-5 w-5 text-rose-700" />}
-                label={t('dashboard.cards.averageAge')}
-                value={
-                  summary.overview.averageAge === null
-                    ? t('dashboard.cards.noAverageAge')
-                    : `${decimalFormatter.format(summary.overview.averageAge)} ${t('dashboard.units.years')}`
-                }
-                accent="bg-rose-100"
-              />
-            </section>
+            {aba === 'pessoas' ? (
+              <>
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <MetricCard
+                    icon={<Users className="h-5 w-5 text-slate-700" />}
+                    label={t('dashboard.cards.totalRegistered')}
+                    value={summary.overview.totalRegistered}
+                    accent="bg-slate-100"
+                  />
+                  <MetricCard
+                    icon={<Users className="h-5 w-5 text-cyan-700" />}
+                    label={t('dashboard.cards.activeRecords')}
+                    value={summary.overview.totalPeople}
+                    accent="bg-cyan-100"
+                  />
+                  <MetricCard
+                    icon={<Church className="h-5 w-5 text-emerald-700" />}
+                    label={t('dashboard.cards.activeMembers')}
+                    value={summary.overview.activeMembers}
+                    accent="bg-emerald-100"
+                  />
+                  <MetricCard
+                    icon={<Home className="h-5 w-5 text-sky-700" />}
+                    label={t('dashboard.cards.families')}
+                    value={summary.overview.families}
+                    accent="bg-sky-100"
+                  />
+                  <MetricCard
+                    icon={<UserRoundCheck className="h-5 w-5 text-amber-700" />}
+                    label={t('dashboard.cards.congregants')}
+                    value={summary.overview.congregants}
+                    accent="bg-amber-100"
+                  />
+                  <MetricCard
+                    icon={<Activity className="h-5 w-5 text-orange-700" />}
+                    label={t('dashboard.cards.visitors')}
+                    value={summary.overview.visitors}
+                    accent="bg-orange-100"
+                  />
+                  <MetricCard
+                    icon={<HeartHandshake className="h-5 w-5 text-violet-700" />}
+                    label={t('dashboard.cards.servingPeople')}
+                    value={summary.overview.servingPeople}
+                    accent="bg-violet-100"
+                  />
+                  <MetricCard
+                    icon={<ShieldCheck className="h-5 w-5 text-indigo-700" />}
+                    label={t('dashboard.cards.withAccess')}
+                    value={summary.overview.withAccess}
+                    accent="bg-indigo-100"
+                  />
+                  <MetricCard
+                    icon={<CalendarDays className="h-5 w-5 text-blue-700" />}
+                    label={t('dashboard.cards.servicesInYear', { year: selectedYearLabel || '-' })}
+                    value={summary.activity.servicesInYear}
+                    accent="bg-blue-100"
+                  />
+                  <MetricCard
+                    icon={<TrendingUp className="h-5 w-5 text-rose-700" />}
+                    label={t('dashboard.cards.averageAge')}
+                    value={
+                      summary.overview.averageAge === null
+                        ? t('dashboard.cards.noAverageAge')
+                        : `${decimalFormatter.format(summary.overview.averageAge)} ${t('dashboard.units.years')}`
+                    }
+                    accent="bg-rose-100"
+                  />
+                </section>
 
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <MetricCard
-                icon={<Music className="h-5 w-5 text-emerald-700" />}
-                label={t('dashboard.music.cards.totalExecutions')}
-                value={summary.music.totalExecutions}
-                accent="bg-emerald-100"
-              />
-              <MetricCard
-                icon={<Music className="h-5 w-5 text-sky-700" />}
-                label={t('dashboard.music.cards.uniqueSongs')}
-                value={summary.music.uniqueSongs}
-                accent="bg-sky-100"
-              />
-              <MetricCard
-                icon={<TrendingUp className="h-5 w-5 text-violet-700" />}
-                label={t('dashboard.music.cards.averagePerService')}
-                value={decimalFormatter.format(summary.music.averageSongsPerService)}
-                accent="bg-violet-100"
-              />
-              <MetricCard
-                icon={<BarChart3 className="h-5 w-5 text-amber-700" />}
-                label={t('dashboard.music.cards.topKey')}
-                value={summary.music.topKey || t('dashboard.music.emptyDash')}
-                accent="bg-amber-100"
-              />
-              <MetricCard
-                icon={<Sparkles className="h-5 w-5 text-rose-700" />}
-                label={t('dashboard.music.cards.mostPlayed')}
-                value={summary.music.mostPlayedSong || t('dashboard.music.emptyDash')}
-                accent="bg-rose-100"
-              />
-            </section>
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <SectionCard title={t('dashboard.sections.status')} icon={<Users className="h-5 w-5" />}>
+                    {statusData.length === 0 ? (
+                      <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={statusData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Bar dataKey="total" radius={[10, 10, 0, 0]}>
+                            {statusData.map((entry) => (
+                              <Cell key={entry.status} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
 
-            <section className="grid gap-6 xl:grid-cols-2">
-              <SectionCard title={t('dashboard.sections.status')} icon={<Users className="h-5 w-5" />}>
-                {statusData.length === 0 ? (
-                  <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={statusData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Bar dataKey="total" radius={[10, 10, 0, 0]}>
-                        {statusData.map((entry) => (
-                          <Cell key={entry.status} fill={entry.fill} />
+                  <SectionCard title={t('dashboard.sections.age')} icon={<BarChart3 className="h-5 w-5" />}>
+                    {ageData.every((item) => item.total === 0) ? (
+                      <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={ageData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="faixa" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Bar dataKey="total" fill="#0f766e" radius={[10, 10, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
+
+                  <SectionCard
+                    title={t('dashboard.sections.servicesTrend')}
+                    icon={<CalendarDays className="h-5 w-5" />}
+                  >
+                    {monthlyServicesData.every((item) => item.total === 0) ? (
+                      <EmptyChartState message={t('dashboard.charts.noActivityData')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart data={monthlyServicesData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="total"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#2563eb' }}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
+
+                  <SectionCard
+                    title={t('dashboard.sections.roles')}
+                    icon={<HeartHandshake className="h-5 w-5" />}
+                  >
+                    {serviceRoleCards.every((item) => item.total === 0) ? (
+                      <EmptyChartState message={t('dashboard.charts.noRolesData')} />
+                    ) : (
+                      <div>
+                        <p className="mb-4 text-sm leading-6 text-slate-500">
+                          {t('dashboard.sections.rolesDescription', {
+                            serving: summary.overview.servingPeople,
+                            access: summary.overview.withAccess,
+                          })}
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {serviceRoleCards.map((item) => (
+                            <ServiceRoleCard
+                              key={item.cargo}
+                              label={item.label}
+                              total={item.total}
+                              note={item.note}
+                              accentClass={item.accentClass}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </SectionCard>
+                </section>
+
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                  <SectionCard
+                    title={t('dashboard.sections.recentServices')}
+                    icon={<CalendarDays className="h-5 w-5" />}
+                  >
+                    {recentServiceDays.length === 0 ? (
+                      <p className="text-sm text-slate-500">{t('dashboard.list.noRecentServices')}</p>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {recentServiceDays.map((item) => (
+                          <div
+                            key={item.date}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              {formatDate(item.date)}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {t('dashboard.list.servicesOnDate', { count: item.total })}
+                            </p>
+                          </div>
                         ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+                      </div>
+                    )}
+                  </SectionCard>
 
-              <SectionCard title={t('dashboard.sections.age')} icon={<BarChart3 className="h-5 w-5" />}>
-                {ageData.every((item) => item.total === 0) ? (
-                  <EmptyChartState message={t('dashboard.charts.noPeopleData')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={ageData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="faixa" tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Bar dataKey="total" fill="#0f766e" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+                  <SectionCard title={t('dashboard.sections.insights')} icon={<Sparkles className="h-5 w-5" />}>
+                    <div className="space-y-3">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {t('dashboard.insights.registryTitle')}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                          {t('dashboard.insights.registryText', {
+                            count: summary.overview.totalRegistered,
+                            active: summary.overview.totalPeople,
+                          })}
+                        </p>
+                      </div>
 
-              <SectionCard
-                title={t('dashboard.sections.servicesTrend')}
-                icon={<CalendarDays className="h-5 w-5" />}
-              >
-                {monthlyServicesData.every((item) => item.total === 0) ? (
-                  <EmptyChartState message={t('dashboard.charts.noActivityData')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={monthlyServicesData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="total"
-                        stroke="#2563eb"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#2563eb' }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {t('dashboard.insights.accessTitle')}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                          {t('dashboard.insights.accessText', {
+                            percent: accessCoverage,
+                            serving: servingCoverage,
+                          })}
+                        </p>
+                      </div>
 
-              <SectionCard
-                title={t('dashboard.sections.roles')}
-                icon={<HeartHandshake className="h-5 w-5" />}
-              >
-                {serviceRoleCards.every((item) => item.total === 0) ? (
-                  <EmptyChartState message={t('dashboard.charts.noRolesData')} />
-                ) : (
-                  <div>
-                    <p className="mb-4 text-sm leading-6 text-slate-500">
-                      {t('dashboard.sections.rolesDescription', {
-                        serving: summary.overview.servingPeople,
-                        access: summary.overview.withAccess,
-                      })}
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {serviceRoleCards.map((item) => (
-                        <ServiceRoleCard
-                          key={item.cargo}
-                          label={item.label}
-                          total={item.total}
-                          note={item.note}
-                          accentClass={item.accentClass}
-                        />
-                      ))}
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {t('dashboard.insights.familyTitle')}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                          {t('dashboard.insights.familyText', {
+                            percent: familyCoverage,
+                            families: summary.overview.families,
+                          })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </SectionCard>
-            </section>
+                  </SectionCard>
+                </section>
+              </>
+            ) : null}
 
-            <section className="grid gap-6 xl:grid-cols-2">
-              <SectionCard
-                title={t('dashboard.music.sections.topSongs')}
-                icon={<Music className="h-5 w-5" />}
-              >
-                {topSongs.length === 0 ? (
-                  <EmptyChartState message={t('dashboard.music.noData')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={topSongs}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="song" tick={{ fontSize: 11 }} angle={-18} textAnchor="end" height={70} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Bar dataKey="total" fill="#10b981" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+            {aba === 'louvor' ? (
+              <>
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <MetricCard
+                    icon={<Music className="h-5 w-5 text-emerald-700" />}
+                    label={t('dashboard.music.cards.totalExecutions')}
+                    value={summary.music.totalExecutions}
+                    accent="bg-emerald-100"
+                  />
+                  <MetricCard
+                    icon={<Music className="h-5 w-5 text-sky-700" />}
+                    label={t('dashboard.music.cards.uniqueSongs')}
+                    value={summary.music.uniqueSongs}
+                    accent="bg-sky-100"
+                  />
+                  <MetricCard
+                    icon={<TrendingUp className="h-5 w-5 text-violet-700" />}
+                    label={t('dashboard.music.cards.averagePerService')}
+                    value={decimalFormatter.format(summary.music.averageSongsPerService)}
+                    accent="bg-violet-100"
+                  />
+                  <MetricCard
+                    icon={<BarChart3 className="h-5 w-5 text-amber-700" />}
+                    label={t('dashboard.music.cards.topKey')}
+                    value={summary.music.topKey || t('dashboard.music.emptyDash')}
+                    accent="bg-amber-100"
+                  />
+                  <MetricCard
+                    icon={<Sparkles className="h-5 w-5 text-rose-700" />}
+                    label={t('dashboard.music.cards.mostPlayed')}
+                    value={summary.music.mostPlayedSong || t('dashboard.music.emptyDash')}
+                    accent="bg-rose-100"
+                  />
+                </section>
 
-              <SectionCard
-                title={t('dashboard.music.sections.executionsTrend')}
-                icon={<TrendingUp className="h-5 w-5" />}
-              >
-                {monthlyExecutionsData.every((item) => item.total === 0) ? (
-                  <EmptyChartState message={t('dashboard.music.noData')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={monthlyExecutionsData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="total"
-                        stroke="#8b5cf6"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#8b5cf6' }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <SectionCard
+                    title={t('dashboard.music.sections.topSongs')}
+                    icon={<Music className="h-5 w-5" />}
+                  >
+                    {topSongs.length === 0 ? (
+                      <EmptyChartState message={t('dashboard.music.noData')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={topSongs}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="song" tick={{ fontSize: 11 }} angle={-18} textAnchor="end" height={70} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Bar dataKey="total" fill="#10b981" radius={[10, 10, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
 
-              <SectionCard
-                title={t('dashboard.music.sections.topKeys')}
-                icon={<BarChart3 className="h-5 w-5" />}
-              >
-                {topKeys.length === 0 ? (
-                  <EmptyChartState message={t('dashboard.music.noKeys')} />
-                ) : (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={topKeys}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="key" tick={{ fontSize: 12 }} />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
-                        }}
-                      />
-                      <Bar dataKey="total" fill="#f59e0b" radius={[10, 10, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </SectionCard>
+                  <SectionCard
+                    title={t('dashboard.music.sections.executionsTrend')}
+                    icon={<TrendingUp className="h-5 w-5" />}
+                  >
+                    {monthlyExecutionsData.every((item) => item.total === 0) ? (
+                      <EmptyChartState message={t('dashboard.music.noData')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart data={monthlyExecutionsData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="total"
+                            stroke="#8b5cf6"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#8b5cf6' }}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
 
-              <SectionCard
-                title={t('dashboard.music.sections.recentSongs')}
-                icon={<Sparkles className="h-5 w-5" />}
-              >
-                {recentSongs.length === 0 ? (
-                  <p className="text-sm text-slate-500">{t('dashboard.music.noRecentSongs')}</p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {recentSongs.map((item) => (
-                      <div
-                        key={`${item.song}-${item.lastDate}`}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-                      >
-                        <p className="truncate text-sm font-semibold text-slate-900">{item.song}</p>
-                        <p className="mt-1 text-sm text-slate-500">{formatDate(item.lastDate)}</p>
-                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                          {formatDaysAgo(item.daysAgo)}
-                        </p>
+                  <SectionCard
+                    title={t('dashboard.music.sections.topKeys')}
+                    icon={<BarChart3 className="h-5 w-5" />}
+                  >
+                    {topKeys.length === 0 ? (
+                      <EmptyChartState message={t('dashboard.music.noKeys')} />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={topKeys}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="key" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip
+                            cursor={{ fill: '#f8fafc' }}
+                            contentStyle={{
+                              borderRadius: '16px',
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+                            }}
+                          />
+                          <Bar dataKey="total" fill="#f59e0b" radius={[10, 10, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </SectionCard>
+
+                  <SectionCard
+                    title={t('dashboard.music.sections.recentSongs')}
+                    icon={<Sparkles className="h-5 w-5" />}
+                  >
+                    {recentSongs.length === 0 ? (
+                      <p className="text-sm text-slate-500">{t('dashboard.music.noRecentSongs')}</p>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {recentSongs.map((item) => (
+                          <div
+                            key={`${item.song}-${item.lastDate}`}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                          >
+                            <p className="truncate text-sm font-semibold text-slate-900">{item.song}</p>
+                            <p className="mt-1 text-sm text-slate-500">{formatDate(item.lastDate)}</p>
+                            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                              {formatDaysAgo(item.daysAgo)}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
-            </section>
+                    )}
+                  </SectionCard>
+                </section>
+              </>
+            ) : null}
 
-            <RepertorioInsights igrejaId={igrejaAtualId} />
-
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <SectionCard
-                title={t('dashboard.sections.recentServices')}
-                icon={<CalendarDays className="h-5 w-5" />}
-              >
-                {recentServiceDays.length === 0 ? (
-                  <p className="text-sm text-slate-500">{t('dashboard.list.noRecentServices')}</p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {recentServiceDays.map((item) => (
-                      <div
-                        key={item.date}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-                      >
-                        <p className="text-sm font-medium text-slate-900">
-                          {formatDate(item.date)}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {t('dashboard.list.servicesOnDate', { count: item.total })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
-
-              <SectionCard title={t('dashboard.sections.insights')} icon={<Sparkles className="h-5 w-5" />}>
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {t('dashboard.insights.registryTitle')}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      {t('dashboard.insights.registryText', {
-                        count: summary.overview.totalRegistered,
-                        active: summary.overview.totalPeople,
-                      })}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {t('dashboard.insights.accessTitle')}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      {t('dashboard.insights.accessText', {
-                        percent: accessCoverage,
-                        serving: servingCoverage,
-                      })}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {t('dashboard.insights.familyTitle')}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      {t('dashboard.insights.familyText', {
-                        percent: familyCoverage,
-                        families: summary.overview.families,
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </SectionCard>
-            </section>
+            {aba === 'repertorio' && igrejaAtualId ? (
+              <RepertorioInsights
+                igrejaId={igrejaAtualId}
+                igrejaNome={igrejaAtual?.nome || summary.igreja?.nome || ''}
+                igrejaSigla={igrejaAtual?.sigla || summary.igreja?.sigla}
+              />
+            ) : null}
           </>
         )}
       </div>

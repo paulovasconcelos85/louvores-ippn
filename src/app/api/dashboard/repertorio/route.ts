@@ -30,8 +30,6 @@ const DIAS_PARA_ESQUECIDA = 180;
 const PERCENTUAL_TEMA_POUCO_CANTADO = 0.12;
 // A leitura de cada culto compara o perfil dos 12 meses que terminam nele.
 const DIAS_JANELA_LEITURA = 365;
-const CULTOS_NA_EVOLUCAO = 12;
-const TEMAS_NA_EVOLUCAO = 4;
 const MUDANCA_MINIMA_TEMA = 0.01;
 
 type CultoRow = { 'Culto nr.': number; Dia: string };
@@ -149,7 +147,7 @@ function perfilDosTemas(execucoes: Execucao[], musicas: Map<string, Musica>) {
 // Leitura do culto mais recente com músicas (inclusive um culto já montado para
 // os próximos dias), comparada com o culto anterior. Recalculada a partir do
 // histórico, então cada culto novo gera a sua leitura sem precisar gravar nada.
-function lerUltimoCulto(cultos: CultoRow[], historico: Execucao[], musicas: Map<string, Musica>) {
+function lerUltimoCulto(cultos: CultoRow[], historico: Execucao[], musicas: Map<string, Musica>, hoje: Date) {
   const cultosComMusica = new Set(historico.map((execucao) => execucao.culto));
   const ordem = cultos
     .filter((culto) => cultosComMusica.has(culto['Culto nr.']) && culto.Dia >= '1900')
@@ -218,36 +216,20 @@ function lerUltimoCulto(cultos: CultoRow[], historico: Execucao[], musicas: Map<
       ).map((tema) => tema.id)
     : [];
 
-  const inicioEvolucao = Math.max(0, ordem.length - CULTOS_NA_EVOLUCAO);
-  const perfis = ordem.slice(inicioEvolucao).map((culto, deslocamento) => ({
-    data: culto.Dia,
-    temas: perfilDosTemas(janelaAte(inicioEvolucao + deslocamento), musicas),
-  }));
-  // Mostra os temas que mais oscilaram nos últimos cultos.
-  const temasEvolucao = TEMAS.map((tema) => {
-    const valores = perfis.map((perfil) => perfil.temas[tema.id]);
-    return { id: tema.id, variacao: Math.max(...valores) - Math.min(...valores) };
-  })
-    .sort((a, b) => b.variacao - a.variacao)
-    .slice(0, TEMAS_NA_EVOLUCAO)
-    .map((tema) => tema.id);
-
   return {
     culto: { numero: ultimo['Culto nr.'], data: ultimo.Dia },
     anterior: anterior ? { numero: anterior['Culto nr.'], data: anterior.Dia } : null,
-    // Cultos já criados depois do último lido, mas ainda sem nenhuma música.
+    // Cultos que já aconteceram depois do último lido, mas ainda sem nenhuma música.
     cultosSemMusica: cultos
-      .filter((culto) => culto.Dia > ultimo.Dia && !cultosComMusica.has(culto['Culto nr.']))
+      .filter(
+        (culto) =>
+          culto.Dia > ultimo.Dia && culto.Dia <= dataIso(hoje) && !cultosComMusica.has(culto['Culto nr.'])
+      )
       .map((culto) => culto.Dia)
       .sort(),
     musicas: musicasDoCulto,
     mudancas,
     lacunasAtendidas,
-    temasEvolucao,
-    evolucao: perfis.map((perfil) => ({
-      data: perfil.data,
-      ...Object.fromEntries(temasEvolucao.map((tema) => [tema, perfil.temas[tema]])),
-    })),
   };
 }
 
@@ -463,13 +445,6 @@ export async function GET(request: Request) {
     const voz = contarCampo('voz');
     const direcao = contarCampo('direcao');
 
-    const pesoPalavra = new Map<string, number>();
-    analisadas.forEach((execucao) => {
-      execucao.analise.palavras.forEach((palavra) => {
-        pesoPalavra.set(palavra, (pesoPalavra.get(palavra) || 0) + 1);
-      });
-    });
-
     const totalExecucoes = execucoes.length;
     const execucoesHinos = execucoes.filter((execucao) => musicas.get(execucao.chave)!.tipo === 'hino').length;
     const comLetra = execucoes.filter((execucao) => musicas.get(execucao.chave)!.temLetra).length;
@@ -499,15 +474,6 @@ export async function GET(request: Request) {
       .filter(([chave]) => !musicas.get(chave)!.temLetra)
       .slice(0, 10)
       .map(([chave, vezes]) => ({ nome: musicas.get(chave)!.nome, vezes }));
-
-    const mensal = new Map<string, { hinos: number; canticos: number }>();
-    execucoes.forEach((execucao) => {
-      const mes = execucao.data.slice(0, 7);
-      const atual = mensal.get(mes) || { hinos: 0, canticos: 0 };
-      if (musicas.get(execucao.chave)!.tipo === 'hino') atual.hinos += 1;
-      else atual.canticos += 1;
-      mensal.set(mes, atual);
-    });
 
     // Para os temas menos cantados, hinos do Novo Cântico que a igreja nunca cantou.
     const jaCantados = new Set(vezesNoHistorico.keys());
@@ -548,7 +514,7 @@ export async function GET(request: Request) {
     return apiSuccess({
       periodo,
       anosDisponiveis,
-      leitura: lerUltimoCulto(cultos, historico, musicas),
+      leitura: lerUltimoCulto(cultos, historico, musicas, hoje),
       resumo: {
         cultos: cultosNoPeriodo,
         execucoes: totalExecucoes,
@@ -576,10 +542,6 @@ export async function GET(request: Request) {
         sobreDeus: percentual(direcao.totais.get('sobre_deus') || 0, direcao.total),
         misto: percentual(direcao.totais.get('misto') || 0, direcao.total),
       },
-      vocabulario: [...pesoPalavra.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 30)
-        .map(([palavra, peso]) => ({ palavra, peso })),
       rodizio: {
         top10: percentual(
           ranking.slice(0, 10).reduce((total, [, vezes]) => total + vezes, 0),
@@ -593,9 +555,6 @@ export async function GET(request: Request) {
       totalNovas: novas.length,
       esquecidas,
       semLetra,
-      mensal: [...mensal.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([mes, totais]) => ({ mes, ...totais })),
       sugestoes,
     });
   } catch (error: any) {
