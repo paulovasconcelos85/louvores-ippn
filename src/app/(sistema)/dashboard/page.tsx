@@ -36,6 +36,7 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
+import RepertorioInsights from '@/components/RepertorioInsights';
 
 type DashboardResponse = {
   igreja: IgrejaSelecionavel | null;
@@ -924,6 +925,8 @@ export default function DashboardPage() {
                 )}
               </SectionCard>
             </section>
+
+            <RepertorioInsights igrejaId={igrejaAtualId} />
 
             <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
               <SectionCard
