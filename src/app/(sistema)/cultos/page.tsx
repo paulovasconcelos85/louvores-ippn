@@ -3035,16 +3035,12 @@ function EditorBoletimDoDiaModal({
 
         const secoesAtuais = normalizarSecoesBoletim(secoes);
 
-        if (!igrejaId) {
+        // Boletim já salvo: respeita o que está lá, inclusive seções apagadas de propósito.
+        // Só um boletim ainda vazio é preenchido com o da semana anterior.
+        if (!igrejaId || secoes.length > 0) {
           setBoletimSecoes(secoesAtuais);
           return;
         }
-
-        const tiposJaPresentes = new Set(
-          secoesAtuais
-            .filter((secao) => secao.itens.some((item) => item.conteudo.trim().length > 0))
-            .map((secao) => secao.tipo)
-        );
 
         const { secoes: secoesAnterior, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
           igrejaId,
@@ -3053,16 +3049,12 @@ function EditorBoletimDoDiaModal({
           locale
         );
 
-        const secoesParaAdicionar = secoesAnterior.filter(
-          (secao) => !tiposJaPresentes.has(secao.tipo)
-        );
-
-        if (secoesParaAdicionar.length === 0 || !origemDia) {
+        if (secoesAnterior.length === 0 || !origemDia) {
           setBoletimSecoes(secoesAtuais);
           return;
         }
 
-        setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesParaAdicionar]));
+        setBoletimSecoes(normalizarSecoesBoletim(secoesAnterior));
         setSecoesReaproveitadasDe(origemDia);
       } catch (error) {
         console.warn('Falha ao carregar boletim do dia:', error);
@@ -4128,16 +4120,11 @@ function EditorLiturgia({
 
       const secoesAtuais = normalizarSecoesBoletim(secoesRascunho);
 
-      if (!igrejaId) {
+      // Mesmo critério do editor do boletim: só um boletim ainda vazio herda o da semana anterior.
+      if (!igrejaId || secoesRascunho.length > 0) {
         setBoletimSecoes(secoesAtuais);
         return;
       }
-
-      const tiposJaPresentes = new Set(
-        secoesAtuais
-          .filter((secao) => secao.itens.some((item) => item.conteudo.trim().length > 0))
-          .map((secao) => secao.tipo)
-      );
 
       const { secoes: secoesAnterior, origemDia } = await carregarUltimasSecoesBoletimPorTipo(
         igrejaId,
@@ -4146,16 +4133,12 @@ function EditorLiturgia({
         locale
       );
 
-      const secoesParaAdicionar = secoesAnterior.filter(
-        (secao) => !tiposJaPresentes.has(secao.tipo)
-      );
-
-      if (secoesParaAdicionar.length === 0 || !origemDia) {
+      if (secoesAnterior.length === 0 || !origemDia) {
         setBoletimSecoes(secoesAtuais);
         return;
       }
 
-      setBoletimSecoes(normalizarSecoesBoletim([...secoesAtuais, ...secoesParaAdicionar]));
+      setBoletimSecoes(normalizarSecoesBoletim(secoesAnterior));
     } catch (error) {
       console.warn('Falha ao carregar seções extras do boletim:', error);
       setBoletimSecoes([]);
@@ -4184,6 +4167,12 @@ function EditorLiturgia({
 
   const salvar = async () => {
     if (!dia) return alert('Selecione a data!');
+    // O campo de data aceita anos como 0206 quando o ano é digitado à mão.
+    const anoDia = Number(dia.slice(0, 4));
+    const anoAtual = new Date().getFullYear();
+    if (anoDia < 2000 || anoDia > anoAtual + 2) {
+      return alert(`A data ${dia.split('-').reverse().join('/')} parece ter o ano errado. Confira o ano antes de salvar.`);
+    }
     setLoading(true);
     try {
       const igrejaId = getStoredChurchId();
@@ -4509,6 +4498,7 @@ function EditorLiturgia({
                     </p>
                     <input
                       type="date"
+                      min="2000-01-01"
                       value={dia}
                       onChange={e => {
                         setDia(e.target.value);
