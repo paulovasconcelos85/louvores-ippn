@@ -656,6 +656,43 @@ function isDomingoDate(dateValue: string) {
   return new Date(`${getCultoDateKey(dateValue)}T00:00:00`).getDay() === 0;
 }
 
+function toLocalDateKey(date: Date) {
+  const mes = String(date.getMonth() + 1).padStart(2, '0');
+  const dia = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${mes}-${dia}`;
+}
+
+// Sugestão para "+ Nova": o próximo domingo (hoje, se for domingo) que ainda não tem boletim.
+function proximoDomingoSemBoletim(cultos: Culto[]) {
+  const diasComBoletim = new Set(cultos.map((culto) => getCultoDateKey(culto.Dia)));
+  const data = new Date();
+  data.setHours(0, 0, 0, 0);
+  data.setDate(data.getDate() + ((7 - data.getDay()) % 7));
+
+  for (let tentativa = 0; tentativa < 12; tentativa++) {
+    const chave = toLocalDateKey(data);
+    if (!diasComBoletim.has(chave)) return chave;
+    data.setDate(data.getDate() + 7);
+  }
+
+  return toLocalDateKey(data);
+}
+
+// Datas que costumam ser erro de digitação (mês ou dia trocado) e merecem confirmação.
+function avisosDataBoletim(dia: string) {
+  const avisos: string[] = [];
+  const data = new Date(`${getCultoDateKey(dia)}T00:00:00`);
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const diasDeDistancia = Math.round((data.getTime() - hoje.getTime()) / 86400000);
+
+  if (!isDomingoDate(dia)) avisos.push('Não é um domingo.');
+  if (diasDeDistancia < -7) avisos.push(`Está ${-diasDeDistancia} dias no passado.`);
+  if (diasDeDistancia > 21) avisos.push(`Está ${diasDeDistancia} dias à frente.`);
+
+  return avisos;
+}
+
 function buildCultoDayGroups(cultos: Culto[]) {
   const groups = new Map<string, { dia: string; cultos: Culto[] }>();
 
@@ -4173,6 +4210,16 @@ function EditorLiturgia({
     if (anoDia < 2000 || anoDia > anoAtual + 2) {
       return alert(`A data ${dia.split('-').reverse().join('/')} parece ter o ano errado. Confira o ano antes de salvar.`);
     }
+    const dataAlterada = !culto || getCultoDateKey(culto.Dia) !== getCultoDateKey(dia);
+    const avisosData = dataAlterada ? avisosDataBoletim(dia) : [];
+    if (
+      avisosData.length > 0 &&
+      !confirm(
+        `Confira a data do boletim:\n\n${formatCultoDateLabel(dia)}\n\n${avisosData.join('\n')}\n\nSalvar mesmo assim?`
+      )
+    ) {
+      return;
+    }
     setLoading(true);
     try {
       const igrejaId = getStoredChurchId();
@@ -4507,6 +4554,12 @@ function EditorLiturgia({
                       disabled={!isLideranca}
                       className="mt-4 w-full bg-transparent py-1 text-2xl font-black text-emerald-800 outline-none"
                     />
+                    {dia && (
+                      <p className={`mt-2 text-sm font-bold ${isDomingoDate(dia) ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {dataCultoFormatada}
+                        {!isDomingoDate(dia) && ' — atenção: não é domingo'}
+                      </p>
+                    )}
                   </>
                 )}
               </div>
@@ -5568,7 +5621,7 @@ export default function CultosPage() {
             </button>
             {isLideranca && (
               <button
-                onClick={() => { setNovoDiaInicial(''); setEditando('novo'); }}
+                onClick={() => { setNovoDiaInicial(proximoDomingoSemBoletim(cultos)); setEditando('novo'); }}
                 className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
               >
                 + Nova
