@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useNomeIgreja } from '@/hooks/useNomeIgreja';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { getIntlLocale } from '@/i18n/config';
@@ -75,6 +76,7 @@ export default function EscalasPage() {
   const intlLocale = getIntlLocale(locale);
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
+  const nomeIgreja = useNomeIgreja();
   const tr = useCallback(
     (pt: string, es: string, en: string) =>
       locale === 'es' ? es : locale === 'en' ? en : pt,
@@ -603,8 +605,7 @@ export default function EscalasPage() {
     });
 
     texto += `${'═'.repeat(30)}\n`;
-    texto += `${tr('Igreja Presbiteriana da Ponta Negra', 'Iglesia Presbiteriana de Ponta Negra', 'Ponta Negra Presbyterian Church')}\n`;
-    texto += `${tr('Uma igreja da família de Deus', 'Una iglesia de la familia de Dios', "A church in God's family")}`;
+    if (nomeIgreja) texto += `${nomeIgreja}\n`;
 
     // Copiar para clipboard e abrir WhatsApp
     navigator.clipboard.writeText(texto);

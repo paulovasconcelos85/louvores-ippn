@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocale, useTranslations } from '@/i18n/provider';
@@ -82,9 +83,19 @@ export default function LoginPage() {
       try {
         setSincronizandoAcesso(true);
         setError('');
+        const next = new URLSearchParams(window.location.search).get('next');
+        // Só caminhos internos, para o parâmetro não virar redirecionamento aberto.
+        const destino = next && next.startsWith('/') && !next.startsWith('//') ? next : '/admin';
+
+        if (destino === '/comecar') {
+          // Quem volta para criar uma igreja nova pode ainda não ter vínculo nenhum.
+          if (ativo) router.push(destino);
+          return;
+        }
+
         await finalizarAcesso();
         if (ativo) {
-          router.push('/admin');
+          router.push(destino);
         }
       } catch (err: any) {
         await signOut();
@@ -129,6 +140,41 @@ export default function LoginPage() {
       setError(mensagemErro);
       setLoading(false);
     }
+  };
+
+  const handleEsqueciSenha = async () => {
+    setError('');
+    setMensagemSucesso('');
+
+    if (!email.trim()) {
+      setError(
+        locale === 'es'
+          ? 'Escribe tu correo arriba y vuelve a hacer clic.'
+          : locale === 'en'
+            ? 'Type your email above and click again.'
+            : 'Digite seu e-mail acima e clique de novo.'
+      );
+      return;
+    }
+
+    setLoading(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=/redefinir-senha`,
+    });
+    setLoading(false);
+
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+
+    setMensagemSucesso(
+      locale === 'es'
+        ? 'Si el correo tiene cuenta, enviamos un enlace para crear una nueva contraseña.'
+        : locale === 'en'
+          ? 'If this email has an account, we sent a link to create a new password.'
+          : 'Se o e-mail tiver conta, enviamos um link para criar uma nova senha.'
+    );
   };
 
   const handleGoogleLogin = async () => {
@@ -334,6 +380,16 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900"
                 placeholder="••••••••"
               />
+              {modo === 'entrar' && (
+                <button
+                  type="button"
+                  onClick={handleEsqueciSenha}
+                  disabled={loading}
+                  className="mt-2 text-sm text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50"
+                >
+                  {locale === 'es' ? 'Olvidé mi contraseña' : locale === 'en' ? 'Forgot my password' : 'Esqueci minha senha'}
+                </button>
+              )}
             </div>
 
             {modo === 'primeiro_acesso' && (
@@ -451,6 +507,16 @@ export default function LoginPage() {
             <p className="text-sm italic text-slate-600">
               <span className="font-fell not-italic text-rubrica">{t('login.firstAccessHintTitle')}</span>{' '}
               {t('login.firstAccessHintBody')}
+            </p>
+            <p className="mt-3 text-sm text-slate-600">
+              {locale === 'es'
+                ? '¿Tu iglesia aún no está en OIKOS Hub?'
+                : locale === 'en'
+                  ? 'Is your church not on OIKOS Hub yet?'
+                  : 'Sua igreja ainda não está no OIKOS Hub?'}{' '}
+              <Link href="/comecar" className="font-semibold text-emerald-700 underline">
+                {locale === 'es' ? 'Crear mi iglesia' : locale === 'en' ? 'Create my church' : 'Criar minha igreja'}
+              </Link>
             </p>
           </div>
           </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useNomeIgreja } from '@/hooks/useNomeIgreja';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
@@ -98,6 +99,7 @@ export default function GerenciarEscalaPage() {
   
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
+  const nomeIgreja = useNomeIgreja();
   
   const [escala, setEscala] = useState<Escala | null>(null);
   const [loading, setLoading] = useState(true);
@@ -446,8 +448,7 @@ export default function GerenciarEscalaPage() {
     });
 
     texto += `${'═'.repeat(30)}\n`;
-    texto += `${tr('Igreja Presbiteriana da Ponta Negra', 'Iglesia Presbiteriana de Ponta Negra', 'Ponta Negra Presbyterian Church')}\n`;
-    texto += `${tr('Uma igreja da família de Deus', 'Una iglesia de la familia de Dios', "A church in God's family")}`;
+    if (nomeIgreja) texto += `${nomeIgreja}\n`;
 
     navigator.clipboard.writeText(texto);
     

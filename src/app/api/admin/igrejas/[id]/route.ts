@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
-import { isSuperAdmin } from '@/lib/permissions';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church-i18n';
+import { verificarGestorIgreja } from '@/lib/igreja-onboarding';
+import { normalizarSlug, validarSlug } from '@/lib/slug-igreja';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,19 +16,6 @@ const supabaseAdmin = createClient(
   }
 );
 
-async function ensureSuperAdmin(request: NextRequest) {
-  const user = await getAuthenticatedUserFromServerCookies(request);
-
-  if (!user?.id) {
-    return { error: apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.') };
-  }
-
-  if (!isSuperAdmin(user.email)) {
-    return { error: apiError('FORBIDDEN', 403, 'Sem permissão para gerenciar igrejas.') };
-  }
-
-  return { user };
-}
 
 function sanitizeString(value: unknown) {
   return typeof value === 'string' ? value.trim() || null : null;
@@ -232,11 +219,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await ensureSuperAdmin(request);
+  const { id } = await params;
+  const auth = await verificarGestorIgreja(request, id);
   if (auth.error) return auth.error;
 
   try {
-    const { id } = await params;
 
     const [
       { data: igreja, error: igrejaError },
@@ -288,17 +275,40 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await ensureSuperAdmin(request);
+  const { id } = await params;
+  const auth = await verificarGestorIgreja(request, id);
   if (auth.error) return auth.error;
 
   try {
-    const { id } = await params;
     const body = (await request.json()) as Record<string, unknown>;
 
     const igrejaPayload = normalizeChurchPayload(body);
 
     if (!igrejaPayload.nome || !igrejaPayload.slug) {
       return apiError('CHURCH_NAME_AND_SLUG_REQUIRED', 400, 'Nome e slug são obrigatórios.');
+    }
+
+    igrejaPayload.slug = normalizarSlug(igrejaPayload.slug);
+    const motivoSlug = validarSlug(igrejaPayload.slug);
+    if (motivoSlug && !auth.superAdmin) {
+      return apiError('SLUG_INVALID', 400, 'Escolha um endereço válido: de 3 a 40 letras, números ou hífens.', { motivo: motivoSlug });
+    }
+
+    const { data: slugEmUso, error: slugError } = await supabaseAdmin
+      .from('igrejas')
+      .select('id')
+      .eq('slug', igrejaPayload.slug)
+      .neq('id', id)
+      .limit(1)
+      .maybeSingle();
+    if (slugError) throw slugError;
+    if (slugEmUso) {
+      return apiError('SLUG_TAKEN', 409, `O endereço "${igrejaPayload.slug}" já está em uso por outra igreja.`);
+    }
+
+    // Só a gestão global ativa/desativa igrejas.
+    if (!auth.superAdmin) {
+      delete (igrejaPayload as Partial<typeof igrejaPayload>).ativo;
     }
 
     const cultos = normalizeCultos(id, body.cultos);

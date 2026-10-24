@@ -55,12 +55,18 @@ const IGREJAS_PARCEIRAS = [
 
 type Copy = {
   navCta: string;
+  createCta: string;
+  helpCta: string;
+  stepsEyebrow: string;
+  stepsTitle: string;
+  stepsText: string;
+  steps: Array<{ title: string; text: string }>;
+  stepsCta: string;
   loginCta: string;
   eyebrow: string;
   title: string;
   subtitle: string;
   primaryCta: string;
-  secondaryCta: string;
   heroMetricA: string;
   heroMetricB: string;
   heroMetricC: string;
@@ -100,13 +106,24 @@ type Copy = {
 const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   pt: {
     navCta: 'Agendar conversa',
+    createCta: 'Criar minha igreja',
+    helpCta: 'Ajuda',
+    stepsEyebrow: 'Sem depender de ninguém',
+    stepsTitle: 'Sua igreja funcionando em 3 passos.',
+    stepsText:
+      'Você mesmo cria, configura e publica. Um roteiro dentro do painel mostra o próximo passo, e a Ajuda explica cada tela.',
+    steps: [
+      { title: 'Crie o espaço da igreja', text: 'Nome, cidade e o endereço público (sugerimos pelas iniciais). Leva 3 minutos.' },
+      { title: 'Monte o boletim do domingo', text: 'Liturgia, cânticos, leituras e avisos a partir de um modelo pronto.' },
+      { title: 'Compartilhe o link', text: 'A igreja abre o boletim no celular e pode instalar como app. Depois, traga a equipe.' },
+    ],
+    stepsCta: 'Começar agora',
     loginCta: 'Entrar',
     eyebrow: 'OIKOS Hub para igrejas',
     title: 'A igreja organizada sem perder o cuidado pastoral.',
     subtitle:
       'Boletins, cultos, escalas, louvores, membros e comunicação em um só lugar. Simples para a equipe, claro para a igreja, útil para o pastor.',
     primaryCta: 'Quero ver uma demonstração',
-    secondaryCta: 'Ver o que o sistema entrega',
     heroMetricA: 'Boletim público',
     heroMetricB: 'Cultos e escalas',
     heroMetricC: 'Cadastro pastoral',
@@ -165,13 +182,24 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   },
   es: {
     navCta: 'Agendar conversación',
+    createCta: 'Crear mi iglesia',
+    helpCta: 'Ayuda',
+    stepsEyebrow: 'Sin depender de nadie',
+    stepsTitle: 'Tu iglesia funcionando en 3 pasos.',
+    stepsText:
+      'Tú mismo creas, configuras y publicas. Una guía dentro del panel muestra el siguiente paso y la Ayuda explica cada pantalla.',
+    steps: [
+      { title: 'Crea el espacio de la iglesia', text: 'Nombre, ciudad y la dirección pública (sugerimos por las iniciales). Toma 3 minutos.' },
+      { title: 'Arma el boletín del domingo', text: 'Liturgia, cantos, lecturas y avisos a partir de un modelo listo.' },
+      { title: 'Comparte el enlace', text: 'La iglesia abre el boletín en el móvil y puede instalarlo como app. Después, suma al equipo.' },
+    ],
+    stepsCta: 'Empezar ahora',
     loginCta: 'Ingresar',
     eyebrow: 'OIKOS Hub para iglesias',
     title: 'La iglesia organizada sin perder el cuidado pastoral.',
     subtitle:
       'Boletines, cultos, turnos, alabanzas, miembros y comunicación en un solo lugar. Simple para el equipo, claro para la iglesia, útil para el pastor.',
     primaryCta: 'Quiero ver una demostración',
-    secondaryCta: 'Ver lo que entrega',
     heroMetricA: 'Boletín público',
     heroMetricB: 'Cultos y turnos',
     heroMetricC: 'Registro pastoral',
@@ -230,13 +258,24 @@ const COPY: Record<'pt' | 'es' | 'en', Copy> = {
   },
   en: {
     navCta: 'Schedule a call',
+    createCta: 'Create my church',
+    helpCta: 'Help',
+    stepsEyebrow: 'No one else needed',
+    stepsTitle: 'Your church up and running in 3 steps.',
+    stepsText:
+      'You create, configure and publish it yourself. A guide inside the dashboard shows the next step, and Help explains every screen.',
+    steps: [
+      { title: "Create your church's space", text: 'Name, city and the public address (we suggest one from the initials). Takes 3 minutes.' },
+      { title: "Build Sunday's bulletin", text: 'Liturgy, songs, readings and announcements from a ready-made template.' },
+      { title: 'Share the link', text: 'The church opens the bulletin on their phones and can install it as an app. Then bring in the team.' },
+    ],
+    stepsCta: 'Start now',
     loginCta: 'Sign in',
     eyebrow: 'OIKOS Hub for churches',
     title: 'A more organized church without losing pastoral care.',
     subtitle:
       'Bulletins, services, schedules, songs, members, and communication in one place. Simple for teams, clear for the church, useful for pastors.',
     primaryCta: 'I want a demo',
-    secondaryCta: 'See what it delivers',
     heroMetricA: 'Public bulletin',
     heroMetricB: 'Services and schedules',
     heroMetricC: 'Pastoral records',
@@ -370,14 +409,17 @@ export default function OikosLandingClient() {
             <span className="text-sm font-semibold tracking-wide sm:text-base">OIKOS Hub</span>
           </Link>
           <div className="flex items-center gap-2">
+            <Link href="/ajuda" className="hidden min-h-10 items-center justify-center rounded-full px-3 py-2 text-xs font-medium text-white/80 transition duration-200 hover:bg-white/10 hover:text-white sm:inline-flex sm:text-sm">
+              {copy.helpCta}
+            </Link>
             <Link href="/login" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white/90 transition duration-200 hover:border-white/30 hover:bg-white/10 hover:text-white sm:gap-2 sm:text-sm">
               <LogIn className="h-4 w-4 shrink-0" />
               <span>{copy.loginCta}</span>
             </Link>
-            <a href="#contato" className="hidden min-h-10 items-center justify-center gap-1.5 rounded-full bg-emerald-400 px-4 py-2 text-center text-xs font-semibold leading-tight text-slate-950 transition duration-200 hover:bg-emerald-300 sm:inline-flex sm:gap-2 sm:px-5 sm:text-sm">
-              <span>{copy.navCta}</span>
+            <Link href="/comecar" className="hidden min-h-10 items-center justify-center gap-1.5 rounded-full bg-emerald-400 px-4 py-2 text-center text-xs font-semibold leading-tight text-slate-950 transition duration-200 hover:bg-emerald-300 sm:inline-flex sm:gap-2 sm:px-5 sm:text-sm">
+              <span>{copy.createCta}</span>
               <ArrowRight className="h-4 w-4" />
-            </a>
+            </Link>
           </div>
         </div>
       </nav>
@@ -407,13 +449,13 @@ export default function OikosLandingClient() {
               {copy.subtitle}
             </p>
             <div className="mt-8 grid gap-3 sm:mt-10 sm:flex sm:flex-row sm:flex-wrap">
-              <a href="#contato" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-center text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-xl hover:shadow-emerald-500/30 sm:text-base">
+              <Link href="/comecar" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-center text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-300 hover:shadow-xl hover:shadow-emerald-500/30 sm:text-base">
+                {copy.createCta}
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+              <a href="#contato" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-center text-sm font-medium text-white backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10 sm:text-base">
                 {copy.primaryCta}
                 <Send className="h-4 w-4 shrink-0" />
-              </a>
-              <a href="#entrega" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-center text-sm font-medium text-white backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10 sm:text-base">
-                {copy.secondaryCta}
-                <ArrowRight className="h-4 w-4 shrink-0" />
               </a>
               <Link href="/login" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 py-3 text-center text-sm font-medium text-emerald-100 transition duration-200 hover:bg-white/5 hover:text-white sm:text-base">
                 {copy.loginCta}
@@ -459,6 +501,39 @@ export default function OikosLandingClient() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="comecar" className="scroll-mt-16 bg-slate-50 py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <p className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3.5 py-1.5 text-xs font-medium uppercase tracking-wide text-emerald-800 sm:text-sm">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            {copy.stepsEyebrow}
+          </p>
+          <h2 className="mt-4 max-w-3xl text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl">
+            {copy.stepsTitle}
+          </h2>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-500 sm:mt-5 sm:text-lg sm:leading-8">{copy.stepsText}</p>
+          <ol className="mt-8 grid gap-4 md:grid-cols-3 lg:mt-10 lg:gap-5">
+            {copy.steps.map((step, index) => (
+              <li key={step.title} className="rounded-3xl border border-white bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-7">
+                <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-base font-bold text-slate-950">
+                  {index + 1}
+                </span>
+                <h3 className="text-lg font-semibold text-slate-950">{step.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link href="/comecar" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 sm:text-base">
+              {copy.stepsCta}
+              <ArrowRight className="h-4 w-4 shrink-0" />
+            </Link>
+            <Link href="/ajuda" className="inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-sm font-medium text-slate-600 hover:bg-white sm:text-base">
+              {copy.helpCta}
+            </Link>
           </div>
         </div>
       </section>
@@ -669,10 +744,10 @@ export default function OikosLandingClient() {
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:hidden">
-        <a href="#contato" className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-slate-950 shadow-xl shadow-emerald-900/25">
-          {copy.primaryCta}
+        <Link href="/comecar" className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-slate-950 shadow-xl shadow-emerald-900/25">
+          {copy.createCta}
           <ArrowRight className="h-4 w-4 shrink-0" />
-        </a>
+        </Link>
       </div>
     </main>
   );

@@ -4,6 +4,7 @@ import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 import { isSuperAdmin } from '@/lib/permissions';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church-i18n';
+import { igrejasGerenciadasPor } from '@/lib/igreja-onboarding';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -174,14 +175,24 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await ensureSuperAdmin(request);
-  if (auth.error) return auth.error;
+  const user = await getAuthenticatedUserFromServerCookies(request);
+  if (!user?.id) {
+    return apiError('UNAUTHENTICATED', 401, 'Usuário não autenticado.');
+  }
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('igrejas')
-      .select('*')
-      .order('nome', { ascending: true });
+    // Superadmin vê todas; pastor/admin vê só as igrejas que gerencia.
+    let query = supabaseAdmin.from('igrejas').select('*').order('nome', { ascending: true });
+
+    if (!isSuperAdmin(user.email)) {
+      const gerenciadas = await igrejasGerenciadasPor(user);
+      if (gerenciadas.length === 0) {
+        return apiError('FORBIDDEN', 403, 'Sem permissão para gerenciar igrejas.');
+      }
+      query = query.in('id', gerenciadas);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

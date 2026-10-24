@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useNomeIgreja } from '@/hooks/useNomeIgreja';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 
@@ -50,6 +51,7 @@ export default function EscalaPublicaPage() {
   const { user } = useAuth();
   
   const [escala, setEscala] = useState<Escala | null>(null);
+  const nomeIgreja = useNomeIgreja((escala as { igreja_id?: string | null } | null)?.igreja_id);
   const [loading, setLoading] = useState(true);
   const [confirmando, setConfirmando] = useState(false);
   const [mensagem, setMensagem] = useState('');
@@ -420,8 +422,7 @@ export default function EscalaPublicaPage() {
 
         {/* Footer */}
         <div className="text-center text-slate-500 text-sm">
-          <p className="mb-1">Igreja Presbiteriana da Ponta Negra</p>
-          <p className="italic">Uma igreja da família de Deus</p>
+          {nomeIgreja && <p className="mb-1">{nomeIgreja}</p>}
         </div>
       </div>
     </div>

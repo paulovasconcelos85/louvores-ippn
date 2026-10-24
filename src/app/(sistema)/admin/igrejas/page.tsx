@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import LogoIgrejaUpload from '@/components/LogoIgrejaUpload';
 import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
@@ -614,11 +616,12 @@ export default function AdminIgrejasPage() {
 
   const loading = authLoading || permLoading;
 
+  // Pastor/admin local também entra: a API devolve só as igrejas que ele gerencia.
   useEffect(() => {
-    if (!loading && (!user || !isSuperAdmin)) {
+    if (!loading && !user) {
       router.push('/admin');
     }
-  }, [loading, user, isSuperAdmin, router]);
+  }, [loading, user, router]);
 
   const carregarIgrejas = useCallback(async () => {
     try {
@@ -627,6 +630,11 @@ export default function AdminIgrejasPage() {
         headers: await buildAuthenticatedHeaders(),
       });
       const payload = await response.json();
+
+      if (response.status === 403) {
+        router.push('/admin');
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -645,13 +653,13 @@ export default function AdminIgrejasPage() {
     } finally {
       setLoadingList(false);
     }
-  }, [tr, locale]);
+  }, [tr, locale, router]);
 
   useEffect(() => {
-    if (!loading && user && isSuperAdmin) {
+    if (!loading && user) {
       carregarIgrejas();
     }
-  }, [carregarIgrejas, loading, user, isSuperAdmin]);
+  }, [carregarIgrejas, loading, user]);
 
   useEffect(() => {
     if (!igrejaSelecionadaId || igrejaSelecionadaId === 'new') {
@@ -1071,7 +1079,7 @@ export default function AdminIgrejasPage() {
     }
   }
 
-  if (loading || !user || !isSuperAdmin) return null;
+  if (loading || !user) return null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1088,6 +1096,7 @@ export default function AdminIgrejasPage() {
           </div>
 
           <div className="flex shrink-0 gap-3">
+            {isSuperAdmin ? (
             <button
               onClick={() => {
                 setErro(null);
@@ -1100,6 +1109,15 @@ export default function AdminIgrejasPage() {
               <Plus className="h-4 w-4" />
               {tr('Nova Igreja', 'Nueva Iglesia', 'New Church')}
             </button>
+            ) : (
+              <Link
+                href="/comecar"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              >
+                <Plus className="h-4 w-4" />
+                {tr('Nova Igreja', 'Nueva Iglesia', 'New Church')}
+              </Link>
+            )}
             <button
               onClick={() => router.push('/admin')}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
@@ -1317,18 +1335,17 @@ export default function AdminIgrejasPage() {
                     <Input label="WhatsApp" value={form.whatsapp} onChange={(value) => updateForm('whatsapp', value)} />
                     <Input label={tr('E-mail', 'Correo electrónico', 'Email')} value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
-                    <Input
-                      label={tr('Logo da igreja', 'Logo de la iglesia', 'Church logo')}
-                      value={form.logo_url}
+                    <LogoIgrejaUpload
+                      igrejaId={igrejaSelecionadaId && igrejaSelecionadaId !== 'new' ? igrejaSelecionadaId : null}
+                      logoUrl={form.logo_url}
                       onChange={(value) => updateForm('logo_url', value)}
-                      placeholder="https://..."
                     />
                   </div>
                   <p className="text-xs text-slate-500">
                     {tr(
-                      'A logo aparece antes do nome da igreja no cabeçalho do boletim público.',
-                      'El logo aparece antes del nombre de la iglesia en el encabezado del boletín público.',
-                      'The logo appears before the church name in the public bulletin header.'
+                      'A logo aparece antes do nome da igreja no cabeçalho do boletim público e vira o ícone do app no celular.',
+                      'El logo aparece antes del nombre de la iglesia en el encabezado del boletín público y se convierte en el ícono de la app en el móvil.',
+                      'The logo appears before the church name in the public bulletin header and becomes the app icon on phones.'
                     )}
                   </p>
                 </section>
