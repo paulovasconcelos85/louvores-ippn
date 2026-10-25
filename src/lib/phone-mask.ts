@@ -90,3 +90,43 @@ export function getPhoneValidationError(value: string): string | null {
   
   return null;
 }
+// Código internacional e tamanhos de número nacional por país da igreja (igrejas.pais).
+const TELEFONE_POR_PAIS: Record<string, { ddi: string; nacional: number[] }> = {
+  BR: { ddi: '55', nacional: [10, 11] },
+  PT: { ddi: '351', nacional: [9] },
+  US: { ddi: '1', nacional: [10] },
+  CA: { ddi: '1', nacional: [10] },
+  AO: { ddi: '244', nacional: [9] },
+  MZ: { ddi: '258', nacional: [9] },
+  ES: { ddi: '34', nacional: [9] },
+  AR: { ddi: '54', nacional: [10] },
+  MX: { ddi: '52', nacional: [10] },
+};
+
+/**
+ * Número no formato do wa.me (só dígitos, com código do país).
+ * Telefones são guardados no formato nacional da igreja; só acrescenta o código
+ * do país quando o número tem tamanho de número nacional. Quem já digitou com
+ * +/00 ou com o código (ex.: brasileiro numa igreja em Portugal) fica como está.
+ */
+export function numeroWhatsApp(telefone: string | null | undefined, paisIgreja?: string | null): string {
+  const bruto = (telefone || '').trim();
+  let digitos = bruto.replace(/\D/g, '');
+  if (!digitos) return '';
+
+  if (bruto.startsWith('+')) return digitos;
+  if (digitos.startsWith('00')) return digitos.slice(2);
+
+  const pais = TELEFONE_POR_PAIS[(paisIgreja || 'BR').toUpperCase()] || TELEFONE_POR_PAIS.BR;
+  // Zero de tronco nacional (ex.: 092...) não vai no formato internacional.
+  if (pais.ddi !== '351' && digitos.startsWith('0')) digitos = digitos.replace(/^0+/, '');
+
+  return pais.nacional.includes(digitos.length) ? `${pais.ddi}${digitos}` : digitos;
+}
+
+/** Link do WhatsApp: com número abre a conversa; sem número, escolhe-se o contato. */
+export function linkWhatsApp(telefone: string | null | undefined, paisIgreja?: string | null, texto?: string) {
+  const numero = numeroWhatsApp(telefone, paisIgreja);
+  const query = texto ? `?text=${encodeURIComponent(texto)}` : '';
+  return `https://wa.me/${numero}${query}`;
+}

@@ -165,7 +165,7 @@ const SECOES: Secao[] = [
           'Cadastre a pessoa com nome, telefone e e-mail.',
           'Para dar acesso, use “Liberar acesso”. A pessoa precisa ter e-mail cadastrado.',
           'Escolha o cargo (veja a tabela abaixo) e, se for do louvor ou da técnica, marque as habilitações.',
-          'Avise a pessoa: ela entra em “Entrar” com o mesmo e-mail — por senha (em “Primeiro acesso”), Google ou Microsoft.',
+          'Mande para a pessoa o link /<endereço-da-igreja>/entrar (ex.: /ippn/entrar). Ele abre o login já com a igreja escolhida; ela entra com o mesmo e-mail — por senha (em “Primeiro acesso”), Google ou Microsoft.',
         ],
       },
       {
@@ -187,6 +187,7 @@ const SECOES: Secao[] = [
           'Staff: boletins, cânticos e escalas.',
           'Presbítero: tudo acima, mais membros, liturgia completa, recursos e liberação de acessos.',
           'Seminarista: boletins, cânticos, membros, liturgia completa, recursos e pedidos pastorais.',
+          'Tesouraria: não depende do cargo. O Conselho designa tesoureiro, auxiliar e comissão de contas dentro do próprio módulo; pastor e presbíteros veem os totais.',
           'Pastor: acesso completo à igreja, incluindo pedidos pastorais e dados da igreja.',
           'Administrador: acesso completo à gestão da igreja (dados, pessoas, escalas, boletins); pedidos pastorais ficam com o pastor.',
         ],
@@ -268,6 +269,45 @@ const SECOES: Secao[] = [
         tipo: 'p',
         texto:
           'Os números saem dos boletins: quanto mais boletins a igreja registra, mais útil fica a visão do repertório — e mais fácil evitar repetição ou esquecer músicas boas.',
+      },
+    ],
+  },
+  {
+    id: 'financas',
+    titulo: 'Tesouraria: dízimos, ofertas e despesas',
+    resumo: 'O livro-caixa da igreja no formato que a IPB pede, com balancetes, exame de contas e relatório anual.',
+    onde: { rotulo: 'Menu → Tesouraria', href: '/financas' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Segue o modelo de estatuto da igreja local da IPB: o Conselho elege o tesoureiro todo ano, nomeia uma Comissão de Exame de Contas de três pessoas e recebe dela um parecer a cada trimestre e no fim do exercício.',
+      },
+      {
+        tipo: 'passos',
+        itens: [
+          'O pastor (ou um presbítero) abre Tesouraria → Configurações → Equipe e designa o tesoureiro, o auxiliar e os três membros da comissão. Vale só para esta igreja e para o ano.',
+          'O tesoureiro cadastra as contas: o caixa (dinheiro das ofertas) e cada conta bancária, com o saldo do dia em que começar a usar o sistema.',
+          'Confira as categorias. Elas já vêm prontas e ligadas aos grupos do relatório estatístico da IPB; renomeie ou crie as que a igreja usa.',
+          'Lance cada entrada e saída. No domingo, use “Salvar e lançar outro” para registrar os envelopes em sequência. Dinheiro depositado no banco é uma transferência, não uma nova entrada.',
+          'Anexe o comprovante de toda saída — nota fiscal, recibo ou RPA para serviço de autônomo. Dá para tirar a foto direto do celular.',
+          'Terminado o trimestre, envie o balancete em “Exame de contas”. O período fica travado; a comissão emite o parecer ou devolve para correção, e o Conselho aprova registrando a ata.',
+        ],
+      },
+      {
+        tipo: 'lista',
+        itens: [
+          'Dízimos são nominais: cada dízimo pode ficar ligado ao membro (ou ficar como não identificado). Só o tesoureiro, o auxiliar e o pastor veem os nomes; presbíteros e comissão veem só os totais.',
+          'Dízimo ao Supremo Concílio: o sistema calcula 10% dos dízimos e ofertas, mês a mês, sem contar as ofertas específicas, e mostra quanto falta repassar.',
+          'Relatório anual: a seção IV do relatório estatístico (receitas, despesas por grupo, verba presbiterial, sustento pastoral, saldo) sai pronta em PDF.',
+          'Orçamento: lance o previsto de cada categoria; o realizado aparece ao lado, para o Conselho votar e a assembleia tomar conhecimento.',
+          'Declaração de contribuições: gere para o membro que pedir comprovante do que contribuiu no ano.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'O sistema organiza a tesouraria, mas não substitui o contador: as obrigações acessórias da igreja (ECF, EFD-Reinf, eSocial e as demais que ele indicar) continuam com ele. Exporte os balancetes e entregue junto com os comprovantes.',
       },
     ],
   },

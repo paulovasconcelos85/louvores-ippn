@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 
-/** Nome da igreja (a informada ou a selecionada no painel), para textos compartilhados. */
-export function useNomeIgreja(igrejaId?: string | null) {
-  const [nome, setNome] = useState('');
+/** Nome e país da igreja (a informada ou a selecionada no painel). */
+export function useIgrejaAtual(igrejaId?: string | null) {
+  const [igreja, setIgreja] = useState<{ nome: string; pais: string | null }>({ nome: '', pais: null });
 
   useEffect(() => {
     const id = igrejaId || getStoredChurchId();
@@ -15,11 +15,11 @@ export function useNomeIgreja(igrejaId?: string | null) {
     let ativo = true;
     supabase
       .from('igrejas')
-      .select('nome')
+      .select('nome, pais')
       .eq('id', id)
       .maybeSingle()
       .then(({ data }) => {
-        if (ativo) setNome(data?.nome || '');
+        if (ativo) setIgreja({ nome: data?.nome || '', pais: data?.pais || null });
       });
 
     return () => {
@@ -27,5 +27,10 @@ export function useNomeIgreja(igrejaId?: string | null) {
     };
   }, [igrejaId]);
 
-  return nome;
+  return igreja;
+}
+
+/** Nome da igreja, para textos compartilhados. */
+export function useNomeIgreja(igrejaId?: string | null) {
+  return useIgrejaAtual(igrejaId).nome;
 }

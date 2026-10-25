@@ -10,7 +10,7 @@ export const SLUGS_RESERVADOS = new Set([
   'admin', 'ajuda', 'api', 'app', 'auth', 'aceitar-convite', 'boletins-anteriores',
   'cadastro', 'canticos', 'cifra', 'comecar', 'completar', 'cultos', 'dashboard',
   'escala', 'escalas', 'letra', 'login', 'logout', 'oikos', 'pedidos',
-  'pedidos-pastorais', 'perfil', 'privacidade', 'recursos', 'redefinir-senha', 'sw', 'manifest',
+  'pedidos-pastorais', 'perfil', 'privacidade', 'recursos', 'redefinir-senha', 'financas', 'tesouraria', 'sw', 'manifest',
   'favicon', 'icone', 'icons', 'static', 'public', 'www', 'suporte', 'contato',
   'termos', 'blog', 'precos', 'planos', 'igreja', 'igrejas', 'novo', 'nova',
   'teste', 'demo', 'root', 'sistema', 'oikoshub', 'hub',

@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { 
-  Building2, 
-  Home, 
-  User, 
-  Settings, 
-  LogOut, 
+import {
+  Building2,
+  Home,
+  User,
+  Settings,
+  LogOut,
   ArrowLeft,
   ChevronDown,
   Church,
-  Library
+  Library,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAcessoFinancas } from '@/hooks/useAcessoFinancas';
 import { useLocale, useTranslations } from '@/i18n/provider';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
@@ -31,6 +33,7 @@ export default function Header() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
   const [igrejaAtualId, setIgrejaAtualId] = useState<string>('');
+  const veTesouraria = useAcessoFinancas(igrejaAtualId);
 
   useEffect(() => {
     if (!user?.id) {
@@ -220,6 +223,19 @@ export default function Header() {
                       <Library className="w-4 h-4" />
                       Recursos
                     </button>
+
+                    {veTesouraria && (
+                      <button
+                        onClick={() => {
+                          setMenuAberto(false);
+                          router.push('/financas');
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
+                      >
+                        <Wallet className="w-4 h-4" />
+                        Tesouraria
+                      </button>
+                    )}
 
                     {permissoes?.podeAcessarAdmin && (
                       <button

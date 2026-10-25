@@ -1466,7 +1466,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               </>
             ) : (
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => router.push(`/login?igreja=${encodeURIComponent(igrejaSlug)}`)}
                 className="text-[1.219rem]/[1.44] sm:text-[1.381rem]/[1.553] text-[#1e1208] border border-[#1e1208]/25 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/5 px-4 sm:px-5 py-1.5 rounded-full transition-colors whitespace-nowrap"
               >
                 {t('home.signIn')}

@@ -7,6 +7,8 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { buscarRelacionamentosDasPessoas } from '@/lib/relacionamentos';
 import { useLocale } from '@/i18n/provider';
 import { Users, ChevronDown, ChevronUp, Cake, Heart, Pencil, Check, X } from 'lucide-react';
+import { linkWhatsApp } from '@/lib/phone-mask';
+import { useIgrejaAtual } from '@/hooks/useNomeIgreja';
 
 type TipoRelacionamento =
   | 'conjuge' | 'pai' | 'mae' | 'filho' | 'filha'
@@ -42,6 +44,7 @@ interface FamiliaViewProps {
 export default function FamiliaView({ podeEditar = false }: FamiliaViewProps) {
   const router = useRouter();
   const locale = useLocale();
+  const { pais: paisIgreja } = useIgrejaAtual();
   const tr = useCallback(
     (pt: string, es: string, en: string) =>
       locale === 'es' ? es : locale === 'en' ? en : pt,
@@ -287,13 +290,12 @@ export default function FamiliaView({ podeEditar = false }: FamiliaViewProps) {
   const abrirWhatsApp = (e: React.MouseEvent, telefone: string | null, nome: string) => {
     e.stopPropagation();
     if (!telefone) return;
-    const num = telefone.replace(/\D/g, '');
     const msg = tr(
       `Olá ${nome}! Que a paz do Senhor esteja contigo!`,
       `Hola ${nome}. Que la paz del Senor esté contigo.`,
       `Hello ${nome}. May the Lord's peace be with you.`
     );
-    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(linkWhatsApp(telefone, paisIgreja, msg), '_blank');
   };
 
   const MembroRow = ({ membro, tipoRelacao }: { membro: MembroSimples; tipoRelacao?: TipoRelacionamento }) => (

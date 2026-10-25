@@ -1,3 +1,5 @@
+import { linkWhatsApp } from '@/lib/phone-mask';
+
 // Helpers para o link público de "Completar cadastro" enviado a cada membro.
 
 export function buildCompletarCadastroUrl(token: string) {
@@ -24,9 +26,11 @@ export function buildConviteCadastroMensagem(nome: string, token: string) {
 }
 
 // Abre o WhatsApp com a mensagem-convite pré-preenchida.
-export function enviarConviteWhatsApp(nome: string, telefone: string | null, token: string) {
-  const msg = encodeURIComponent(buildConviteCadastroMensagem(nome, token));
-  const num = (telefone || '').replace(/\D/g, '');
-  const base = num ? `https://wa.me/55${num}` : 'https://wa.me/';
-  window.open(`${base}?text=${msg}`, '_blank');
+export function enviarConviteWhatsApp(
+  nome: string,
+  telefone: string | null,
+  token: string,
+  paisIgreja?: string | null
+) {
+  window.open(linkWhatsApp(telefone, paisIgreja, buildConviteCadastroMensagem(nome, token)), '_blank');
 }

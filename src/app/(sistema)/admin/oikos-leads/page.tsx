@@ -21,6 +21,7 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveApiErrorMessage, resolveApiSuccessMessage } from '@/lib/api-feedback';
 import { getIntlLocale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
+import { linkWhatsApp } from '@/lib/phone-mask';
 
 type LeadStatus = 'novo' | 'em_contato' | 'demo_agendada' | 'convertido' | 'perdido';
 type StatusFiltro = 'todos' | LeadStatus;
@@ -67,8 +68,8 @@ function resolveContactHref(contato: string) {
 
   const digits = trimmed.replace(/\D/g, '');
   if (digits.length >= 10) {
-    const normalized = digits.startsWith('55') ? digits : `55${digits}`;
-    return `https://wa.me/${normalized}`;
+    // Leads da landing não têm igreja: número nacional é tratado como brasileiro.
+    return linkWhatsApp(trimmed, 'BR');
   }
 
   return null;

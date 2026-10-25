@@ -20,7 +20,8 @@ import {
   MessageSquareHeart,
   MessageSquareText,
   HelpCircle,
-  Settings
+  Settings,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -36,6 +37,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import PerfilRepertorioResumo from '@/components/PerfilRepertorioResumo';
 import PrimeirosPassos from '@/components/PrimeirosPassos';
+import { useAcessoFinancas } from '@/hooks/useAcessoFinancas';
 
 interface MinhaProximaEscala {
   escala_id: string;
@@ -68,6 +70,7 @@ export default function AdminPage() {
 
   const loading = authLoading || permLoading;
   const [boasVindas, setBoasVindas] = useState(false);
+  const veTesouraria = useAcessoFinancas(igrejaAtual?.id);
 
   useEffect(() => {
     setBoasVindas(new URLSearchParams(window.location.search).get('boas-vindas') === '1');
@@ -642,6 +645,23 @@ export default function AdminPage() {
                 </p>
                 <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
                   {tr('Configurar', 'Configurar', 'Configure')}
+                </span>
+              </div>
+            </Link>
+          )}
+
+          {veTesouraria && (
+            <Link href="/financas" className="block">
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">
+                <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
+                  <Wallet className="w-6 h-6 text-slate-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{tr('Tesouraria', 'Tesorería', 'Treasury')}</h3>
+                <p className="text-slate-600 text-sm mb-4">
+                  {tr('Dízimos, ofertas, despesas, balancetes e relatório da IPB', 'Diezmos, ofrendas, gastos, balances e informe de la IPB', 'Tithes, offerings, expenses, statements and IPB report')}
+                </p>
+                <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
+                  {tr('Acessar', 'Acceder', 'Access')}
                 </span>
               </div>
             </Link>

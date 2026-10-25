@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoCor } from '@/lib/permissions';
-import { formatPhoneNumber, unformatPhoneNumber } from '@/lib/phone-mask';
+import { formatPhoneNumber, unformatPhoneNumber, linkWhatsApp } from '@/lib/phone-mask';
 import { supabase } from '@/lib/supabase';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 import { getStoredChurchId } from '@/lib/church-utils';
@@ -26,6 +26,7 @@ import {
   ClipboardCheck, PenLine, Download,
 } from 'lucide-react';
 import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
+import { useIgrejaAtual } from '@/hooks/useNomeIgreja';
 
 interface Membro {
   id: string;
@@ -349,6 +350,7 @@ export default function MembroDetalhe({
   const intlLocale = getIntlLocale(locale);
   const { user } = useAuth();
   const { permissoes, usuarioPermitido } = usePermissions();
+  const { pais: paisIgreja } = useIgrejaAtual();
   const tr = useCallback(
     (pt: string, es: string, en: string) =>
       locale === 'es' ? es : locale === 'en' ? en : pt,
@@ -879,13 +881,12 @@ export default function MembroDetalhe({
       );
       return;
     }
-    const num = membro.telefone.replace(/\D/g, '');
     const msg = tr(
       `Olá ${membro.nome}! Que a paz do Senhor esteja contigo!`,
       `Hola ${membro.nome}. Que la paz del Senor esté contigo.`,
       `Hello ${membro.nome}. May the Lord's peace be with you.`
     );
-    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(linkWhatsApp(membro.telefone, paisIgreja, msg), '_blank');
   };
 
   const ligarPara = () => {
@@ -907,7 +908,7 @@ export default function MembroDetalhe({
       setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
       return;
     }
-    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token);
+    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token, paisIgreja);
   };
 
   const copiarLinkCadastro = async () => {

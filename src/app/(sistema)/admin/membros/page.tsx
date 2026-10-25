@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CargoTipo, getCargoCor } from '@/lib/permissions';
-import { formatPhoneNumber } from '@/lib/phone-mask';
+import { formatPhoneNumber, linkWhatsApp } from '@/lib/phone-mask';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { buildCompletarCadastroUrl, enviarConviteWhatsApp } from '@/lib/cadastro-link';
 import { buscarRelacionamentosDasPessoas } from '@/lib/relacionamentos';
+import { useIgrejaAtual } from '@/hooks/useNomeIgreja';
 
 interface Membro {
   id: string;
@@ -159,6 +160,7 @@ export default function PastorarMembrosPage() {
   const intlLocale = getIntlLocale(locale);
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
+  const { pais: paisIgreja } = useIgrejaAtual();
   const tr = useCallback(
     (pt: string, es: string, en: string) =>
       locale === 'es' ? es : locale === 'en' ? en : pt,
@@ -758,13 +760,12 @@ export default function PastorarMembrosPage() {
       );
       return;
     }
-    const num = telefone.replace(/\D/g, '');
     const msg = tr(
       `Olá ${nome}! Que a paz do Senhor esteja contigo!`,
       `Hola ${nome}. Que la paz del Senor esté contigo.`,
       `Hello ${nome}. May the Lord's peace be with you.`
     );
-    window.open(`https://wa.me/55${num}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(linkWhatsApp(telefone, paisIgreja, msg), '_blank');
   };
 
   const ligarPara = (telefone: string | null) => {
@@ -799,7 +800,7 @@ export default function PastorarMembrosPage() {
       setMensagem(tr('Link indisponível para este cadastro.', 'Enlace no disponible.', 'Link unavailable.'));
       return;
     }
-    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token);
+    enviarConviteWhatsApp(membro.nome, membro.telefone, membro.cadastro_token, paisIgreja);
   };
 
   const excluirMembro = async (membro: Membro) => {

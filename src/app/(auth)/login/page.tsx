@@ -21,19 +21,54 @@ export default function LoginPage() {
   const [modo, setModo] = useState<'entrar' | 'primeiro_acesso'>('entrar');
   const [sincronizandoAcesso, setSincronizandoAcesso] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState('');
-  const [igrejas, setIgrejas] = useState<{ id: string; nome: string }[]>([]);
-  const [igrejaId, setIgrejaId] = useState('');
+  // Igreja do primeiro acesso, achada pelo endereço público (slug), não por uma
+  // lista de todas as igrejas.
+  const [igrejaSlug, setIgrejaSlug] = useState('');
+  const [igrejaEncontrada, setIgrejaEncontrada] = useState<{ id: string; nome: string; slug: string } | null>(null);
+  const [igrejaFixada, setIgrejaFixada] = useState(false);
+  const [buscandoIgreja, setBuscandoIgreja] = useState(false);
+  const igrejaId = igrejaEncontrada?.id || '';
   const skipSyncRef = useRef(false);
 
   useEffect(() => {
-    if (modo !== 'primeiro_acesso') return;
-    supabase
-      .from('igrejas')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data }) => setIgrejas(data || []));
-  }, [modo]);
+    const slugUrl = new URLSearchParams(window.location.search).get('igreja');
+    if (slugUrl) {
+      setIgrejaSlug(slugUrl);
+      setIgrejaFixada(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Aceita o link inteiro colado (https://.../ippn) ou só o endereço.
+    const slug = igrejaSlug.trim().toLowerCase().replace(/\/+$/, '').split('/').pop() || '';
+    if (slug.length < 2) {
+      setIgrejaEncontrada(null);
+      return;
+    }
+
+    let ativo = true;
+    const timer = setTimeout(async () => {
+      setBuscandoIgreja(true);
+      try {
+        const response = await fetch(`/api/igrejas/slug/${encodeURIComponent(slug)}`);
+        const data = await response.json();
+        if (!ativo) return;
+        setIgrejaEncontrada(
+          response.ok && data.igreja ? { id: data.igreja.id, nome: data.igreja.nome, slug: data.igreja.slug } : null
+        );
+        if (!response.ok) setIgrejaFixada(false);
+      } catch {
+        if (ativo) setIgrejaEncontrada(null);
+      } finally {
+        if (ativo) setBuscandoIgreja(false);
+      }
+    }, 350);
+
+    return () => {
+      ativo = false;
+      clearTimeout(timer);
+    };
+  }, [igrejaSlug]);
 
   const finalizarAcesso = useCallback(async (opts?: { igrejaId?: string }) => {
     const {
@@ -220,7 +255,13 @@ export default function LoginPage() {
       }
 
       if (!igrejaId) {
-        throw new Error('Selecione uma igreja para continuar.');
+        throw new Error(
+          locale === 'es'
+            ? 'Informa la dirección de tu iglesia para continuar.'
+            : locale === 'en'
+              ? 'Enter your church address to continue.'
+              : 'Informe o endereço da sua igreja para continuar.'
+        );
       }
 
       skipSyncRef.current = true;
@@ -410,19 +451,47 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label className="block font-fell text-sm tracking-[0.15em] text-slate-700 mb-2">
-                    Igreja
+                    {locale === 'es' ? 'Tu iglesia' : locale === 'en' ? 'Your church' : 'Sua igreja'}
                   </label>
-                  <select
-                    value={igrejaId}
-                    onChange={(e) => setIgrejaId(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900 bg-white"
-                  >
-                    <option value="">Selecione sua igreja...</option>
-                    {igrejas.map((ig) => (
-                      <option key={ig.id} value={ig.id}>{ig.nome}</option>
-                    ))}
-                  </select>
+                  {igrejaFixada && igrejaEncontrada ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <span className="text-slate-900">✓ {igrejaEncontrada.nome}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIgrejaFixada(false);
+                          setIgrejaSlug('');
+                        }}
+                        className="text-sm text-emerald-700 underline"
+                      >
+                        {locale === 'es' ? 'Cambiar' : locale === 'en' ? 'Change' : 'Trocar'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        value={igrejaSlug}
+                        onChange={(e) => setIgrejaSlug(e.target.value)}
+                        placeholder={locale === 'en' ? 'e.g. ippn or the bulletin link' : locale === 'es' ? 'ej.: ippn o el enlace del boletín' : 'ex.: ippn ou o link do boletim'}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-md bg-white focus:ring-4 focus:ring-emerald-100 focus:border-emerald-600 outline-none transition-all text-slate-900"
+                      />
+                      <p className="mt-1.5 text-sm text-slate-500">
+                        {buscandoIgreja
+                          ? locale === 'es' ? 'Buscando…' : locale === 'en' ? 'Searching…' : 'Procurando…'
+                          : igrejaEncontrada
+                            ? <span className="text-emerald-700">✓ {igrejaEncontrada.nome}</span>
+                            : igrejaSlug.trim().length >= 2
+                              ? <span className="text-red-600">{locale === 'es' ? 'No encontramos esta iglesia.' : locale === 'en' ? 'Church not found.' : 'Não encontramos esta igreja.'}</span>
+                              : locale === 'es'
+                                ? 'Es la dirección del boletín de tu iglesia. Pídela a la secretaría si no la sabes.'
+                                : locale === 'en'
+                                  ? "It's your church's bulletin address. Ask the church office if you don't know it."
+                                  : 'É o endereço do boletim da sua igreja. Peça à secretaria se não souber.'}
+                      </p>
+                    </>
+                  )}
                 </div>
               </>
             )}
