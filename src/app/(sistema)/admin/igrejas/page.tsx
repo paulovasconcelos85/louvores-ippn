@@ -1335,6 +1335,12 @@ export default function AdminIgrejasPage() {
                     <Input label="WhatsApp" value={form.whatsapp} onChange={(value) => updateForm('whatsapp', value)} />
                     <Input label={tr('E-mail', 'Correo electrónico', 'Email')} value={form.email} onChange={(value) => updateForm('email', value)} type="email" />
                     <Input label="Site" value={form.site} onChange={(value) => updateForm('site', value)} />
+                    <Input
+                      label={tr('Canal do YouTube (destaque no boletim)', 'Canal de YouTube (destacado en el boletín)', 'YouTube channel (featured in bulletin)')}
+                      value={form.youtube}
+                      onChange={(value) => updateForm('youtube', value)}
+                      placeholder="https://www.youtube.com/@canal"
+                    />
                     <LogoIgrejaUpload
                       igrejaId={igrejaSelecionadaId && igrejaSelecionadaId !== 'new' ? igrejaSelecionadaId : null}
                       logoUrl={form.logo_url}

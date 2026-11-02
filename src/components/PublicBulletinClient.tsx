@@ -18,9 +18,11 @@ import {
   MessageCircle,
   Music,
   Phone,
+  Podcast,
   Printer,
   Smartphone,
   X,
+  Youtube,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { Locale } from '@/i18n/config';
@@ -206,6 +208,55 @@ function Cantoneiras() {
   );
 }
 
+// Convite em destaque para os canais de mídia da igreja (YouTube, podcast).
+function CartaoCanalMidia({
+  href,
+  icone,
+  cor,
+  corHover,
+  rubrica,
+  titulo,
+  texto,
+  acao,
+}: {
+  href: string;
+  icone: React.ReactNode;
+  cor: string;
+  corHover: string;
+  rubrica: string;
+  titulo: string;
+  texto: string;
+  acao: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      style={{ '--cor': cor, '--cor-hover': corHover } as React.CSSProperties}
+      className={`group flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-7 px-6 py-7 sm:px-9 sm:py-8 text-center sm:text-left transition-transform duration-200 hover:-translate-y-0.5 ${folha}`}
+    >
+      <Cantoneiras />
+      <span className="flex h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 items-center justify-center rounded-full bg-[var(--cor)] text-white shadow-[0_10px_24px_-10px_rgba(30,18,8,0.55)]">
+        {icone}
+      </span>
+      <span className="min-w-0 flex-1 space-y-1">
+        <span className="block font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.3em] text-[#8b2a1d]">
+          {rubrica}
+        </span>
+        <span className="block font-fell text-[1.95rem]/[1.2] sm:text-[2.275rem]/[1.2] text-[#1e1208]">
+          {titulo}
+        </span>
+        <span className="block italic text-[20px] leading-[1.6] text-[#5a4030]">{texto}</span>
+        <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--cor)] px-6 py-2.5 text-[1.381rem]/[1.553] text-white transition-colors group-hover:bg-[var(--cor-hover)]">
+          {acao}
+          <ArrowRight className="h-4 w-4" />
+        </span>
+      </span>
+    </a>
+  );
+}
+
 function formatarDataExtenso(valor: string, locale: Locale) {
   const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -230,6 +281,16 @@ function extrairYoutubeId(url: string | null) {
 
   const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
   return url.match(regex)?.[1] || null;
+}
+
+// Aceita o canal como URL completa, "youtube.com/@canal" ou só "@canal".
+function montarUrlCanalYoutube(valor: string | null | undefined) {
+  const texto = valor?.trim();
+  if (!texto) return null;
+  if (/^https?:\/\//i.test(texto)) return texto;
+  if (/^(www\.|m\.)?youtube\.com\//i.test(texto)) return `https://${texto}`;
+  if (/^@[\w.-]+$/.test(texto)) return `https://www.youtube.com/${texto}`;
+  return null;
 }
 
 function parseAgendaBoletimItem(conteudo: string) {
@@ -575,6 +636,20 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     () => extrairYoutubeId(igrejaDetalhes?.apresentacao_youtube_url || null),
     [igrejaDetalhes]
   );
+
+  // Canal da igreja em destaque no boletim: campo próprio ou, na falta dele, a rede social "youtube".
+  const canalYoutubeUrl = useMemo(
+    () =>
+      montarUrlCanalYoutube(igrejaDetalhes?.youtube) ||
+      montarUrlCanalYoutube(redesSociais.find((rede) => rede.tipo === 'youtube' && rede.ativo !== false)?.url),
+    [igrejaDetalhes?.youtube, redesSociais]
+  );
+
+  // Podcast vem da rede social "spotify" cadastrada no admin.
+  const podcastSpotifyUrl = useMemo(() => {
+    const url = redesSociais.find((rede) => rede.tipo === 'spotify' && rede.ativo !== false)?.url?.trim();
+    return url && /^https?:\/\//i.test(url) ? url : null;
+  }, [redesSociais]);
 
   const paragrafosApresentacao = useMemo(
     () => apresentacaoTexto.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean),
@@ -1664,6 +1739,39 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <div className="flex flex-col items-center py-24 gap-3">
             <div className="w-8 h-8 border-2 border-[#8b2a1d] border-t-transparent rounded-full animate-spin" />
             <p className="italic text-[#7a5c40]">Carregando boletim...</p>
+          </div>
+        )}
+
+        {!loading && (canalYoutubeUrl || podcastSpotifyUrl) && (
+          <div
+            className={`fade-up -mx-3 sm:mx-0 mt-6 sm:mt-10 grid gap-4 sm:gap-6 ${
+              canalYoutubeUrl && podcastSpotifyUrl ? 'lg:grid-cols-2' : ''
+            }`}
+          >
+            {canalYoutubeUrl && (
+              <CartaoCanalMidia
+                href={canalYoutubeUrl}
+                icone={<Youtube className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
+                cor="#c4302b"
+                corHover="#a32622"
+                rubrica="Cultos no YouTube"
+                titulo="Siga o nosso canal"
+                texto="Assista aos cultos, reveja as pregações e ative as notificações para não perder nenhuma transmissão."
+                acao="Inscrever-se"
+              />
+            )}
+            {podcastSpotifyUrl && (
+              <CartaoCanalMidia
+                href={podcastSpotifyUrl}
+                icone={<Podcast className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
+                cor="#1a9e4b"
+                corHover="#157f3c"
+                rubrica="Podcast no Spotify"
+                titulo="Ouça o nosso podcast"
+                texto="Pregações e estudos para ouvir no caminho, em casa ou onde estiver. Siga para receber os novos episódios."
+                acao="Seguir podcast"
+              />
+            )}
           </div>
         )}
 
