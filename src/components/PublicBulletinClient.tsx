@@ -1742,39 +1742,6 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           </div>
         )}
 
-        {!loading && (canalYoutubeUrl || podcastSpotifyUrl) && (
-          <div
-            className={`fade-up -mx-3 sm:mx-0 mt-6 sm:mt-10 grid gap-4 sm:gap-6 ${
-              canalYoutubeUrl && podcastSpotifyUrl ? 'lg:grid-cols-2' : ''
-            }`}
-          >
-            {canalYoutubeUrl && (
-              <CartaoCanalMidia
-                href={canalYoutubeUrl}
-                icone={<Youtube className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
-                cor="#c4302b"
-                corHover="#a32622"
-                rubrica="Cultos no YouTube"
-                titulo="Siga o nosso canal"
-                texto="Assista aos cultos, reveja as pregações e ative as notificações para não perder nenhuma transmissão."
-                acao="Inscrever-se"
-              />
-            )}
-            {podcastSpotifyUrl && (
-              <CartaoCanalMidia
-                href={podcastSpotifyUrl}
-                icone={<Podcast className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
-                cor="#1a9e4b"
-                corHover="#157f3c"
-                rubrica="Podcast no Spotify"
-                titulo="Ouça o nosso podcast"
-                texto="Pregações e estudos para ouvir no caminho, em casa ou onde estiver. Siga para receber os novos episódios."
-                acao="Seguir podcast"
-              />
-            )}
-          </div>
-        )}
-
         {!loading && (
           <div className="mt-10 sm:mt-14 grid gap-12 sm:gap-12 xl:grid-cols-[minmax(0,1.72fr)_300px] xl:items-start">
             <section className="space-y-12 sm:space-y-16 min-w-0">
@@ -2024,6 +1991,39 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 </Link>
               </section>
             </aside>
+          </div>
+        )}
+
+        {!loading && (canalYoutubeUrl || podcastSpotifyUrl) && (
+          <div
+            className={`fade-up -mx-3 sm:mx-0 mt-12 sm:mt-16 grid gap-4 sm:gap-6 ${
+              canalYoutubeUrl && podcastSpotifyUrl ? 'lg:grid-cols-2' : ''
+            }`}
+          >
+            {canalYoutubeUrl && (
+              <CartaoCanalMidia
+                href={canalYoutubeUrl}
+                icone={<Youtube className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
+                cor="#c4302b"
+                corHover="#a32622"
+                rubrica="Cultos no YouTube"
+                titulo="Siga o nosso canal"
+                texto="Assista aos cultos, reveja as pregações e ative as notificações para não perder nenhuma transmissão."
+                acao="Inscrever-se"
+              />
+            )}
+            {podcastSpotifyUrl && (
+              <CartaoCanalMidia
+                href={podcastSpotifyUrl}
+                icone={<Podcast className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
+                cor="#1a9e4b"
+                corHover="#157f3c"
+                rubrica="Podcast no Spotify"
+                titulo="Ouça o nosso podcast"
+                texto="Pregações e estudos para ouvir no caminho, em casa ou onde estiver. Siga para receber os novos episódios."
+                acao="Seguir podcast"
+              />
+            )}
           </div>
         )}
       </main>
