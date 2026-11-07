@@ -116,13 +116,23 @@ interface TextoComPassagensProps {
   locale: Locale;
   className?: string;
   // Formatação do texto comum entre as referências (negrito, links...).
-  renderTexto: (texto: string) => React.ReactNode;
+  renderTexto?: (texto: string) => React.ReactNode;
+  // Listas de referências ("Is 60.21; 61.3"): entende continuações sem o livro.
+  continuacoes?: boolean;
 }
+
+const textoSimples = (texto: string) => texto;
 
 // Linha da liturgia com as referências bíblicas ("Salmo 23", "Rm 8.1-4")
 // destacadas; cada uma abre o texto bíblico logo abaixo da linha.
-export default function TextoComPassagens({ texto, locale, className, renderTexto }: TextoComPassagensProps) {
-  const referencias = useMemo(() => encontrarReferenciasBiblicas(texto), [texto]);
+export default function TextoComPassagens({
+  texto,
+  locale,
+  className,
+  renderTexto = textoSimples,
+  continuacoes = false,
+}: TextoComPassagensProps) {
+  const referencias = useMemo(() => encontrarReferenciasBiblicas(texto, { continuacoes }), [texto, continuacoes]);
   const [abertas, setAbertas] = useState<Set<number>>(() => new Set());
 
   if (referencias.length === 0) {
@@ -151,14 +161,19 @@ export default function TextoComPassagens({ texto, locale, className, renderText
         onClick={() => alternar(indice)}
         aria-expanded={aberta}
         title={`${TEXTOS[locale].ler} ${referencia.rotulo}`}
-        className="mx-[-0.15em] inline-flex items-baseline gap-1 rounded-sm px-[0.15em] text-[#8b2a1d] underline decoration-[#8b2a1d]/55 decoration-dotted underline-offset-[5px] transition-colors hover:bg-[#8b2a1d]/[0.07]"
+        className={`mx-[-0.15em] inline-flex items-baseline gap-1 rounded-sm px-[0.15em] text-[#8b2a1d] underline decoration-[#8b2a1d]/55 decoration-dotted underline-offset-[5px] transition-colors hover:bg-[#8b2a1d]/[0.07] ${
+          aberta ? 'bg-[#8b2a1d]/[0.07]' : ''
+        }`}
       >
-        <BookOpen className="h-[0.8em] w-[0.8em] shrink-0 self-center" aria-hidden />
+        {/* Em listas de referências, só cor e sublinhado: ícones em cada uma poluem a linha. */}
+        {continuacoes ? null : <BookOpen className="h-[0.8em] w-[0.8em] shrink-0 self-center" aria-hidden />}
         <span>{referencia.rotulo}</span>
-        <ChevronDown
-          className={`h-[0.7em] w-[0.7em] shrink-0 self-center transition-transform ${aberta ? 'rotate-180' : ''}`}
-          aria-hidden
-        />
+        {continuacoes ? null : (
+          <ChevronDown
+            className={`h-[0.7em] w-[0.7em] shrink-0 self-center transition-transform ${aberta ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
+        )}
       </button>
     );
     posicao = referencia.fim;

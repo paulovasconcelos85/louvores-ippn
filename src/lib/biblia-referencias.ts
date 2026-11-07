@@ -18,35 +18,35 @@ const LIVROS: LivroBiblico[] = [
   { codigo: 'LEV', capitulos: 27, nomes: ['levitico', 'lv', 'lev'] },
   { codigo: 'NUM', capitulos: 36, nomes: ['numeros', 'nm', 'num'] },
   { codigo: 'DEU', capitulos: 34, nomes: ['deuteronomio', 'dt', 'deut'] },
-  { codigo: 'JOS', capitulos: 24, nomes: ['josue', 'js'] },
+  { codigo: 'JOS', capitulos: 24, nomes: ['josue', 'js', 'jos'] },
   { codigo: 'JDG', capitulos: 21, nomes: ['juizes', 'jz', 'jui'] },
   { codigo: 'RUT', capitulos: 4, nomes: ['rute', 'rt'] },
   { codigo: '1SA', capitulos: 31, numero: 1, nomes: ['samuel', 'sm', 'sam'] },
   { codigo: '2SA', capitulos: 24, numero: 2, nomes: ['samuel', 'sm', 'sam'] },
   { codigo: '1KI', capitulos: 22, numero: 1, nomes: ['reis', 'rs'] },
   { codigo: '2KI', capitulos: 25, numero: 2, nomes: ['reis', 'rs'] },
-  { codigo: '1CH', capitulos: 29, numero: 1, nomes: ['cronicas', 'cr', 'cro'] },
-  { codigo: '2CH', capitulos: 36, numero: 2, nomes: ['cronicas', 'cr', 'cro'] },
+  { codigo: '1CH', capitulos: 29, numero: 1, nomes: ['cronicas', 'cr', 'cro', 'cron'] },
+  { codigo: '2CH', capitulos: 36, numero: 2, nomes: ['cronicas', 'cr', 'cro', 'cron'] },
   { codigo: 'EZR', capitulos: 10, nomes: ['esdras', 'ed', 'esd'] },
-  { codigo: 'NEH', capitulos: 13, nomes: ['neemias', 'ne', 'nee'] },
+  { codigo: 'NEH', capitulos: 13, nomes: ['neemias', 'ne', 'nee', 'neem'] },
   { codigo: 'EST', capitulos: 10, nomes: ['ester', 'et', 'est'] },
   // "Jó" (com acento) é tratado à parte: sem acento colide com "Jo" (João).
-  { codigo: 'JOB', capitulos: 42, nomes: [] },
+  { codigo: 'JOB', capitulos: 42, nomes: ['job'] },
   { codigo: 'PSA', capitulos: 150, nomes: ['salmos', 'salmo', 'sl', 'sal'] },
   { codigo: 'PRO', capitulos: 31, nomes: ['proverbios', 'pv', 'prov'] },
-  { codigo: 'ECC', capitulos: 12, nomes: ['eclesiastes', 'ec', 'ecl'] },
+  { codigo: 'ECC', capitulos: 12, nomes: ['eclesiastes', 'ec', 'ecl', 'ecles'] },
   { codigo: 'SNG', capitulos: 8, nomes: ['canticodoscanticos', 'cantares', 'ct', 'cant'] },
   { codigo: 'ISA', capitulos: 66, nomes: ['isaias', 'is', 'isa'] },
   { codigo: 'JER', capitulos: 52, nomes: ['jeremias', 'jr', 'jer'] },
-  { codigo: 'LAM', capitulos: 5, nomes: ['lamentacoes', 'lm', 'lam'] },
-  { codigo: 'EZK', capitulos: 48, nomes: ['ezequiel', 'ez', 'eze'] },
+  { codigo: 'LAM', capitulos: 5, nomes: ['lamentacoes', 'lm', 'lam', 'lament'] },
+  { codigo: 'EZK', capitulos: 48, nomes: ['ezequiel', 'ez', 'eze', 'ezeq'] },
   { codigo: 'DAN', capitulos: 12, nomes: ['daniel', 'dn', 'dan'] },
-  { codigo: 'HOS', capitulos: 14, nomes: ['oseias', 'os'] },
+  { codigo: 'HOS', capitulos: 14, nomes: ['oseias', 'os', 'ose'] },
   { codigo: 'JOL', capitulos: 3, nomes: ['joel', 'jl'] },
   { codigo: 'AMO', capitulos: 9, nomes: ['amos', 'am'] },
-  { codigo: 'OBA', capitulos: 1, nomes: ['obadias', 'ob', 'obd'] },
-  { codigo: 'JON', capitulos: 4, nomes: ['jonas', 'jn'] },
-  { codigo: 'MIC', capitulos: 7, nomes: ['miqueias', 'mq', 'miq'] },
+  { codigo: 'OBA', capitulos: 1, nomes: ['obadias', 'ob', 'obd', 'obad'] },
+  { codigo: 'JON', capitulos: 4, nomes: ['jonas', 'jn', 'jon'] },
+  { codigo: 'MIC', capitulos: 7, nomes: ['miqueias', 'mq', 'miq', 'mic'] },
   { codigo: 'NAM', capitulos: 3, nomes: ['naum', 'na'] },
   { codigo: 'HAB', capitulos: 3, nomes: ['habacuque', 'hc', 'hab'] },
   { codigo: 'ZEP', capitulos: 3, nomes: ['sofonias', 'sf', 'sof'] },
@@ -62,17 +62,17 @@ const LIVROS: LivroBiblico[] = [
   { codigo: '1CO', capitulos: 16, numero: 1, nomes: ['corintios', 'co', 'cor'] },
   { codigo: '2CO', capitulos: 13, numero: 2, nomes: ['corintios', 'co', 'cor'] },
   { codigo: 'GAL', capitulos: 6, nomes: ['galatas', 'gl', 'gal'] },
-  { codigo: 'EPH', capitulos: 6, nomes: ['efesios', 'ef', 'efe'] },
-  { codigo: 'PHP', capitulos: 4, nomes: ['filipenses', 'fp', 'fil'] },
+  { codigo: 'EPH', capitulos: 6, nomes: ['efesios', 'ef', 'efe', 'efes'] },
+  { codigo: 'PHP', capitulos: 4, nomes: ['filipenses', 'fp', 'fl', 'fil', 'filip'] },
   { codigo: 'COL', capitulos: 4, nomes: ['colossenses', 'cl', 'col'] },
-  { codigo: '1TH', capitulos: 5, numero: 1, nomes: ['tessalonicenses', 'ts', 'tes'] },
-  { codigo: '2TH', capitulos: 3, numero: 2, nomes: ['tessalonicenses', 'ts', 'tes'] },
+  { codigo: '1TH', capitulos: 5, numero: 1, nomes: ['tessalonicenses', 'ts', 'tes', 'tess'] },
+  { codigo: '2TH', capitulos: 3, numero: 2, nomes: ['tessalonicenses', 'ts', 'tes', 'tess'] },
   { codigo: '1TI', capitulos: 6, numero: 1, nomes: ['timoteo', 'tm', 'tim'] },
   { codigo: '2TI', capitulos: 4, numero: 2, nomes: ['timoteo', 'tm', 'tim'] },
-  { codigo: 'TIT', capitulos: 3, nomes: ['tito', 'tt'] },
-  { codigo: 'PHM', capitulos: 1, nomes: ['filemom', 'filemon', 'fm', 'flm'] },
+  { codigo: 'TIT', capitulos: 3, nomes: ['tito', 'tt', 'tit'] },
+  { codigo: 'PHM', capitulos: 1, nomes: ['filemom', 'filemon', 'fm', 'flm', 'filem'] },
   { codigo: 'HEB', capitulos: 13, nomes: ['hebreus', 'hb', 'heb'] },
-  { codigo: 'JAS', capitulos: 5, nomes: ['tiago', 'tg'] },
+  { codigo: 'JAS', capitulos: 5, nomes: ['tiago', 'tg', 'tiag'] },
   { codigo: '1PE', capitulos: 5, numero: 1, nomes: ['pedro', 'pe', 'ped'] },
   { codigo: '2PE', capitulos: 3, numero: 2, nomes: ['pedro', 'pe', 'ped'] },
   { codigo: '1JN', capitulos: 5, numero: 1, nomes: ['joao', 'jo'] },
@@ -124,9 +124,66 @@ export interface ReferenciaBiblica {
 }
 
 const REGEX_REFERENCIA =
-  /(?<![\p{L}\p{N}])(?:([123]|I{1,3})\s*[ºª°]?\s+|([123])\s*[ºª°]?)?(C[âa]ntico\s+dos\s+C[âa]nticos|\p{L}+)(\.?)\s*(\d{1,3})(?:\s*[:.,]\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?)?(?:\s+e\s+(\d{1,3})(?![:.,]\d))?(?![\p{L}\p{N}])/gu;
+  /(?<![\p{L}\p{N}])(?:([123]|I{1,3})\s*[ºª°]?\s+|([123])\s*[ºª°]?)?(C[âa]ntico\s+dos\s+C[âa]nticos|\p{L}+)(\.?)(?:[.,]|-(?=\s))?\s*(\d{1,3})(?:\s*[:.,]\s*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?)?(?:\s+e\s+(\d{1,3})(?![:.,]\d))?(?![\p{L}\p{N}])/gu;
 
-export function encontrarReferenciasBiblicas(texto: string): ReferenciaBiblica[] {
+// Continuação sem o nome do livro, logo após uma referência:
+// "; 61.3" (outro capítulo), ", 44" (outro versículo), ", e 2: 1", " e 26:22".
+const REGEX_CONTINUACAO =
+  /(\s*(?:[;,]\s*(?:e\s+)?|\s+e\s+))(\d{1,3})(?:\s*[:.]\s*(\d{1,3}))?(?:\s*[-–—]\s*(\d{1,3}))?(?![\p{L}\p{N}])/uy;
+
+interface OpcoesReferencias {
+  // Listas de referências (catecismos, Confissão): entende continuações.
+  continuacoes?: boolean;
+}
+
+function lerContinuacoes(
+  texto: string,
+  posicao: number,
+  livro: LivroBiblico,
+  capituloInicial: number,
+  temVersiculo: boolean
+): ReferenciaBiblica[] {
+  const continuacoes: ReferenciaBiblica[] = [];
+  let capitulo = capituloInicial;
+  let comVersiculo = temVersiculo;
+
+  REGEX_CONTINUACAO.lastIndex = posicao;
+  let match: RegExpExecArray | null;
+  while ((match = REGEX_CONTINUACAO.exec(texto)) !== null) {
+    const [trecho, separador, aTexto, bTexto, fimTexto] = match;
+    const a = Number(aTexto);
+    const b = bTexto ? Number(bTexto) : null;
+    const fim = fimTexto ? Number(fimTexto) : null;
+    let passagem: string | null = null;
+
+    if (b !== null) {
+      // "61.3", "2: 1-4": capítulo e versículo(s).
+      if (a >= 1 && a <= livro.capitulos && b >= 1) {
+        capitulo = a;
+        comVersiculo = true;
+        passagem = fim && fim > b ? `${livro.codigo}.${a}.${b}-${fim}` : `${livro.codigo}.${a}.${b}`;
+      }
+    } else if (separador.includes(',') && comVersiculo) {
+      // ", 44", ", 15-16": outro(s) versículo(s) do mesmo capítulo.
+      if (a >= 1) passagem = fim && fim > a ? `${livro.codigo}.${capitulo}.${a}-${fim}` : `${livro.codigo}.${capitulo}.${a}`;
+    } else if (a >= 1 && a <= livro.capitulos) {
+      // "; 90", " e 47": outro capítulo inteiro.
+      capitulo = a;
+      comVersiculo = false;
+      passagem = `${livro.codigo}.${a}`;
+    }
+
+    if (!passagem) break;
+
+    const inicio = match.index + separador.length;
+    const rotulo = trecho.slice(separador.length);
+    continuacoes.push({ inicio, fim: inicio + rotulo.length, rotulo, passagens: [passagem] });
+  }
+
+  return continuacoes;
+}
+
+export function encontrarReferenciasBiblicas(texto: string, opcoes: OpcoesReferencias = {}): ReferenciaBiblica[] {
   const referencias: ReferenciaBiblica[] = [];
 
   for (const match of texto.matchAll(REGEX_REFERENCIA)) {
@@ -179,9 +236,13 @@ export function encontrarReferenciasBiblicas(texto: string): ReferenciaBiblica[]
     const inicio = match.index ?? 0;
 
     referencias.push({ inicio, fim: inicio + rotulo.length, rotulo, passagens });
+
+    if (opcoes.continuacoes && !consumiuSegundoCapitulo && livro.capitulos > 1) {
+      referencias.push(...lerContinuacoes(texto, inicio + rotulo.length, livro, capitulo, v1 !== null));
+    }
   }
 
-  return referencias;
+  return referencias.sort((a, b) => a.inicio - b.inicio);
 }
 
 // Validação no servidor do que chega do navegador.

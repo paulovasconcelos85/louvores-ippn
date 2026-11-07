@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Church,
   Library,
+  ScrollText,
   Wallet
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -222,6 +223,17 @@ export default function Header() {
                     >
                       <Library className="w-4 h-4" />
                       Recursos
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMenuAberto(false);
+                        router.push('/confissoes');
+                      }}
+                      className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
+                    >
+                      <ScrollText className="w-4 h-4" />
+                      Confissões e Catecismos
                     </button>
 
                     {veTesouraria && (

@@ -20,6 +20,7 @@ import {
   Phone,
   Podcast,
   Printer,
+  ScrollText,
   Smartphone,
   X,
   Youtube,
@@ -34,6 +35,7 @@ import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { formatIgrejaLocalizacao } from '@/lib/church-utils';
 import TextoComPassagens from '@/components/TextoComPassagens';
 import VersiculoDoDia from '@/components/VersiculoDoDia';
+import ConfissaoDoDia from '@/components/ConfissaoDoDia';
 
 interface BoletimItem {
   id: string;
@@ -1255,6 +1257,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     return (
       <div className="space-y-5">
         <VersiculoDoDia locale={locale} variante="boletim" />
+        <ConfissaoDoDia locale={locale} />
         {renderBlocoTexto(texto)}
         <div className="border-t border-dotted border-[#1e1208]/25 pt-3">
           <div className="flex items-start justify-between gap-2">
@@ -1661,6 +1664,13 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             >
               <Library className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{t('home.resources')}</span>
+            </Link>
+            <Link
+              href="/confissoes"
+              className="inline-flex items-center gap-1.5 italic text-[#7a5c40] hover:text-[#8b2a1d] transition-colors"
+            >
+              <ScrollText className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Confissões e Catecismos</span>
             </Link>
             {podeInstalar ? (
               <button

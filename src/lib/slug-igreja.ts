@@ -13,7 +13,7 @@ export const SLUGS_RESERVADOS = new Set([
   'pedidos-pastorais', 'perfil', 'privacidade', 'recursos', 'redefinir-senha', 'financas', 'tesouraria', 'sw', 'manifest',
   'favicon', 'icone', 'icons', 'static', 'public', 'www', 'suporte', 'contato',
   'termos', 'blog', 'precos', 'planos', 'igreja', 'igrejas', 'novo', 'nova',
-  'teste', 'demo', 'root', 'sistema', 'oikoshub', 'hub',
+  'teste', 'demo', 'root', 'sistema', 'oikoshub', 'hub', 'confissoes', 'biblia',
 ]);
 
 // Palavras que não entram nas iniciais: "Igreja Presbiteriana da Ponta Negra" → "ippn".
