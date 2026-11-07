@@ -195,7 +195,9 @@ export function reais(valorCentavos: number) {
 export function lerValorDigitado(texto: string) {
   const limpo = texto.replace(/[^\d,.-]/g, '');
   if (!limpo) return 0;
-  const decimalComVirgula = limpo.lastIndexOf(',') > limpo.lastIndexOf('.');
+  // "1.234" e "1.234.567" sem vírgula: pontos são separadores de milhar.
+  const soMilharComPonto = /^-?\d{1,3}(\.\d{3})+$/.test(limpo);
+  const decimalComVirgula = soMilharComPonto || limpo.lastIndexOf(',') > limpo.lastIndexOf('.');
   const normalizado = decimalComVirgula ? limpo.replace(/\./g, '').replace(',', '.') : limpo.replace(/,/g, '');
   return centavos(Number(normalizado));
 }

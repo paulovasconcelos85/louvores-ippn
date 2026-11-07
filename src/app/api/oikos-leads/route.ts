@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import { lerCorpo, textoObrigatorio, textoOpcional } from '@/lib/validacao';
 
 let supabaseAdmin: SupabaseClient<Database> | null = null;
 
@@ -22,29 +24,20 @@ function getSupabaseAdmin() {
   return supabaseAdmin;
 }
 
-function sanitizeString(value: unknown, maxLength = 1000) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, maxLength) : null;
-}
+const leadSchema = z.object({
+  nome: textoObrigatorio(160, 'Nome e contato são obrigatórios.'),
+  contato: textoObrigatorio(180, 'Nome e contato são obrigatórios.'),
+  mensagem: textoOpcional(2000),
+  igreja: textoOpcional(180),
+  funcao: textoOpcional(120),
+  locale: textoOpcional(10),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-
-    const nome = sanitizeString(body.nome, 160);
-    const contato = sanitizeString(body.contato, 180);
-    const mensagem = sanitizeString(body.mensagem, 2000);
-    const igreja = sanitizeString(body.igreja, 180);
-    const funcao = sanitizeString(body.funcao, 120);
-    const locale = sanitizeString(body.locale, 10);
-
-    if (!nome || !contato) {
-      return NextResponse.json(
-        { error: 'Nome e contato são obrigatórios.' },
-        { status: 400 }
-      );
-    }
+    const corpo = await lerCorpo(request, leadSchema);
+    if (corpo.error) return corpo.error;
+    const { nome, contato, mensagem, igreja, funcao, locale } = corpo.data;
 
     const { data, error } = await getSupabaseAdmin()
       .from('oikos_leads')

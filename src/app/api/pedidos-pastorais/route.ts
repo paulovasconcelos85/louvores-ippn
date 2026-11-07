@@ -2,6 +2,8 @@ import type { Database } from '@/lib/database.types';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
+import { z } from 'zod';
+import { lerCorpo, textoObrigatorio, textoOpcional } from '@/lib/validacao';
 
 const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,21 +16,32 @@ const supabaseAdmin = createClient<Database>(
   }
 );
 
-const CATEGORIAS_VALIDAS = new Set(['oracao', 'aconselhamento', 'visita', 'pregacao', 'outro']);
+const OBRIGATORIOS = 'Igreja, nome e mensagem são obrigatórios.';
+
+const pedidoSchema = z.object({
+  igreja_id: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() : ''),
+    z.string().min(1, OBRIGATORIOS).pipe(z.uuid('Igreja inválida ou inativa.'))
+  ),
+  nome_solicitante: textoObrigatorio(160, OBRIGATORIOS),
+  email_solicitante: textoOpcional(180).transform((email) => email?.toLowerCase() ?? null),
+  telefone_solicitante: textoOpcional(40),
+  categoria: textoOpcional(30).pipe(
+    z
+      .enum(['oracao', 'aconselhamento', 'visita', 'pregacao', 'outro'], { error: 'Categoria inválida.' })
+      .nullable()
+      .transform((categoria) => categoria ?? 'oracao')
+  ),
+  assunto: textoOpcional(200),
+  mensagem: textoObrigatorio(5000, OBRIGATORIOS),
+  deseja_retorno: z.boolean().catch(true),
+});
 
 type UsuarioAcessoPedido = {
   id: string;
   pessoa_id: string | null;
   igreja_id: string | null;
 };
-
-function sanitizeString(value: unknown) {
-  return typeof value === 'string' ? value.trim() || null : null;
-}
-
-function sanitizeBoolean(value: unknown, fallback = false) {
-  return typeof value === 'boolean' ? value : fallback;
-}
 
 async function findUsuarioAcessoParaIgreja(authUserId: string, igrejaId: string) {
   const { data: acessos, error: acessosError } = await supabaseAdmin
@@ -67,27 +80,18 @@ async function findUsuarioAcessoParaIgreja(authUserId: string, igrejaId: string)
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-
-    const igrejaId = sanitizeString(body.igreja_id);
-    const nomeSolicitante = sanitizeString(body.nome_solicitante);
-    const emailSolicitante = sanitizeString(body.email_solicitante)?.toLowerCase() || null;
-    const telefoneSolicitante = sanitizeString(body.telefone_solicitante);
-    const categoria = sanitizeString(body.categoria) || 'oracao';
-    const assunto = sanitizeString(body.assunto);
-    const mensagem = sanitizeString(body.mensagem);
-    const desejaRetorno = sanitizeBoolean(body.deseja_retorno, true);
-
-    if (!igrejaId || !nomeSolicitante || !mensagem) {
-      return NextResponse.json(
-        { error: 'Igreja, nome e mensagem são obrigatórios.' },
-        { status: 400 }
-      );
-    }
-
-    if (!CATEGORIAS_VALIDAS.has(categoria)) {
-      return NextResponse.json({ error: 'Categoria inválida.' }, { status: 400 });
-    }
+    const corpo = await lerCorpo(request, pedidoSchema);
+    if (corpo.error) return corpo.error;
+    const {
+      igreja_id: igrejaId,
+      nome_solicitante: nomeSolicitante,
+      email_solicitante: emailSolicitante,
+      telefone_solicitante: telefoneSolicitante,
+      categoria,
+      assunto,
+      mensagem,
+      deseja_retorno: desejaRetorno,
+    } = corpo.data;
 
     const { data: igreja, error: igrejaError } = await supabaseAdmin
       .from('igrejas')
