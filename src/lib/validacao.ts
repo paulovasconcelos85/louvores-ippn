@@ -19,6 +19,36 @@ export function textoObrigatorio(max: number, mensagem: string) {
   );
 }
 
+/** Data ISO (AAAA-MM-DD) válida; qualquer outra coisa vira null. */
+export function dataOpcional() {
+  return z.preprocess((value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const data = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(data.getTime()) && data.toISOString().startsWith(value) ? value : null;
+  }, z.string().nullable());
+}
+
+/** Número finito dentro do intervalo; qualquer outra coisa vira null. */
+export function numeroOpcional(min: number, max: number) {
+  return z.preprocess(
+    (value) => (typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null),
+    z.number().nullable()
+  );
+}
+
+/** Lista de textos não vazios (até `maxItens`, cada um até `max`); vazia vira null. */
+export function listaDeTextos(maxItens: number, max: number) {
+  return z.preprocess((value) => {
+    if (!Array.isArray(value)) return null;
+    const itens = value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim().slice(0, max))
+      .filter(Boolean)
+      .slice(0, maxItens);
+    return itens.length ? itens : null;
+  }, z.array(z.string()).nullable());
+}
+
 /**
  * Lê o JSON do corpo e valida com o schema. Em caso de erro devolve a resposta
  * 400 pronta, com a primeira mensagem do schema.

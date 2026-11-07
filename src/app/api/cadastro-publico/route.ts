@@ -1,6 +1,15 @@
 import type { Database, TablesInsert } from '@/lib/database.types';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import {
+  dataOpcional,
+  lerCorpo,
+  listaDeTextos,
+  numeroOpcional,
+  textoObrigatorio,
+  textoOpcional,
+} from '@/lib/validacao';
 
 const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,7 +22,49 @@ const supabaseAdmin = createClient<Database>(
   }
 );
 
-const STATUS_PUBLICOS = new Set(['ativo', 'congregado', 'visitante']);
+const IGREJA_INDISPONIVEL = 'A igreja informada não está disponível para cadastro público.';
+
+const cadastroSchema = z.object({
+  igreja_id: textoOpcional(36).refine((id) => !id || z.uuid().safeParse(id).success, IGREJA_INDISPONIVEL),
+  igreja_slug: textoOpcional(80),
+  nome: textoObrigatorio(160, 'Preencha seu nome completo.'),
+  telefone: textoOpcional(40),
+  email: textoOpcional(180).transform((email) => email?.toLowerCase() ?? null),
+  sexo: z.enum(['M', 'F']).nullable().catch(null),
+  // Só os status oferecidos no formulário público; cargo e "ativo" não vêm
+  // do cliente, porque o vínculo dispara a sincronização de acesso por e-mail.
+  status_membro: z.enum(['ativo', 'congregado', 'visitante']).catch('visitante'),
+  data_nascimento: dataOpcional(),
+  logradouro: textoOpcional(200),
+  bairro: textoOpcional(120),
+  cep: textoOpcional(20),
+  cidade: textoOpcional(120),
+  uf: textoOpcional(40),
+  latitude: numeroOpcional(-90, 90),
+  longitude: numeroOpcional(-180, 180),
+  google_place_id: textoOpcional(300),
+  endereco_completo: textoOpcional(400),
+  nome_pai: textoOpcional(160),
+  nome_mae: textoOpcional(160),
+  estado_civil: textoOpcional(40),
+  conjuge_nome: textoOpcional(160),
+  conjuge_religiao: textoOpcional(120),
+  data_casamento: dataOpcional(),
+  naturalidade_cidade: textoOpcional(120),
+  naturalidade_uf: textoOpcional(40),
+  profissao: textoOpcional(120),
+  escolaridade: textoOpcional(80),
+  batizado: z.preprocess(Boolean, z.boolean()),
+  data_batismo: dataOpcional(),
+  data_profissao_fe: dataOpcional(),
+  transferido_ipb: z.preprocess(Boolean, z.boolean()),
+  transferido_outra_denominacao: textoOpcional(160),
+  cursos_discipulado: listaDeTextos(30, 120),
+  grupo_familiar_nome: textoOpcional(160),
+  grupo_familiar_lider: textoOpcional(160),
+  situacao_saude: textoOpcional(1000),
+  observacoes: textoOpcional(2000),
+});
 
 type IgrejaPublica = {
   id: string;
@@ -34,15 +85,6 @@ function trimString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function nullableString(value: unknown) {
-  const trimmed = trimString(value);
-  return trimmed || null;
-}
-
-function nullableLowerEmail(value: unknown) {
-  const trimmed = trimString(value).toLowerCase();
-  return trimmed || null;
-}
 
 async function findChurchById(igrejaId: string) {
   const { data, error } = await supabaseAdmin
@@ -165,63 +207,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const igreja = await resolveSelectedChurch(body.igreja_id, body.igreja_slug);
-
-    const nome = trimString(body.nome);
-    const telefone = trimString(body.telefone);
-    const email = nullableLowerEmail(body.email);
-    // Só os status oferecidos no formulário público; cargo e "ativo" não vêm
-    // do cliente, porque o vínculo dispara a sincronização de acesso por e-mail.
-    const statusInformado = trimString(body.status_membro);
-    const statusMembro = STATUS_PUBLICOS.has(statusInformado) ? statusInformado : 'visitante';
-
-    if (!nome) {
-      return NextResponse.json(
-        { error: 'Preencha seu nome completo.' },
-        { status: 400 }
-      );
-    }
+    const corpo = await lerCorpo(request, cadastroSchema);
+    if (corpo.error) return corpo.error;
+    const { igreja_id, igreja_slug, cidade, uf, ...dados } = corpo.data;
+    const igreja = await resolveSelectedChurch(igreja_id, igreja_slug);
 
     const now = new Date().toISOString();
     const payloadPessoa: TablesInsert<'pessoas'> = {
-      nome,
-      telefone: telefone || null,
-      sexo: body.sexo === 'M' || body.sexo === 'F' ? body.sexo : null,
-      status_membro: statusMembro,
-      data_nascimento: nullableString(body.data_nascimento),
-      email,
-      logradouro: nullableString(body.logradouro),
-      bairro: nullableString(body.bairro),
-      cep: nullableString(body.cep),
-      cidade: nullableString(body.cidade) || igreja.cidade || null,
-      uf: nullableString(body.uf) || igreja.uf || null,
-      latitude: body.latitude ?? null,
-      longitude: body.longitude ?? null,
-      google_place_id: nullableString(body.google_place_id),
-      endereco_completo: nullableString(body.endereco_completo),
-      nome_pai: nullableString(body.nome_pai),
-      nome_mae: nullableString(body.nome_mae),
-      estado_civil: nullableString(body.estado_civil),
-      conjuge_nome: nullableString(body.conjuge_nome),
-      conjuge_religiao: nullableString(body.conjuge_religiao),
-      data_casamento: nullableString(body.data_casamento),
-      naturalidade_cidade: nullableString(body.naturalidade_cidade),
-      naturalidade_uf: nullableString(body.naturalidade_uf),
-      profissao: nullableString(body.profissao),
-      escolaridade: nullableString(body.escolaridade),
-      batizado: Boolean(body.batizado),
-      data_batismo: nullableString(body.data_batismo),
-      data_profissao_fe: nullableString(body.data_profissao_fe),
-      transferido_ipb: Boolean(body.transferido_ipb),
-      transferido_outra_denominacao: nullableString(body.transferido_outra_denominacao),
-      cursos_discipulado: Array.isArray(body.cursos_discipulado)
-        ? body.cursos_discipulado
-        : null,
-      grupo_familiar_nome: nullableString(body.grupo_familiar_nome),
-      grupo_familiar_lider: nullableString(body.grupo_familiar_lider),
-      situacao_saude: nullableString(body.situacao_saude),
-      observacoes: nullableString(body.observacoes),
+      ...dados,
+      cidade: cidade || igreja.cidade || null,
+      uf: uf || igreja.uf || null,
       ativo: true,
       cargo: 'membro',
       atualizado_em: now,
@@ -249,7 +244,7 @@ export async function POST(request: NextRequest) {
       .insert({
         pessoa_id: pessoaId,
         igreja_id: igreja.id,
-        status_membro: statusMembro,
+        status_membro: dados.status_membro,
         cargo: 'membro',
         ativo: true,
         atualizado_em: now,
