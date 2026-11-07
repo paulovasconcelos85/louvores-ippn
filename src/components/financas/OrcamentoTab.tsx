@@ -5,6 +5,7 @@ import { Loader2, Save } from 'lucide-react';
 import { lerValorDigitado } from '@/lib/financas';
 import type { ResumoFinanceiro } from '@/lib/financas-resumo';
 import { botaoPrimario, finApi, inputClass, labelClass, type ContextoFinancas } from './api';
+import CampoValor from './CampoValor';
 
 // Orçamento anual por categoria: previsto (votado pelo Conselho) x realizado.
 export default function OrcamentoTab({
@@ -126,11 +127,10 @@ export default function OrcamentoTab({
                         <td className="px-4 py-2">{c.nome}</td>
                         <td className="px-4 py-1.5 text-right">
                           {podeEditar ? (
-                            <input
-                              inputMode="decimal"
-                              value={previsto[c.id] || ''}
-                              onChange={(e) => setPrevisto((atual) => ({ ...atual, [c.id]: e.target.value }))}
-                              placeholder="0,00"
+                            <CampoValor
+                              valor={previsto[c.id] || ''}
+                              onChange={(texto) => setPrevisto((atual) => ({ ...atual, [c.id]: texto }))}
+                              moeda={moeda}
                               className={`${inputClass} py-1.5 text-right`}
                             />
                           ) : (

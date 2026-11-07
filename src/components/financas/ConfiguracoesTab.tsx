@@ -14,6 +14,7 @@ import {
   type GrupoIpb,
   type PapelEquipe,
 } from '@/lib/financas';
+import CampoValor from './CampoValor';
 import PessoaPicker from './PessoaPicker';
 import { botaoPrimario, botaoSecundario, finApi, inputClass, labelClass, type ContextoFinancas } from './api';
 
@@ -269,7 +270,7 @@ function Contas({
           )}
           <label className="block">
             <span className={labelClass}>Saldo inicial</span>
-            <input inputMode="decimal" value={editando.saldoTexto || ''} onChange={(e) => setEditando({ ...editando, saldoTexto: e.target.value })} placeholder="0,00" className={`${inputClass} text-right`} />
+            <CampoValor valor={editando.saldoTexto || ''} onChange={(saldoTexto) => setEditando({ ...editando, saldoTexto })} moeda={moeda} permitirNegativo className={`${inputClass} text-right`} />
           </label>
           <label className="block">
             <span className={labelClass}>Na data de *</span>

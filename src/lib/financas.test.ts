@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { centavos, intervaloDoPeriodo, lerValorDigitado, nomeDoPeriodo, trimestreDe } from '@/lib/financas';
+import {
+  centavos,
+  criarFormatadorMoeda,
+  intervaloDoPeriodo,
+  lerValorDigitado,
+  nomeDoPeriodo,
+  trimestreDe,
+  valorDaMascara,
+} from '@/lib/financas';
 
 describe('centavos', () => {
   it('arredonda reais para centavos', () => {
@@ -61,5 +69,55 @@ describe('intervaloDoPeriodo', () => {
   it('nomeia o período', () => {
     expect(nomeDoPeriodo(0)).toBe('Exercício completo');
     expect(nomeDoPeriodo(3)).toBe('3º trimestre');
+  });
+});
+
+describe('valorDaMascara', () => {
+  const brl = criarFormatadorMoeda('BR');
+  const eur = criarFormatadorMoeda('PT');
+
+  /** Simula digitar tecla a tecla no fim do campo, como o CampoValor exibe. */
+  function digitar(moeda: (c: number) => string, teclas: string[], permitirNegativo = false) {
+    let exibido = '';
+    for (const tecla of teclas) {
+      const novo = tecla === '⌫' ? exibido.slice(0, -1) : exibido + tecla;
+      const valor = valorDaMascara(exibido, novo, permitirNegativo);
+      exibido = valor === null ? '' : moeda(valor);
+    }
+    return exibido ? lerValorDigitado(exibido) : null;
+  }
+
+  it('dígitos entram pela direita', () => {
+    expect(digitar(brl, ['1'])).toBe(1);
+    expect(digitar(brl, ['1', '2', '3', '4', '5'])).toBe(12345);
+    expect(digitar(brl, ['1', '2', '3', '4', '5', '6', '7'])).toBe(1234567);
+  });
+
+  it('o texto formatado volta aos mesmos centavos em várias moedas', () => {
+    for (const pais of ['BR', 'PT', 'ES', 'US', 'CA', 'AO', 'MZ', 'AR', 'MX']) {
+      expect(digitar(criarFormatadorMoeda(pais), ['9', '8', '7', '6', '5', '4'])).toBe(987654);
+      expect(digitar(criarFormatadorMoeda(pais), ['5', '0', '-'], true)).toBe(-50);
+    }
+  });
+
+  it('apagar remove o último dígito, mesmo com o símbolo no fim (€)', () => {
+    expect(digitar(brl, ['1', '2', '3', '⌫'])).toBe(12);
+    expect(digitar(eur, ['1', '2', '3', '⌫'])).toBe(12);
+    expect(digitar(brl, ['1', '⌫'])).toBeNull();
+  });
+
+  it('ignora letras e zeros à esquerda', () => {
+    expect(digitar(brl, ['a', '0', '0', '5'])).toBe(5);
+  });
+
+  it('"-" alterna o sinal só quando permitido', () => {
+    expect(digitar(brl, ['5', '0', '-'], true)).toBe(-50);
+    expect(digitar(brl, ['5', '0', '-', '-'], true)).toBe(50);
+    expect(digitar(brl, ['5', '-', '0'], true)).toBe(-50);
+    expect(digitar(brl, ['5', '0', '-'])).toBe(50);
+  });
+
+  it('limita a 12 dígitos', () => {
+    expect(digitar(brl, Array(15).fill('9'))).toBe(999999999999);
   });
 });

@@ -21,6 +21,7 @@ import {
   type FinLancamento,
   type TipoLancamento,
 } from '@/lib/financas';
+import CampoValor from './CampoValor';
 import PessoaPicker from './PessoaPicker';
 import { botaoPrimario, botaoSecundario, finApi, inputClass, labelClass, type ContextoFinancas } from './api';
 
@@ -285,6 +286,7 @@ export default function LancamentosTab({
           key={chaveFormulario}
           igrejaId={igrejaId}
           contexto={contexto}
+          moeda={moeda}
           inicial={rascunho}
           onFechar={() => setRascunho(null)}
           onSalvo={(continuar, ultimo) => {
@@ -311,12 +313,14 @@ function Cartao({ rotulo, valor, cor }: { rotulo: string; valor: string; cor: st
 function FormularioLancamento({
   igrejaId,
   contexto,
+  moeda,
   inicial,
   onFechar,
   onSalvo,
 }: {
   igrejaId: string;
   contexto: ContextoFinancas;
+  moeda: (centavos: number) => string;
   inicial: Rascunho;
   onFechar: () => void;
   onSalvo: (continuar: boolean, ultimo: Rascunho) => void;
@@ -428,11 +432,10 @@ function FormularioLancamento({
           </label>
           <label className="block">
             <span className={labelClass}>Valor *</span>
-            <input
-              inputMode="decimal"
-              value={form.valorTexto}
-              onChange={(e) => atualizar({ valorTexto: e.target.value })}
-              placeholder="0,00"
+            <CampoValor
+              valor={form.valorTexto}
+              onChange={(valorTexto) => atualizar({ valorTexto })}
+              moeda={moeda}
               className={`${inputClass} text-right font-semibold tabular-nums`}
               autoFocus
               required

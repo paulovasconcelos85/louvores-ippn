@@ -202,6 +202,25 @@ export function lerValorDigitado(texto: string) {
   return centavos(Number(normalizado));
 }
 
+/**
+ * Máscara de valor no estilo de app de banco: os dígitos entram pela direita
+ * (1, 2, 3 → 1,23). Recebe o texto exibido antes e depois da edição e devolve
+ * os centavos, ou null quando o campo ficou vazio. Apagar um símbolo da moeda
+ * (ex.: o "€" no fim) apaga o último dígito; "-" alterna o sinal.
+ */
+export function valorDaMascara(anterior: string, digitado: string, permitirNegativo = false) {
+  const digitosAntes = anterior.replace(/\D/g, '');
+  let digitos = digitado.replace(/\D/g, '');
+  if (digitos === digitosAntes && digitado.length < anterior.length) digitos = digitos.slice(0, -1);
+  digitos = digitos.replace(/^0+/, '').slice(0, 12);
+  if (!digitos) return null;
+
+  const negativoAntes = anterior.includes('-');
+  const mexeuNoSinal = digitado.split('-').length !== anterior.split('-').length;
+  const negativo = permitirNegativo && (mexeuNoSinal ? !negativoAntes : negativoAntes);
+  return Number(digitos) * (negativo ? -1 : 1);
+}
+
 export function moedaDoPais(pais?: string | null) {
   switch ((pais || 'BR').toUpperCase()) {
     case 'PT':
