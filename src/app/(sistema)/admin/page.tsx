@@ -37,6 +37,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import PerfilRepertorioResumo from '@/components/PerfilRepertorioResumo';
 import PrimeirosPassos from '@/components/PrimeirosPassos';
+import VersiculoDoDia from '@/components/VersiculoDoDia';
 import { useAcessoFinancas } from '@/hooks/useAcessoFinancas';
 
 interface MinhaProximaEscala {
@@ -331,6 +332,8 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
+
+        <VersiculoDoDia locale={locale} variante="painel" />
 
         {igrejaAtual?.id && podeGerenciarIgreja ? (
           <PrimeirosPassos igrejaId={igrejaAtual.id} boasVindas={boasVindas} />

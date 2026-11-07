@@ -119,6 +119,12 @@ export async function buscarPassagem(bibliaId: number, passagemId: string): Prom
   return { id: dados.id, referencia: dados.reference, blocos: converterHtml(dados.content) };
 }
 
+// Dia do ano (1–366) -> passagem do versículo do dia ("PHP.4.8").
+export async function buscarVersiculoDoDia(dia: number): Promise<string> {
+  const dados = await chamarApi<{ day: number; passage_id: string }>(`/verse_of_the_days/${dia}`);
+  return dados.passage_id;
+}
+
 export async function buscarVersao(bibliaId: number): Promise<VersaoBiblica> {
   const dados = await chamarApi<{
     id: number;

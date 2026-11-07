@@ -33,6 +33,7 @@ import { resolveLocalizedText } from '@/lib/church-i18n';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { formatIgrejaLocalizacao } from '@/lib/church-utils';
 import TextoComPassagens from '@/components/TextoComPassagens';
+import VersiculoDoDia from '@/components/VersiculoDoDia';
 
 interface BoletimItem {
   id: string;
@@ -1253,6 +1254,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
     return (
       <div className="space-y-5">
+        <VersiculoDoDia locale={locale} variante="boletim" />
         {renderBlocoTexto(texto)}
         <div className="border-t border-dotted border-[#1e1208]/25 pt-3">
           <div className="flex items-start justify-between gap-2">
