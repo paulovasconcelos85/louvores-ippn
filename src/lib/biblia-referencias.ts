@@ -128,8 +128,9 @@ const REGEX_REFERENCIA =
 
 // Continuação sem o nome do livro, logo após uma referência:
 // "; 61.3" (outro capítulo), ", 44" (outro versículo), ", e 2: 1", " e 26:22".
+// Não vale quando o número abre um livro numerado: "; 1 João 5:11" é outra referência.
 const REGEX_CONTINUACAO =
-  /(\s*(?:[;,]\s*(?:e\s+)?|\s+e\s+))(\d{1,3})(?:\s*[:.]\s*(\d{1,3}))?(?:\s*[-–—]\s*(\d{1,3}))?(?![\p{L}\p{N}])/uy;
+  /(\s*(?:[;,]\s*(?:e\s+)?|\s+e\s+))(\d{1,3})(?:\s*[:.]\s*(\d{1,3}))?(?:\s*[-–—]\s*(\d{1,3}))?(?![\p{L}\p{N}]|\s+(?!e\s)\p{L})/uy;
 
 interface OpcoesReferencias {
   // Listas de referências (catecismos, Confissão): entende continuações.

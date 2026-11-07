@@ -994,7 +994,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isCadaDiaSection = (secao: BoletimSecao) =>
     secao.tipo === 'cada_dia' ||
     secao.id === 'cada-dia-devocional' ||
-    secao.titulo.trim().toLowerCase() === 'cada dia';
+    ['cada dia', 'meditação do dia'].includes(secao.titulo.trim().toLowerCase());
   const nomeExibicaoIgreja =
     igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
   const logoIgrejaUrl = igrejaDetalhes?.logo_url?.trim() || null;
@@ -1260,6 +1260,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       <div className="space-y-5">
         <VersiculoDoDia locale={locale} variante="boletim" />
         <ConfissaoDoDia locale={locale} />
+        <p className="text-center font-fell text-[1.15rem] tracking-[0.3em] text-[#8b2a1d]">DEVOCIONAL CADA DIA</p>
         {renderBlocoTexto(texto)}
         <div className="border-t border-dotted border-[#1e1208]/25 pt-3">
           <div className="flex items-start justify-between gap-2">

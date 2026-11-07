@@ -718,7 +718,7 @@ function getNextSectionOrder(secoes: LegacyBoletimSecao[]) {
 function isCadaDiaSection(secao: LegacyBoletimSecao) {
   return (
     secao.id === CADA_DIA_SECTION_ID ||
-    secao.titulo.trim().toLowerCase() === 'cada dia'
+    ['cada dia', 'meditação do dia'].includes(secao.titulo.trim().toLowerCase())
   );
 }
 
@@ -737,7 +737,8 @@ async function buildCadaDiaSection(
       igreja_id: null,
       culto_id: secaoExistente?.culto_id || null,
       tipo: 'outro',
-      titulo: 'Cada dia',
+      // Versículo do dia + confissão do dia + devocional Cada Dia.
+      titulo: 'Meditação do dia',
       icone: null,
       ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
       visivel: true,
