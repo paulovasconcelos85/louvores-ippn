@@ -32,6 +32,7 @@ import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { resolveLocalizedText } from '@/lib/church-i18n';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { formatIgrejaLocalizacao } from '@/lib/church-utils';
+import TextoComPassagens from '@/components/TextoComPassagens';
 
 interface BoletimItem {
   id: string;
@@ -1146,7 +1147,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
   const renderBlocoTexto = (
     texto: string,
-    tone: 'default' | 'emphasis' | 'muted' = 'default'
+    tone: 'default' | 'emphasis' | 'muted' = 'default',
+    // Liturgia: referências bíblicas viram botões que abrem o texto (YouVersion).
+    comPassagens = false
   ) => {
     const linhas = texto.split('\n');
     const textoClassName =
@@ -1190,22 +1193,44 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
           const itemLista = extrairTextoMarcadorLista(valor);
           if (itemLista) {
+            const itemClassName = `${textoClassName} flex items-start gap-2.5 text-[22px] leading-[1.75] sm:text-[23px] break-words`;
+
+            // Com passagens o painel do texto bíblico é um <div>: o item vira <div>.
+            if (comPassagens) {
+              return (
+                <div key={`${itemLista}-${index}`} className={itemClassName}>
+                  <span className="text-[#8b2a1d]" aria-hidden>❧</span>
+                  <div className="flex-1 min-w-0 break-words">
+                    <TextoComPassagens texto={itemLista} locale={locale} renderTexto={parseInlinePastoral} />
+                  </div>
+                </div>
+              );
+            }
+
             return (
-              <p
-                key={`${itemLista}-${index}`}
-                className={`${textoClassName} flex items-start gap-2.5 text-[22px] leading-[1.75] sm:text-[23px] break-words`}
-              >
+              <p key={`${itemLista}-${index}`} className={itemClassName}>
                 <span className="text-[#8b2a1d]" aria-hidden>❧</span>
                 <span className="flex-1 min-w-0 break-words">{parseInlinePastoral(itemLista)}</span>
               </p>
             );
           }
 
+          const paragrafoClassName = `${textoClassName} text-[22px] whitespace-pre-line leading-[1.75] sm:text-[23px] break-words`;
+
+          if (comPassagens) {
+            return (
+              <TextoComPassagens
+                key={`${valor}-${index}`}
+                texto={valor}
+                locale={locale}
+                className={paragrafoClassName}
+                renderTexto={parseInlinePastoral}
+              />
+            );
+          }
+
           return (
-            <p
-              key={`${valor}-${index}`}
-              className={`${textoClassName} text-[22px] whitespace-pre-line leading-[1.75] sm:text-[23px] break-words`}
-            >
+            <p key={`${valor}-${index}`} className={paragrafoClassName}>
               {parseInlinePastoral(valor)}
             </p>
           );
@@ -1800,17 +1825,19 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                   className={`py-5 ${itemIndex > 0 ? 'border-t border-dotted border-[#1e1208]/20' : ''}`}
                                 >
                                   <div className="space-y-3">
-                                    <p className="flex items-baseline gap-2 text-[22px] sm:text-[1.544rem]/[1.474] font-semibold leading-snug text-[#1e1208]">
+                                    <div className="flex items-baseline gap-2 text-[22px] sm:text-[1.544rem]/[1.474] font-semibold leading-snug text-[#1e1208]">
                                       <span className="text-[#8b2a1d] font-normal" aria-hidden>¶</span>
-                                      {grupo.titulo}
-                                    </p>
+                                      <div className="min-w-0 flex-1">
+                                        <TextoComPassagens texto={grupo.titulo} locale={locale} renderTexto={(t) => t} />
+                                      </div>
+                                    </div>
 
                                     {grupo.publicos.length > 0 ? (
                                       <div className="space-y-2 pl-5">
                                         {grupo.publicos.map((corpo, corpoIndex) =>
                                           corpo ? (
                                             <div key={`${grupo.id}-publico-${corpoIndex}`}>
-                                              {renderBlocoTexto(corpo)}
+                                              {renderBlocoTexto(corpo, 'default', true)}
                                             </div>
                                           ) : null
                                         )}
