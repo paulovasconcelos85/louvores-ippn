@@ -12,6 +12,8 @@ const supabaseAdmin = createClient(
   }
 );
 
+const STATUS_PUBLICOS = new Set(['ativo', 'congregado', 'visitante']);
+
 type IgrejaPublica = {
   id: string;
   nome: string;
@@ -168,7 +170,10 @@ export async function POST(request: NextRequest) {
     const nome = trimString(body.nome);
     const telefone = trimString(body.telefone);
     const email = nullableLowerEmail(body.email);
-    const statusMembro = trimString(body.status_membro) || 'visitante';
+    // Só os status oferecidos no formulário público; cargo e "ativo" não vêm
+    // do cliente, porque o vínculo dispara a sincronização de acesso por e-mail.
+    const statusInformado = trimString(body.status_membro);
+    const statusMembro = STATUS_PUBLICOS.has(statusInformado) ? statusInformado : 'visitante';
 
     if (!nome) {
       return NextResponse.json(
@@ -216,7 +221,7 @@ export async function POST(request: NextRequest) {
       grupo_familiar_lider: nullableString(body.grupo_familiar_lider),
       situacao_saude: nullableString(body.situacao_saude),
       observacoes: nullableString(body.observacoes),
-      ativo: body.ativo !== false,
+      ativo: true,
       cargo: 'membro',
       atualizado_em: now,
     };
@@ -245,7 +250,7 @@ export async function POST(request: NextRequest) {
         igreja_id: igreja.id,
         status_membro: statusMembro,
         cargo: 'membro',
-        ativo: body.ativo !== false,
+        ativo: true,
         atualizado_em: now,
       });
 

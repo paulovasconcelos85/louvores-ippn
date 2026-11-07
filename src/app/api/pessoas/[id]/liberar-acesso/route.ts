@@ -73,6 +73,11 @@ export async function POST(
 
     if (vinculoError) throw vinculoError;
 
+    // Só libera acesso para quem é da igreja atual: o id na URL pode ser de outra igreja.
+    if (!vinculo && !permissionContext.isSuperAdmin) {
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada.');
+    }
+
     const { data: vinculosPessoa, error: vinculosPessoaError } = await supabaseAdmin
       .from('pessoas_igrejas')
       .select('igreja_id, cargo, ativo')

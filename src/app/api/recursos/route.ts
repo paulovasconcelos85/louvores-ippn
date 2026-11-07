@@ -102,8 +102,18 @@ async function ensureEditAccess(request: NextRequest, igrejaId?: string | null) 
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const igrejaId = searchParams.get('igreja_id');
+  let igrejaId = searchParams.get('igreja_id');
   const incluirInativos = searchParams.get('incluir_inativos') === 'true';
+
+  // Recursos inativos são rascunhos/ocultos: só quem edita, e só da própria igreja.
+  if (incluirInativos) {
+    const auth = await ensureEditAccess(request, igrejaId);
+    if (auth.error) return auth.error;
+    igrejaId = auth.contexto.igrejaId;
+    if (!igrejaId) {
+      return apiError('CHURCH_REQUIRED', 400, 'Nenhuma igreja selecionada.');
+    }
+  }
 
   try {
     const supabase = getSupabaseAdmin();
@@ -174,7 +184,9 @@ export async function POST(request: NextRequest) {
     const { data, error } = await (getSupabaseAdmin().from('recursos_multimidia') as any)
       .insert({
         ...payload,
-        igreja_id: igrejaId || auth.contexto.igrejaId,
+        // A igreja autorizada, não a pedida: getUserPermissionContext troca
+        // por outra quando o usuário não tem vínculo com a igreja informada.
+        igreja_id: auth.contexto.igrejaId,
         criado_por: auth.contexto.user.id,
         atualizado_por: auth.contexto.user.id,
       })
@@ -224,6 +236,7 @@ export async function PATCH(request: NextRequest) {
         atualizado_por: auth.contexto.user.id,
       })
       .eq('id', id)
+      .eq('igreja_id', auth.contexto.igrejaId)
       .select('*')
       .single();
 

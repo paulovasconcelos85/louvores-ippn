@@ -279,11 +279,13 @@ export async function POST(request: NextRequest) {
       criados += 1;
     }
 
-    // Invalida o token após confirmação bem-sucedida para evitar reutilização
-    await supabaseAdmin
+    // Invalida o token após confirmação bem-sucedida para evitar reutilização.
+    // A coluna é NOT NULL: troca por um token novo em vez de apagar.
+    const { error: tokenError } = await supabaseAdmin
       .from('pessoas')
-      .update({ cadastro_token: null })
+      .update({ cadastro_token: crypto.randomUUID() })
       .eq('id', pessoa.id);
+    if (tokenError) console.error('Erro ao invalidar token de cadastro:', tokenError);
 
     return NextResponse.json({ success: true, filhos_criados: criados });
   } catch (error: any) {

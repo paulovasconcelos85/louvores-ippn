@@ -278,6 +278,11 @@ export async function PATCH(
 
     if (vinculoLookupError) throw vinculoLookupError;
 
+    // Só edita quem é da igreja atual: o id na URL pode ser de outra igreja.
+    if (!vinculoExistente && !permissionContext.isSuperAdmin) {
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada');
+    }
+
     const { error: todosVinculosPessoaError } = await supabaseAdmin
       .from('pessoas_igrejas')
       .select('id, igreja_id, cargo, status_membro, ativo')
@@ -478,6 +483,11 @@ export async function DELETE(
       .eq('pessoa_id', id);
 
     if (vinculosError) throw vinculosError;
+
+    // Só remove quem é da igreja atual: o id na URL pode ser de outra igreja.
+    if (!permissionContext.isSuperAdmin && !(vinculos || []).some((v) => v.igreja_id === igrejaId)) {
+      return apiError('PERSON_NOT_FOUND', 404, 'Pessoa não encontrada');
+    }
 
     const temAcesso = await pessoaTemAcesso(id, pessoa.usuario_id);
 
