@@ -36,6 +36,7 @@ import { formatIgrejaLocalizacao } from '@/lib/church-utils';
 import TextoComPassagens from '@/components/TextoComPassagens';
 import VersiculoDoDia from '@/components/VersiculoDoDia';
 import ConfissaoDoDia from '@/components/ConfissaoDoDia';
+import { lembrarBoletim } from '@/components/VoltarBoletim';
 
 interface BoletimItem {
   id: string;
@@ -856,6 +857,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         const igreja = data.igreja as IgrejaSelecionavel | null;
         setIgrejas(igreja ? [igreja] : []);
         setIgrejaAtualId(igreja?.id || null);
+        if (igreja) lembrarBoletim(igrejaSlug, igreja.sigla || igreja.nome);
       } catch (error: unknown) {
         console.error('Erro ao carregar igreja:', getMensagemErro(error, 'Erro ao carregar igreja.'));
         if (!active) return;
