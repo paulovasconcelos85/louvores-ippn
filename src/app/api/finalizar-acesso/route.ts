@@ -1,3 +1,4 @@
+import type { Database } from '@/lib/database.types';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
   const cookieStore = await cookies();
   const authHeader = request.headers.get('Authorization');
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   const bearerToken = authHeader?.replace(/^Bearer\s+/i, '').trim() || undefined;
 
   if (bearerToken) {
-    const supabaseClient = createClient(
+    const supabaseClient = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {

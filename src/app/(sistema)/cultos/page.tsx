@@ -1476,7 +1476,7 @@ async function inserirLouvorItensComCompatibilidadeI18n<T extends { conteudo_pub
     void conteudo_publico_i18n;
     return row;
   });
-  const fallbackResult = await supabase.from('louvor_itens').insert(rowsSemI18n);
+  const fallbackResult = await supabase.from('louvor_itens').insert(rowsSemI18n as unknown as T[]);
 
   if (fallbackResult.error) throw fallbackResult.error;
 }

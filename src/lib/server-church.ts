@@ -1,10 +1,11 @@
+import type { Database } from '@/lib/database.types';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { isSuperAdmin, podeGerenciarUsuariosComTags, podePastorearMembros } from '@/lib/permissions';
 
 function getSupabaseAdmin() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
@@ -17,7 +18,7 @@ function getSupabaseAdmin() {
 }
 
 function getSupabaseAnonClient() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -46,7 +47,7 @@ type UsuarioAcessoBasico = {
 
 async function getAuthenticatedUserFromCookies() {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

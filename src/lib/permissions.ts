@@ -1,7 +1,12 @@
 // lib/permissions.ts
 import { ADMIN_EMAILS } from './admin-config';
+import { Constants, type Database } from './database.types';
 
-export type CargoTipo = 'membro' | 'diacono' | 'presbitero' | 'pastor' | 'seminarista' | 'staff' | 'musico' | 'admin' | 'superadmin';
+export type CargoTipo = Database['public']['Enums']['cargo_tipo'];
+
+export function isCargoTipo(value: unknown): value is CargoTipo {
+  return typeof value === 'string' && (Constants.public.Enums.cargo_tipo as readonly string[]).includes(value);
+}
 
 export interface TagPermissao {
   id: string;
@@ -245,6 +250,10 @@ export function getCargoLabel(cargo: CargoTipo): string {
     staff: 'Staff',
     musico: 'Músico',
     admin: 'Administrador',
+    secretario: 'Secretário',
+    tesoureiro: 'Tesoureiro',
+    congregado: 'Congregado',
+    visitante: 'Visitante',
     superadmin: 'Super Admin'
   };
   return labels[cargo];
@@ -263,6 +272,10 @@ export function getCargoCor(cargo: CargoTipo): string {
     staff: 'bg-cyan-100 text-cyan-800',
     musico: 'bg-emerald-100 text-emerald-800',
     admin: 'bg-red-100 text-red-800',
+    secretario: 'bg-sky-100 text-sky-800',
+    tesoureiro: 'bg-amber-100 text-amber-800',
+    congregado: 'bg-stone-100 text-stone-700',
+    visitante: 'bg-gray-100 text-gray-600',
     superadmin: 'bg-orange-100 text-orange-800'
   };
   return cores[cargo];
@@ -281,6 +294,10 @@ export function getCargoIcone(cargo: CargoTipo): string {
     staff: '🛠️',
     musico: '🎵',
     admin: '🔐',
+    secretario: '📝',
+    tesoureiro: '💰',
+    congregado: '🙋',
+    visitante: '👋',
     superadmin: '⭐'
   };
   return icones[cargo];

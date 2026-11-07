@@ -1,9 +1,10 @@
+import type { Database } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext, resolveAuthorizedCurrentIgrejaId } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -204,7 +205,7 @@ export async function POST(
             {
               usuario_id: usuarioAcessoId,
               igreja_id: vinculoPessoa.igreja_id,
-              cargo: vinculoPessoa.cargo ?? cargo,
+              cargo: vinculoPessoa.cargo ?? cargo ?? 'membro',
               ativo: vinculoPessoa.ativo ?? ativo,
             },
             { onConflict: 'usuario_id,igreja_id' }

@@ -327,6 +327,10 @@ export default function PastorarMembrosPage() {
       presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
       pastor: tr('Pastor', 'Pastor', 'Pastor'),
       admin: tr('Administrador', 'Administrador', 'Administrator'),
+      secretario: tr('Secretário', 'Secretario', 'Clerk'),
+      tesoureiro: tr('Tesoureiro', 'Tesorero', 'Treasurer'),
+      congregado: tr('Congregado', 'Congregante', 'Congregant'),
+      visitante: tr('Visitante', 'Visitante', 'Visitor'),
       superadmin: tr('Super Admin', 'Super Admin', 'Super Admin'),
     } satisfies Record<CargoTipo, string>)[cargo];
 

@@ -1,10 +1,12 @@
+import type { Database } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserPermissionContext } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
+import { isCargoTipo } from '@/lib/permissions';
 
 // Cliente Supabase Admin
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -144,7 +146,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('pessoas_igrejas.ativo', ativo === 'true');
     }
     
-    if (cargo) {
+    if (isCargoTipo(cargo)) {
       query = query.eq('pessoas_igrejas.cargo', cargo);
     }
     

@@ -1,7 +1,8 @@
+import type { Database, TablesInsert } from '@/lib/database.types';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -183,10 +184,10 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    const payloadPessoa: Record<string, unknown> = {
+    const payloadPessoa: TablesInsert<'pessoas'> = {
       nome,
       telefone: telefone || null,
-      sexo: nullableString(body.sexo),
+      sexo: body.sexo === 'M' || body.sexo === 'F' ? body.sexo : null,
       status_membro: statusMembro,
       data_nascimento: nullableString(body.data_nascimento),
       email,

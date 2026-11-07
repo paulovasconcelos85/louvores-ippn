@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
-    const contar = (tabela: string) =>
+    const contar = (tabela: 'igreja_cultos' | 'Louvores IPPN' | 'pessoas_igrejas' | 'escalas') =>
       supabaseAdmin.from(tabela).select('*', { count: 'exact', head: true }).eq('igreja_id', igrejaId);
 
     const [igrejaResult, cultosResult, boletinsResult, pessoasResult, escalasResult] = await Promise.all([

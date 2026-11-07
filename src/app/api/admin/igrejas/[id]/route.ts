@@ -1,3 +1,4 @@
+import type { Database, Json } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { apiError, apiSuccess } from '@/lib/api-response';
@@ -5,7 +6,7 @@ import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church
 import { verificarGestorIgreja } from '@/lib/igreja-onboarding';
 import { normalizarSlug, validarSlug } from '@/lib/slug-igreja';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -34,7 +35,7 @@ function sanitizeStringArray(value: unknown) {
 
   const items = value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return items.length > 0 ? items : null;
 }
@@ -78,8 +79,8 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     whatsapp: sanitizeString(body.whatsapp),
     telefone: sanitizeString(body.telefone),
     complemento: sanitizeString(body.complemento),
-    tipos_liturgicos: body.tipos_liturgicos ?? null,
-    modelo_liturgico_padrao: body.modelo_liturgico_padrao ?? null,
+    tipos_liturgicos: (body.tipos_liturgicos ?? null) as Json,
+    modelo_liturgico_padrao: (body.modelo_liturgico_padrao ?? null) as Json,
     modo_repertorio: sanitizeString(body.modo_repertorio),
     permite_cadastro_canticos: sanitizeBoolean(body.permite_cadastro_canticos, true),
     pais: normalizePais(body.pais),
@@ -122,7 +123,7 @@ function normalizeCultos(igrejaId: string, rawItems: unknown) {
         ordem: sanitizeNumber(row.ordem) ?? index + 1,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function normalizeRedes(igrejaId: string, rawItems: unknown) {
@@ -144,7 +145,7 @@ function normalizeRedes(igrejaId: string, rawItems: unknown) {
         ordem: sanitizeNumber(row.ordem) ?? index + 1,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
@@ -192,13 +193,13 @@ function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
         bloco,
         ordem: sanitizeNumber(row.ordem) ?? index + 1,
         tipo,
-        descricao_padrao,
+        descricao_padrao: descricao_padrao || '',
         conteudo_publico_padrao_i18n: conteudoPublicoCompactado,
         descricao_interna_padrao_i18n: descricaoInternaCompactada,
         tem_cantico: typeof row.tem_cantico === 'boolean' ? row.tem_cantico : null,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function sortByOrdem<T extends { ordem?: number | null; horario?: string | null }>(items: T[]) {
@@ -317,7 +318,7 @@ export async function PATCH(
 
     const { data: igreja, error: igrejaError } = await supabaseAdmin
       .from('igrejas')
-      .update(igrejaPayload)
+      .update({ ...igrejaPayload, nome: igrejaPayload.nome, slug: igrejaPayload.slug })
       .eq('id', id)
       .select('*')
       .single();

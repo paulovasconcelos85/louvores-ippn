@@ -1,3 +1,4 @@
+import type { Database, TablesUpdate } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -5,8 +6,9 @@ import {
   resolveAuthorizedCurrentIgrejaId,
 } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
+import { isCargoTipo, type CargoTipo } from '@/lib/permissions';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -36,14 +38,14 @@ type UsuarioAcessoRow = {
   pessoa_id: string | null;
   auth_user_id: string | null;
   igreja_id: string | null;
-  cargo: string | null;
+  cargo: CargoTipo | null;
   ativo: boolean | null;
 };
 
 type UsuarioIgrejaRow = {
   usuario_id: string;
   igreja_id: string;
-  cargo: string | null;
+  cargo: CargoTipo | null;
   ativo: boolean | null;
 };
 
@@ -53,22 +55,21 @@ type PessoaRow = {
   email: string | null;
   telefone: string | null;
   usuario_id: string | null;
-  igreja_id: string | null;
-  cargo: string | null;
+  cargo: CargoTipo | null;
   status_membro: string | null;
   ativo: boolean | null;
 };
 
 type PessoaIgrejaRow = {
   igreja_id: string;
-  cargo: string | null;
+  cargo: CargoTipo | null;
   status_membro: string | null;
   ativo: boolean | null;
 };
 
 type RequestChurchAccess = {
   igrejaId: string;
-  cargo: string;
+  cargo: CargoTipo;
   ativo?: boolean;
 };
 
@@ -151,7 +152,7 @@ async function findUniqueAccessByEmail(email: string) {
 async function findUniquePessoaByEmail(email: string) {
   const { data, error } = await supabaseAdmin
     .from('pessoas')
-    .select('id, nome, email, telefone, usuario_id, igreja_id, cargo, status_membro, ativo')
+    .select('id, nome, email, telefone, usuario_id, cargo, status_membro, ativo')
     .eq('email', email)
     .limit(2);
 
@@ -206,7 +207,7 @@ export async function GET(request: NextRequest) {
 
     const { data: igrejas, error: igrejasError } = await supabaseAdmin
       .from('igrejas')
-      .select('id, nome, sigla, cidade, uf, ativo')
+      .select('id, nome, sigla:nome_abreviado, cidade, uf, ativo')
       .in('id', churchIds)
       .order('nome', { ascending: true });
 
@@ -266,7 +267,7 @@ export async function GET(request: NextRequest) {
           igreja_id: string;
           igreja_nome: string;
           igreja_sigla: string | null;
-          cargo: string;
+          cargo: CargoTipo;
           ativo: boolean;
         }>;
       }
@@ -287,7 +288,7 @@ export async function GET(request: NextRequest) {
           igreja_id: string;
           igreja_nome: string;
           igreja_sigla: string | null;
-          cargo: string;
+          cargo: CargoTipo;
           ativo: boolean;
         }>,
       };
@@ -299,7 +300,7 @@ export async function GET(request: NextRequest) {
     function upsertChurchLink(
       usuarioId: string,
       churchId: string,
-      cargo: string | null,
+      cargo: CargoTipo | null,
       ativo: boolean | null
     ) {
       const acesso = accessById.get(usuarioId);
@@ -398,6 +399,10 @@ export async function POST(request: NextRequest) {
       return apiError('HUB_EMAIL_REQUIRED', 400, 'E-mail é obrigatório.');
     }
 
+    if (requestedChurches.some((church) => !isCargoTipo(church.cargo))) {
+      return apiError('HUB_INVALID_ROLE', 400, 'Cargo inválido.');
+    }
+
     if (requestedChurches.length === 0) {
       return apiError(
         'HUB_CHURCH_REQUIRED',
@@ -452,7 +457,7 @@ export async function POST(request: NextRequest) {
     if (body.pessoaId) {
       const { data: pessoaById, error: pessoaByIdError } = await supabaseAdmin
         .from('pessoas')
-        .select('id, nome, email, telefone, usuario_id, igreja_id, cargo, status_membro, ativo')
+        .select('id, nome, email, telefone, usuario_id, cargo, status_membro, ativo')
         .eq('id', body.pessoaId)
         .maybeSingle<PessoaRow>();
 
@@ -463,7 +468,7 @@ export async function POST(request: NextRequest) {
     if (!pessoa && existingAccess?.pessoa_id) {
       const { data: pessoaByAccess, error: pessoaByAccessError } = await supabaseAdmin
         .from('pessoas')
-        .select('id, nome, email, telefone, usuario_id, igreja_id, cargo, status_membro, ativo')
+        .select('id, nome, email, telefone, usuario_id, cargo, status_membro, ativo')
         .eq('id', existingAccess.pessoa_id)
         .maybeSingle<PessoaRow>();
 
@@ -514,20 +519,19 @@ export async function POST(request: NextRequest) {
           email: normalizedEmail,
           telefone: normalizedPhone,
           usuario_id: existingAccess?.auth_user_id || null,
-          igreja_id: primaryChurch.igrejaId,
           cargo: primaryChurch.cargo,
           status_membro: 'ativo',
           ativo: primaryChurch.ativo !== false,
           criado_em: now,
           atualizado_em: now,
         })
-        .select('id, nome, email, telefone, usuario_id, igreja_id, cargo, status_membro, ativo')
+        .select('id, nome, email, telefone, usuario_id, cargo, status_membro, ativo')
         .single<PessoaRow>();
 
       if (createPessoaError) throw createPessoaError;
       pessoa = createdPessoa;
     } else {
-      const pessoaUpdate: Record<string, unknown> = {
+      const pessoaUpdate: TablesUpdate<'pessoas'> = {
         atualizado_em: now,
       };
 
@@ -680,7 +684,6 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         telefone: normalizedPhone ?? pessoa.telefone ?? null,
         usuario_id: pessoa.usuario_id || savedAccess.auth_user_id || null,
-        igreja_id: primaryChurch.igrejaId,
         cargo: primaryChurch.cargo,
         ativo: primaryChurch.ativo !== false,
         atualizado_em: now,

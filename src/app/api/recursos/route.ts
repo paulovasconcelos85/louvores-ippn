@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { apiError, apiSuccess } from '@/lib/api-response';
@@ -8,11 +10,11 @@ type RecursoCategoria = 'culto' | 'ebd' | 'estudo' | 'especial';
 
 const CATEGORIAS_VALIDAS = new Set<RecursoCategoria>(['culto', 'ebd', 'estudo', 'especial']);
 
-let supabaseAdmin: ReturnType<typeof createClient> | null = null;
+let supabaseAdmin: SupabaseClient<Database> | null = null;
 
 function getSupabaseAdmin() {
   if (!supabaseAdmin) {
-    supabaseAdmin = createClient(
+    supabaseAdmin = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       {

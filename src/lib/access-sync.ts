@@ -1,4 +1,6 @@
+import type { Database } from '@/lib/database.types';
 import { createClient } from '@supabase/supabase-js';
+import type { CargoTipo } from '@/lib/permissions';
 
 type AuthLikeUser = {
   id: string;
@@ -8,7 +10,7 @@ type AuthLikeUser = {
 type PessoaAcesso = {
   id: string;
   nome: string;
-  cargo: string;
+  cargo: CargoTipo;
   email: string | null;
   telefone: string | null;
   ativo: boolean | null;
@@ -16,7 +18,7 @@ type PessoaAcesso = {
 
 type PessoaIgrejaVinculo = {
   igreja_id: string;
-  cargo: string | null;
+  cargo: CargoTipo | null;
   ativo: boolean | null;
   status_membro?: string | null;
 };
@@ -28,7 +30,7 @@ type UsuarioAcesso = {
   email?: string | null;
   auth_user_id?: string | null;
   nome?: string | null;
-  cargo?: string | null;
+  cargo?: CargoTipo | null;
   ativo?: boolean | null;
   telefone?: string | null;
 };
@@ -40,7 +42,7 @@ export type SyncAccessResult =
   | { status: 'conflict'; message: string };
 
 function getSupabaseAdmin() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
@@ -61,7 +63,7 @@ async function getPessoaChurchLinks(
   pessoaId: string,
   fallback?: {
     igreja_id?: string | null;
-    cargo?: string | null;
+    cargo?: CargoTipo | null;
     ativo?: boolean | null;
   }
 ) {

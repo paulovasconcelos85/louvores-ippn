@@ -133,7 +133,7 @@ export async function carregarBase(igrejaId: string, ate: string): Promise<BaseF
   if (contasError) throw contasError;
   if (catError) throw catError;
 
-  return { contas: contas || [], categorias: categorias || [], lancamentos };
+  return { contas: contas || [], categorias: (categorias || []) as BaseFinanceira['categorias'], lancamentos };
 }
 
 /** Valores em centavos. Transferências mexem nas contas, mas não em receitas e despesas. */

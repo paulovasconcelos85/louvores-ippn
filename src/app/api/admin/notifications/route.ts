@@ -1,9 +1,10 @@
+import type { Database } from '@/lib/database.types';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest } from 'next/server';
 import { getUserPermissionContext } from '@/lib/server-church';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {

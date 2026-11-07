@@ -1,13 +1,14 @@
+import type { Database } from '@/lib/database.types';
 import { createClient } from '@supabase/supabase-js';
 import { apiError } from '@/lib/api-response';
-import { isSuperAdmin } from '@/lib/permissions';
+import { isSuperAdmin, type CargoTipo } from '@/lib/permissions';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 
 // Operações de servidor do autoatendimento: criar igreja pela landing e
 // acompanhar os primeiros passos da igreja recém-criada.
 
 export function getSupabaseAdmin() {
-  return createClient(
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
@@ -33,7 +34,7 @@ export async function slugsOcupados(candidatos: string[]) {
 }
 
 // Cargos que administram a própria igreja (dados, cultos, logo, endereço).
-export const CARGOS_GESTAO_IGREJA = ['admin', 'pastor'];
+export const CARGOS_GESTAO_IGREJA: CargoTipo[] = ['admin', 'pastor'];
 
 /** Igrejas em que o usuário autenticado tem cargo de gestão. */
 export async function igrejasGerenciadasPor(user: { id: string; email?: string | null }) {

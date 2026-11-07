@@ -1,3 +1,4 @@
+import type { Database } from '@/lib/database.types';
 import { createClient } from '@supabase/supabase-js';
 import https from 'node:https';
 import { normalizeIgreja } from '@/lib/church-utils';
@@ -9,7 +10,7 @@ import {
 import { isSuperAdmin } from '@/lib/permissions';
 import { apiError, apiSuccess } from '@/lib/api-response';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -167,7 +168,7 @@ export async function GET(request: Request) {
         const igrejaIds = Array.from(
           new Set(
             [acesso?.igreja_id, ...(vinculos || []).map((vinculo) => vinculo.igreja_id)]
-              .filter(Boolean)
+              .filter((id): id is string => Boolean(id))
           )
         );
 

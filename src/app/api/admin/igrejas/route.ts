@@ -1,3 +1,4 @@
+import type { Database, Json } from '@/lib/database.types';
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
@@ -6,7 +7,7 @@ import { apiError, apiSuccess } from '@/lib/api-response';
 import { compactLocalizedTextMap, normalizeLocalizedTextMap } from '@/lib/church-i18n';
 import { igrejasGerenciadasPor } from '@/lib/igreja-onboarding';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
@@ -105,7 +106,7 @@ function normalizeCultos(igrejaId: string, rawItems: unknown) {
         ordem: sanitizeNumber(row.ordem) ?? index + 1,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function normalizePais(value?: string | null) {
@@ -122,7 +123,7 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
   const apresentacao_galeria = Array.isArray(body.apresentacao_galeria)
     ? body.apresentacao_galeria
         .map((item) => (typeof item === 'string' ? item.trim() : ''))
-        .filter(Boolean)
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
     : [];
 
   const apresentacaoTituloI18n = normalizeLocalizedTextMap(
@@ -153,8 +154,8 @@ function normalizeChurchPayload(body: Partial<IgrejaPayload>) {
     whatsapp: body.whatsapp?.trim() || null,
     telefone: body.telefone?.trim() || null,
     complemento: body.complemento?.trim() || null,
-    tipos_liturgicos: body.tipos_liturgicos ?? null,
-    modelo_liturgico_padrao: body.modelo_liturgico_padrao ?? null,
+    tipos_liturgicos: (body.tipos_liturgicos ?? null) as Json,
+    modelo_liturgico_padrao: (body.modelo_liturgico_padrao ?? null) as Json,
     modo_repertorio: body.modo_repertorio?.trim() || null,
     permite_cadastro_canticos: body.permite_cadastro_canticos ?? true,
     pais: normalizePais(body.pais),
@@ -234,7 +235,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from('igrejas')
-      .insert(payload)
+      .insert({ ...payload, nome: payload.nome, slug: payload.slug })
       .select('*')
       .single();
 

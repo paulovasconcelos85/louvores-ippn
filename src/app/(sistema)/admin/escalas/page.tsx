@@ -373,7 +373,7 @@ export default function EscalasPage() {
       await supabase.from('louvor_itens').insert(modeloPadrao);
       
       return cultoId;
-    } catch {
+    } catch (error) {
       console.error('Erro ao criar culto:', error);
       return null;
     }
@@ -402,7 +402,7 @@ export default function EscalasPage() {
       setHoraInicio('09:00');
       setHoraFim('');
       setTipoCulto('dominical_manha');
-    } catch {
+    } catch (error) {
       console.error('Erro ao preparar modal:', error);
       setData('');
       setTitulo('');

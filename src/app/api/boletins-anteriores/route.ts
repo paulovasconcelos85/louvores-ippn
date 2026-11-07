@@ -1,10 +1,11 @@
+import type { Database } from '@/lib/database.types';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from '@/i18n/config';
 import { resolveLocalizedText } from '@/lib/church-i18n';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
