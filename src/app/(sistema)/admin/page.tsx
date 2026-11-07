@@ -127,7 +127,7 @@ export default function AdminPage() {
           escala_id: escala.id,
           data: escala.data,
           hora_inicio: escala.hora_inicio,
-          tipo_culto: escala.tipo_culto,
+          tipo_culto: escala.tipo_culto || '',
           funcao: funcoes[0]?.tags_funcoes?.nome || tr('Função', 'Función', 'Role'),
           confirmado: funcoes[0]?.confirmado || false
         });

@@ -39,8 +39,8 @@ interface Tag {
   id: string;
   nome: string;
   categoria: string;
-  cor: string;
-  icone: string;
+  cor: string | null;
+  icone: string | null;
 }
 
 type SortField = 'nome' | 'email' | 'telefone' | 'cargo' | 'ativo' | 'tem_acesso';

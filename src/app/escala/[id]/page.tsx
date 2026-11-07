@@ -12,21 +12,21 @@ interface Tag {
   id: string;
   nome: string;
   categoria: string;
-  cor: string;
-  icone: string;
+  cor: string | null;
+  icone: string | null;
 }
 
 interface Usuario {
   id: string;
   nome: string;
-  email: string;
+  email: string | null;
 }
 
 interface EscalaFuncao {
   id: string;
-  ordem: number;
-  confirmado: boolean;
-  observacoes?: string;
+  ordem: number | null;
+  confirmado: boolean | null;
+  observacoes?: string | null;
   tags_funcoes: Tag;
   pessoas: Usuario;
 }
@@ -36,11 +36,11 @@ interface Escala {
   titulo: string;
   data: string;
   hora_inicio: string;
-  hora_fim?: string;
-  tipo_culto: string;
-  observacoes?: string;
-  status: string;
-  culto_id?: number;
+  hora_fim?: string | null;
+  tipo_culto: string | null;
+  observacoes?: string | null;
+  status: string | null;
+  culto_id?: number | null;
   escalas_funcoes: EscalaFuncao[];
 }
 
@@ -98,7 +98,17 @@ export default function EscalaPublicaPage() {
       const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
-      setEscala(data);
+      // Funções sempre são criadas com pessoa; uma sem pessoa não tem o que exibir.
+      setEscala(
+        data
+          ? {
+              ...data,
+              escalas_funcoes: (data.escalas_funcoes || []).filter(
+                (f): f is typeof f & { pessoas: Usuario } => Boolean(f.pessoas)
+              ),
+            }
+          : null
+      );
     } catch (error: any) {
       console.error('Erro ao carregar escala:', error);
       setEscala(null);
@@ -189,14 +199,14 @@ export default function EscalaPublicaPage() {
     }
   };
 
-  const getTipoCultoLabel = (tipo: string) => {
+  const getTipoCultoLabel = (tipo: string | null) => {
     const labels: Record<string, string> = {
       dominical_manha: 'Dominical - Manhã',
       dominical_noite: 'Dominical - Noite',
       quarta: 'Quarta-feira',
       especial: 'Culto Especial'
     };
-    return labels[tipo] || tipo;
+    return tipo ? labels[tipo] || tipo : '';
   };
 
   if (loading) {
@@ -367,7 +377,7 @@ export default function EscalaPublicaPage() {
                       <div key={func.id} className="flex items-center gap-3 bg-white rounded-lg px-4 py-3 border-2 border-slate-200">
                         <div
                           className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: func.tags_funcoes.cor }}
+                          style={{ backgroundColor: func.tags_funcoes.cor ?? undefined }}
                         />
                         <span className="font-semibold text-slate-900 flex-1">
                           {func.tags_funcoes.icone} {func.tags_funcoes.nome}

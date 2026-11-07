@@ -32,24 +32,24 @@ interface Tag {
   id: string;
   nome: string;
   categoria: string;
-  ordem_categoria: number;
-  ordem: number;
-  cor: string;
-  icone: string;
+  ordem_categoria: number | null;
+  ordem: number | null;
+  cor: string | null;
+  icone: string | null;
 }
 
 interface Usuario {
   id: string;
   nome: string;
-  email: string;
-  telefone?: string;
+  email: string | null;
+  telefone?: string | null;
 }
 
 interface EscalaFuncao {
   id: string;
-  ordem: number;
-  confirmado: boolean;
-  observacoes?: string;
+  ordem: number | null;
+  confirmado: boolean | null;
+  observacoes?: string | null;
   tags_funcoes: Tag;
   pessoas: Usuario;
 }
@@ -59,11 +59,11 @@ interface Escala {
   titulo: string;
   data: string;
   hora_inicio: string;
-  hora_fim?: string;
-  tipo_culto: string;
-  observacoes?: string;
+  hora_fim?: string | null;
+  tipo_culto: string | null;
+  observacoes?: string | null;
   status: 'rascunho' | 'publicada' | 'concluida';
-  culto_id?: number;
+  culto_id?: number | null;
   escalas_funcoes: EscalaFuncao[];
   canticos?: Cantico[];
 }
@@ -171,7 +171,7 @@ export default function GerenciarEscalaPage() {
       setData(escala.data);
       setHoraInicio(escala.hora_inicio);
       setHoraFim(escala.hora_fim || '');
-      setTipoCulto(escala.tipo_culto);
+      setTipoCulto(escala.tipo_culto || '');
       setObservacoes(escala.observacoes || '');
       setStatus(escala.status);
     }
@@ -221,16 +221,17 @@ export default function GerenciarEscalaPage() {
 
       if (escalaError) throw escalaError;
       
-      if (escalaData.escalas_funcoes) {
-        escalaData.escalas_funcoes.sort((a: EscalaFuncao, b: EscalaFuncao) => {
+      // Funções sempre são criadas com pessoa; uma sem pessoa não tem o que exibir.
+      const funcoes = (escalaData.escalas_funcoes || [])
+        .filter((f): f is typeof f & { pessoas: Usuario } => Boolean(f.pessoas))
+        .sort((a: EscalaFuncao, b: EscalaFuncao) => {
           const catA = a.tags_funcoes.ordem_categoria || 999;
           const catB = b.tags_funcoes.ordem_categoria || 999;
           if (catA !== catB) return catA - catB;
           return (a.tags_funcoes.ordem || 999) - (b.tags_funcoes.ordem || 999);
         });
-      }
-      
-      setEscala(escalaData);
+
+      setEscala({ ...escalaData, status: escalaData.status as Escala['status'], escalas_funcoes: funcoes });
       
       const params = new URLSearchParams();
       if (igrejaId) params.set('igreja_id', igrejaId);
@@ -372,7 +373,7 @@ export default function GerenciarEscalaPage() {
     setMensagemTipo('warning');
   };
 
-  const toggleConfirmacao = async (funcaoId: string, confirmadoAtual: boolean) => {
+  const toggleConfirmacao = async (funcaoId: string, confirmadoAtual: boolean | null) => {
     if (!escala) return;
 
     setEscala(prev => ({
@@ -474,18 +475,30 @@ export default function GerenciarEscalaPage() {
       if (!igrejaId) {
         throw new Error(tr('Nenhuma igreja selecionada', 'Ninguna iglesia seleccionada', 'No church selected'));
       }
-      await supabase.from('escalas_funcoes').delete().eq('escala_id', escalaId);
+      const { data: anteriores, error: anterioresError } = await supabase
+        .from('escalas_funcoes')
+        .select('escala_id, igreja_id, pessoa_id, tag_id, ordem, confirmado, observacoes, status')
+        .eq('escala_id', escalaId);
+      if (anterioresError) throw anterioresError;
 
       const payload = escala.escalas_funcoes.map(f => ({
         escala_id: escalaId,
-        usuario_id: f.pessoas.id,
+        igreja_id: igrejaId,
+        pessoa_id: f.pessoas.id,
         tag_id: f.tags_funcoes.id,
         ordem: f.ordem,
         confirmado: f.confirmado
       }));
 
+      const { error: deleteError } = await supabase.from('escalas_funcoes').delete().eq('escala_id', escalaId);
+      if (deleteError) throw deleteError;
+
       const { error } = await supabase.from('escalas_funcoes').insert(payload);
-      if (error) throw error;
+      if (error) {
+        // Devolve as funções anteriores para a escala não ficar vazia.
+        if (anteriores?.length) await supabase.from('escalas_funcoes').insert(anteriores);
+        throw error;
+      }
 
       setMensagem(tr('Escala salva com sucesso!', '¡Escala guardada con éxito!', 'Schedule saved successfully!'));
       setMensagemTipo('success');
@@ -746,7 +759,7 @@ export default function GerenciarEscalaPage() {
                           <div className="flex items-center gap-3">
                             <div
                               className="w-3 h-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: func.tags_funcoes.cor }}
+                              style={{ backgroundColor: func.tags_funcoes.cor ?? undefined }}
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">

@@ -14,8 +14,8 @@ interface Usuario {
 
 interface Funcao {
   id: string;
-  ordem: number;
-  confirmado: boolean;
+  ordem: number | null;
+  confirmado: boolean | null;
   tag: Tag;
   usuario: Usuario;
 }
@@ -31,7 +31,7 @@ interface Cantico {
 interface Escala {
   id: string;
   titulo: string;
-  status: string;
+  status: string | null;
   funcoes: Funcao[];
   canticos: Cantico[];  // 👈 NOVA PROPRIEDADE
 }
@@ -81,14 +81,14 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
         }
 
         // 3. Buscar tags das funções
-        const tagIds = (funcoes || []).map(f => f.tag_id).filter(Boolean);
+        const tagIds = (funcoes || []).map(f => f.tag_id);
         const { data: tags } = await supabase
           .from('tags_funcoes')
           .select('id, nome, categoria, cor')
           .in('id', tagIds);
 
         // 4. Buscar pessoas escaladas
-        const pessoaIds = (funcoes || []).map(f => f.pessoa_id).filter(Boolean);
+        const pessoaIds = (funcoes || []).map(f => f.pessoa_id).filter((id): id is string => Boolean(id));
         const { data: pessoas } = await supabase
           .from('pessoas')
           .select('id, nome, email')
@@ -110,7 +110,7 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
             // Buscar os cânticos pelos IDs encontrados
             const canticoIds = louvorItens
               .map(item => item.cantico_id)
-              .filter(Boolean);
+              .filter((id): id is string => Boolean(id));
 
             if (canticoIds.length > 0) {
               const { data: canticosData } = await supabase
@@ -135,7 +135,7 @@ export function useEscalaDoCulto(dataCulto: string, shouldFetch: boolean = true)
         // 7. Montar funções completas
         const funcoesFormatadas: Funcao[] = (funcoes || []).map(f => {
           const tag = tagsMap.get(f.tag_id);
-          const pessoa = pessoasMap.get(f.pessoa_id);
+          const pessoa = f.pessoa_id ? pessoasMap.get(f.pessoa_id) : undefined;
 
           return {
             id: f.id,

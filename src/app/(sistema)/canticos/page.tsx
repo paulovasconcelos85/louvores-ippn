@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { Json, Tables } from '@/lib/database.types';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getStoredChurchId } from '@/lib/church-utils';
@@ -106,6 +107,18 @@ function mapHinarioNovoCantico(item: {
     holyrics_artist: item.holyrics_artist,
     holyrics_key: item.holyrics_key,
     holyrics_bpm: item.holyrics_bpm,
+  };
+}
+
+function mapCanticoRow(item: Tables<'canticos'>): Cantico {
+  return {
+    ...item,
+    numero: null,
+    autor_letra: null,
+    compositor: null,
+    audio_url: null,
+    created_at: item.created_at || new Date(0).toISOString(),
+    holyrics_paragraphs: item.holyrics_paragraphs as HolyricsParagraph[] | null,
   };
 }
 
@@ -502,7 +515,7 @@ export default function CanticosPage() {
       return;
     }
 
-    setCanticos((data || []) as Cantico[]);
+    setCanticos((data || []).map(mapCanticoRow));
   }, [busca, filtroTags, configuracaoRepertorio]);
 
   const calcularSimilaridade = useCallback((str1: string, str2: string): number => {
@@ -572,7 +585,7 @@ export default function CanticosPage() {
     const { error } = await supabase
       .from('canticos')
       .update({
-        holyrics_paragraphs: slides,
+        holyrics_paragraphs: slides as unknown as Json,
         holyrics_artist: holyForm.artist,
         holyrics_key: holyForm.key,
         holyrics_bpm: holyForm.bpm || null
@@ -840,7 +853,7 @@ export default function CanticosPage() {
     const { data: novoCantico, error } = await supabase.from('canticos').insert(payload).select().single();
     if (!error && novoCantico) {
       setCanticos(prev =>
-        [...prev, novoCantico as Cantico].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+        [...prev, mapCanticoRow(novoCantico)].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
       );
       setCriandoNovo(false);
       alert('✅ Cântico criado!');

@@ -33,32 +33,32 @@ interface Escala {
   data: string;
   hora_inicio: string;
   hora_fim: string | null;
-  tipo_culto: string;
+  tipo_culto: string | null;
   observacoes: string | null;
   status: 'rascunho' | 'publicada' | 'concluida';
-  criado_em: string;
+  criado_em: string | null;
   culto_id: number | null;
   escalas_funcoes?: EscalaFuncao[];
 }
 
 interface EscalaFuncao {
   id: string;
-  ordem: number;
-  confirmado: boolean;
+  ordem: number | null;
+  confirmado: boolean | null;
   tags_funcoes: {
     nome: string;
     categoria: string;
-    cor: string;
+    cor: string | null;
   };
   pessoas: {
     nome: string;
-    email: string;
+    email: string | null;
   };
 }
 
 interface Culto {
   'Culto nr.': number;
-  'Dia': string;
+  'Dia': string | null;
 }
 
 // 🎵 CATEGORIAS APENAS PARA LOUVOR E TÉCNICA
@@ -268,7 +268,16 @@ export default function EscalasPage() {
       const { data, error } = await query;
 
       if (error) throw error;
-      setEscalas(data || []);
+      // Funções sempre são criadas com pessoa; uma sem pessoa não tem o que exibir.
+      setEscalas(
+        (data || []).map((escala) => ({
+          ...escala,
+          status: escala.status as Escala['status'],
+          escalas_funcoes: (escala.escalas_funcoes || []).filter(
+            (f): f is typeof f & { pessoas: EscalaFuncao['pessoas'] } => Boolean(f.pessoas)
+          ),
+        }))
+      );
     } catch (error: any) {
       console.error('Erro ao carregar escalas:', error);
       setMensagem(tr('Erro ao carregar escalas', 'Error al cargar escalas', 'Error loading schedules'));
@@ -420,7 +429,7 @@ export default function EscalasPage() {
     setData(escala.data);
     setHoraInicio(escala.hora_inicio);
     setHoraFim(escala.hora_fim || '');
-    setTipoCulto(escala.tipo_culto);
+    setTipoCulto(escala.tipo_culto || '');
     setObservacoes(escala.observacoes || '');
     setStatus(escala.status);
     setCultoSelecionado(escala.culto_id);
@@ -545,6 +554,7 @@ export default function EscalasPage() {
 
     try {
       const igrejaId = getStoredChurchId();
+      if (!igrejaId) throw new Error('Nenhuma igreja selecionada');
       const { error } = await supabase
         .from('escalas')
         .delete()
@@ -630,7 +640,7 @@ export default function EscalasPage() {
     return info[status as keyof typeof info] || info.rascunho;
   };
 
-  const getTipoCultoLabel = (tipo: string) => {
+  const getTipoCultoLabel = (tipo: string | null) => {
     return tipoCultoLabels[tipo as keyof typeof tipoCultoLabels] || tipo;
   };
 
@@ -1125,7 +1135,7 @@ export default function EscalasPage() {
                                 >
                                   {cultosDisponiveis.map(culto => (
                                     <option key={culto['Culto nr.']} value={culto['Culto nr.']}>
-                                      {tr('Culto', 'Culto', 'Service')} #{culto['Culto nr.']} - {formatarDataCompleta(culto.Dia)}
+                                      {tr('Culto', 'Culto', 'Service')} #{culto['Culto nr.']} - {culto.Dia ? formatarDataCompleta(culto.Dia) : ''}
                                     </option>
                                   ))}
                                 </select>

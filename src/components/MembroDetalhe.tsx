@@ -756,10 +756,12 @@ export default function MembroDetalhe({
     if (!conteudoNota.trim()) return;
     try {
       const autorId = await resolvePessoaIdForCurrentUser(user);
+      // A nota precisa de autor; sem pessoa vinculada ao usuário, o insert falharia.
+      if (!autorId) throw new Error('Usuário sem pessoa vinculada');
 
       const { error } = await supabase.from('notas_pastorais').insert({
         membro_id: membroId,
-        autor_id: autorId || null,
+        autor_id: autorId,
         tipo: tipoNota,
         titulo: tituloNota.trim() || null,
         conteudo: conteudoNota.trim(),

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import type { TablesInsert } from '@/lib/database.types';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
@@ -1460,9 +1461,7 @@ function buildBoletimFallbackRows(secoes: BoletimSecaoRascunho[], ordemInicial: 
   return rows;
 }
 
-async function inserirLouvorItensComCompatibilidadeI18n<T extends { conteudo_publico_i18n?: unknown }>(
-  rows: T[]
-) {
+async function inserirLouvorItensComCompatibilidadeI18n(rows: TablesInsert<'louvor_itens'>[]) {
   if (rows.length === 0) return;
 
   const insertResult = await supabase.from('louvor_itens').insert(rows);
@@ -1476,7 +1475,7 @@ async function inserirLouvorItensComCompatibilidadeI18n<T extends { conteudo_pub
     void conteudo_publico_i18n;
     return row;
   });
-  const fallbackResult = await supabase.from('louvor_itens').insert(rowsSemI18n as unknown as T[]);
+  const fallbackResult = await supabase.from('louvor_itens').insert(rowsSemI18n);
 
   if (fallbackResult.error) throw fallbackResult.error;
 }
@@ -5224,6 +5223,7 @@ export default function CultosPage() {
   const shareWhatsApp = async (culto: Culto) => {
     const igrejaId = getStoredChurchId();
     const cultoNr = culto['Culto nr.'];
+    if (!igrejaId) return;
     const { data: cultoValido } = await supabase
       .from('Louvores IPPN')
       .select('"Culto nr."')
@@ -5262,6 +5262,7 @@ export default function CultosPage() {
   const sharePDF = async (culto: Culto) => {
     const igrejaId = getStoredChurchId();
     const cultoNr = culto['Culto nr.'];
+    if (!igrejaId) return;
     const { data: cultoValido } = await supabase
       .from('Louvores IPPN')
       .select('"Culto nr."')
