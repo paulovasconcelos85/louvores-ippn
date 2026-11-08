@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs/config';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Metadados sempre no <head>: Chrome e iPhone só encontram o manifest e o ícone
@@ -5,4 +7,10 @@ const nextConfig = {
   htmlLimitedBots: /.*/,
 };
 
-export default nextConfig;
+// Source maps só sobem para o Sentry quando SENTRY_AUTH_TOKEN, SENTRY_ORG e
+// SENTRY_PROJECT estão definidos (na Vercel); sem eles o build segue normal.
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  telemetry: false,
+});
