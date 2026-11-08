@@ -19,7 +19,6 @@ interface Tag {
 interface Usuario {
   id: string;
   nome: string;
-  email: string | null;
 }
 
 interface EscalaFuncao {
@@ -83,8 +82,7 @@ export default function EscalaPublicaPage() {
             ),
             pessoas (
               id,
-              nome,
-              email
+              nome
             )
           )
         `)
