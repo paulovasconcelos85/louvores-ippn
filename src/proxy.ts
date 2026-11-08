@@ -5,7 +5,7 @@ import {
   LOCALE_COOKIE_NAME,
 } from './i18n/config';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')) {
     const callbackUrl = request.nextUrl.clone();
     callbackUrl.pathname = '/auth/callback';
