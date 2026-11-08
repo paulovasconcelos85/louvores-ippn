@@ -255,6 +255,7 @@ export default function GerenciarEscalaPage() {
         .from('tags_funcoes')
         .select('*')
         .eq('ativo', true)
+        .or(`igreja_id.eq.${igrejaId},igreja_id.is.null`)
         .order('ordem_categoria, ordem');
       
       setTodasTags(tags || []);
