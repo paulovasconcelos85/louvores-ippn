@@ -34,6 +34,7 @@ import { resolveLocalizedText } from '@/lib/church-i18n';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { formatIgrejaLocalizacao } from '@/lib/church-utils';
 import TextoComPassagens from '@/components/TextoComPassagens';
+import { formatarTextoParaWhatsApp } from '@/lib/formatacao-whatsapp';
 import VersiculoDoDia from '@/components/VersiculoDoDia';
 import ConfissaoDoDia from '@/components/ConfissaoDoDia';
 import { lembrarBoletim } from '@/components/VoltarBoletim';
@@ -1254,7 +1255,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       .trim();
     const [titulo, ...corpoPartes] = texto.split('\n\n');
     const corpo = corpoPartes.join('\n\n').trim();
-    const textoCompartilhamento = `*${titulo}*\n\n${corpo}\n\nFonte: ${fonteUrl}`;
+    const textoCompartilhamento = `*${titulo}*\n\n${formatarTextoParaWhatsApp(corpo)}\n\nFonte: ${fonteUrl}`;
 
     return (
       <div className="space-y-5">
