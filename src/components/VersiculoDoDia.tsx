@@ -37,9 +37,11 @@ interface VersiculoDoDiaProps {
   locale: Locale;
   // boletim: estilo reformado do boletim público; painel: cartão do sistema.
   variante: 'boletim' | 'painel';
+  // Repassa o texto formatado pro bloco pai, pra compor o compartilhamento do boletim inteiro.
+  onTextoPronto?: (texto: string | null) => void;
 }
 
-export default function VersiculoDoDia({ locale, variante }: VersiculoDoDiaProps) {
+export default function VersiculoDoDia({ locale, variante, onTextoPronto }: VersiculoDoDiaProps) {
   const textos = TEXTOS[locale];
   const [dados, setDados] = useState<DadosVersiculo | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -56,12 +58,23 @@ export default function VersiculoDoDia({ locale, variante }: VersiculoDoDiaProps
     };
   }, [locale]);
 
+  const compartilhamentoParaBloco = dados
+    ? `*${textos.titulo}*\n\n“${textoCorrido(dados)}”\n— ${dados.passagem.referencia} (${dados.versao.abreviacao})`
+    : null;
+
+  useEffect(() => {
+    onTextoPronto?.(compartilhamentoParaBloco);
+    // Ao desmontar (ex.: seção removida do boletim), limpa a parte deste bloco no texto combinado.
+    return () => onTextoPronto?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compartilhamentoParaBloco]);
+
   // Sem versículo (falha na API): não ocupa espaço.
   if (!dados) return null;
 
   const texto = textoCorrido(dados);
   const referencia = `${dados.passagem.referencia} (${dados.versao.abreviacao})`;
-  const compartilhamento = `*${textos.titulo}*\n\n“${texto}”\n— ${referencia}`;
+  const compartilhamento = compartilhamentoParaBloco as string;
 
   const copiar = async () => {
     try {

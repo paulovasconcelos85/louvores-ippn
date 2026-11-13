@@ -489,6 +489,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const [jaInstalado, setJaInstalado] = useState(false);
   const [dicaIosAberta, setDicaIosAberta] = useState(false);
   const [cadaDiaCopiado, setCadaDiaCopiado] = useState(false);
+  // Versículo e Confissão avisam o texto deles pronto aqui, pra entrar junto no compartilhamento do bloco inteiro.
+  const [versiculoCompartilhamento, setVersiculoCompartilhamento] = useState<string | null>(null);
+  const [confissaoCompartilhamento, setConfissaoCompartilhamento] = useState<string | null>(null);
   const [itemCopiadoId, setItemCopiadoId] = useState<string | null>(null);
   const [informativoAbertoId, setInformativoAbertoId] = useState<string | null>(null);
   const informativoRefs = useRef<Map<string, HTMLDetailsElement>>(new Map());
@@ -1255,12 +1258,16 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       .trim();
     const [titulo, ...corpoPartes] = texto.split('\n\n');
     const corpo = corpoPartes.join('\n\n').trim();
-    const textoCompartilhamento = `*${titulo}*\n\n${formatarTextoParaWhatsApp(corpo)}\n\nFonte: ${fonteUrl}`;
+    const textoCadaDia = `*${titulo}*\n\n${formatarTextoParaWhatsApp(corpo)}\n\nFonte: ${fonteUrl}`;
+    // Bloco inteiro: Versículo + Confissão (quando carregados) + Devocional Cada Dia.
+    const textoCompartilhamento = [versiculoCompartilhamento, confissaoCompartilhamento, textoCadaDia]
+      .filter(Boolean)
+      .join('\n\n— — —\n\n');
 
     return (
       <div className="space-y-5">
-        <VersiculoDoDia locale={locale} variante="boletim" />
-        <ConfissaoDoDia locale={locale} />
+        <VersiculoDoDia locale={locale} variante="boletim" onTextoPronto={setVersiculoCompartilhamento} />
+        <ConfissaoDoDia locale={locale} onTextoPronto={setConfissaoCompartilhamento} />
         <p className="text-center font-fell text-[1.15rem] tracking-[0.3em] text-[#8b2a1d]">DEVOCIONAL CADA DIA</p>
         {renderBlocoTexto(texto)}
         <div className="border-t border-dotted border-[#1e1208]/25 pt-3">
@@ -1283,7 +1290,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     '_blank'
                   )
                 }
-                title="Compartilhar no WhatsApp"
+                title="Compartilhar o bloco inteiro (versículo, confissão e devocional) no WhatsApp"
                 className={botaoDiscreto}
               >
                 <MessageCircle className="h-3.5 w-3.5" />
@@ -1292,7 +1299,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <button
                 type="button"
                 onClick={() => copiarCadaDia(textoCompartilhamento)}
-                title="Copiar para compartilhar no WhatsApp"
+                title="Copiar o bloco inteiro (versículo, confissão e devocional) para o WhatsApp"
                 className={botaoDiscreto}
               >
                 {cadaDiaCopiado ? (

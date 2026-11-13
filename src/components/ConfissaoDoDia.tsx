@@ -33,8 +33,14 @@ function resumir(texto: string) {
   return { texto: `${texto.slice(0, corte > 0 ? corte : LIMITE_CARACTERES).trimEnd()}…`, cortado: true };
 }
 
+interface ConfissaoDoDiaProps {
+  locale: Locale;
+  // Repassa o texto formatado pro bloco pai, pra compor o compartilhamento do boletim inteiro.
+  onTextoPronto?: (texto: string | null) => void;
+}
+
 // Um item das confissões e catecismos por dia, em ciclo (ver src/lib/confissoes.ts).
-export default function ConfissaoDoDia({ locale }: { locale: Locale }) {
+export default function ConfissaoDoDia({ locale, onTextoPronto }: ConfissaoDoDiaProps) {
   const [dados, setDados] = useState<DadosConfissaoDoDia | null>(null);
 
   useEffect(() => {
@@ -47,6 +53,27 @@ export default function ConfissaoDoDia({ locale }: { locale: Locale }) {
       ativo = false;
     };
   }, []);
+
+  const compartilhamento = dados
+    ? [
+        `*${dados.documento.titulo} · ${dados.item.rotulo}*`,
+        dados.item.secao ? `_${dados.item.secao}_` : null,
+        dados.item.pergunta ? `*${dados.item.pergunta}*` : null,
+        resumir(dados.item.texto).texto,
+        resumir(dados.item.texto).cortado && typeof window !== 'undefined'
+          ? `${window.location.origin}/confissoes/${dados.documento.id}#item-${dados.item.ordem}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    : null;
+
+  useEffect(() => {
+    onTextoPronto?.(compartilhamento);
+    // Ao desmontar (ex.: seção removida do boletim), limpa a parte deste bloco no texto combinado.
+    return () => onTextoPronto?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compartilhamento]);
 
   if (!dados) return null;
 
