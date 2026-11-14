@@ -197,10 +197,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/login');
+      router.replace('/login');
     }
     if (!loading && user && !permissoes.podeAcessarAdmin) {
-      router.push(permissoes.ehMembroComum ? '/membro' : '/');
+      router.replace(permissoes.ehMembroComum ? '/membro' : '/');
     }
   }, [user, loading, permissoes.podeAcessarAdmin, permissoes.ehMembroComum, router]);
 
@@ -269,7 +269,9 @@ export default function AdminPage() {
     };
   }, [locale]);
 
-  if (loading) {
+  // Sem acesso ao painel (ex.: membro comum), mantém o carregamento enquanto o
+  // redirecionamento acontece, para o painel interno não piscar na tela.
+  if (loading || (user && !permissoes.podeAcessarAdmin)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
