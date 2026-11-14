@@ -20,6 +20,7 @@
     "activeChurch": "Igreja ativa",
     "profile": "Meu Perfil",
     "admin": "Administração",
+    "memberArea": "Minha área",
     "signOut": "Sair",
     "fallbackUser": "Usuário",
     "loadChurchesError": "Erro ao carregar igrejas."
@@ -282,5 +283,58 @@
       "tecnica": "🎛️ Técnica",
       "apoio": "👥 Apoio"
     }
+  },
+  "memberArea": {
+    "title": "Minha área",
+    "welcome": "Olá, {nome}",
+    "subtitle": "Conteúdo pra você, sem precisar de nenhuma função.",
+    "churchInfo": "Dados da Igreja",
+    "churchInfoDescription": "Endereço, contato e como contribuir",
+    "repertoire": "Repertório",
+    "repertoireDescription": "Letras dos cânticos, só pra ler",
+    "repertoireEmpty": "Nenhum cântico cadastrado ainda.",
+    "repertoireSearchPlaceholder": "Buscar por nome...",
+    "confessions": "Catecismos e Confissões",
+    "confessionsDescription": "Material de leitura e estudo",
+    "resources": "Recursos",
+    "resourcesDescription": "Vídeos e materiais da igreja",
+    "contributionTitle": "Como contribuir",
+    "pixCopy": "Copiar",
+    "pixCopied": "Copiado!",
+    "contributionEmpty": "Essa igreja ainda não cadastrou uma forma de contribuir.",
+    "contributionType": {
+      "pix": "PIX",
+      "iban": "IBAN",
+      "mbway": "MB WAY",
+      "banco": "Transferência bancária",
+      "outro": "Outro"
+    },
+    "back": "Voltar pra minha área",
+    "liturgicalYear": "Ano litúrgico",
+    "liturgicalYearDescription": "A temporada atual do calendário da igreja",
+    "liturgicalSeasons": {
+      "advento": { "nome": "Advento", "descricao": "Tempo de espera e preparação para a vinda de Cristo." },
+      "natal": { "nome": "Natal", "descricao": "Celebração do nascimento de Jesus." },
+      "epifania": { "nome": "Epifania", "descricao": "A manifestação de Cristo ao mundo." },
+      "quaresma": { "nome": "Quaresma", "descricao": "Quarenta dias de preparação para a Páscoa, com jejum e arrependimento." },
+      "pascoa": { "nome": "Páscoa", "descricao": "Celebração da ressurreição de Cristo." },
+      "pentecostes": { "nome": "Pentecostes", "descricao": "A descida do Espírito Santo sobre a igreja." },
+      "tempoComum": { "nome": "Tempo Comum", "descricao": "Tempo de crescimento na vida cristã ordinária." }
+    },
+    "events": "Eventos",
+    "eventsDescription": "O que vai rolar na igreja",
+    "eventsEmpty": "Nenhum evento programado no momento.",
+    "eventsLocation": "Local",
+    "eventsTime": "Horário",
+    "birthdays": "Aniversariantes do mês",
+    "birthdaysDescription": "Quem faz aniversário esse mês",
+    "birthdaysEmpty": "Ninguém faz aniversário esse mês.",
+    "leadership": "Quem é quem",
+    "leadershipDescription": "Liderança e contatos da igreja",
+    "leadershipEmpty": "Nenhum contato de liderança cadastrado ainda.",
+    "prayerRequests": "Pedidos de Oração",
+    "prayerRequestsDescription": "Envie ou acompanhe pedidos de oração",
+    "pastBulletins": "Boletins Anteriores",
+    "pastBulletinsDescription": "Edições já publicadas"
   }
 }

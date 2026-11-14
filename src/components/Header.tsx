@@ -13,7 +13,8 @@ import {
   Church,
   Library,
   ScrollText,
-  Wallet
+  Wallet,
+  CalendarDays
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -228,6 +229,17 @@ export default function Header() {
                     <button
                       onClick={() => {
                         setMenuAberto(false);
+                        router.push('/eventos');
+                      }}
+                      className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                      Eventos
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setMenuAberto(false);
                         router.push('/confissoes');
                       }}
                       className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
@@ -259,6 +271,19 @@ export default function Header() {
                       >
                         <Settings className="w-4 h-4" />
                         {t('header.admin')}
+                      </button>
+                    )}
+
+                    {permissoes?.ehMembroComum && (
+                      <button
+                        onClick={() => {
+                          setMenuAberto(false);
+                          router.push('/membro');
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
+                      >
+                        <Home className="w-4 h-4" />
+                        {t('header.memberArea')}
                       </button>
                     )}
                   </div>

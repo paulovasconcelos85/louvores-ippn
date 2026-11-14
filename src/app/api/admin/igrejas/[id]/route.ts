@@ -148,6 +148,34 @@ function normalizeRedes(igrejaId: string, rawItems: unknown) {
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
+const TIPOS_CONTRIBUIR_VALIDOS = new Set(['pix', 'iban', 'mbway', 'banco', 'outro']);
+
+function normalizeFormasContribuir(igrejaId: string, rawItems: unknown) {
+  if (!Array.isArray(rawItems)) return [];
+
+  return rawItems
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const tipoBruto = sanitizeString(row.tipo);
+      const tipo = tipoBruto && TIPOS_CONTRIBUIR_VALIDOS.has(tipoBruto) ? tipoBruto : null;
+      const label = sanitizeString(row.label);
+      const valor = sanitizeString(row.valor);
+
+      if (!tipo || !label || !valor) return null;
+
+      return {
+        igreja_id: igrejaId,
+        tipo,
+        label,
+        valor,
+        beneficiario: tipo === 'pix' ? sanitizeString(row.beneficiario) : null,
+        ativo: sanitizeBoolean(row.ativo, true),
+        ordem: sanitizeNumber(row.ordem) ?? index + 1,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
 function normalizeModelosLiturgia(igrejaId: string, rawItems: unknown) {
   if (!Array.isArray(rawItems)) return [];
 
@@ -230,11 +258,13 @@ export async function GET(
       { data: igreja, error: igrejaError },
       cultosResult,
       redesResult,
+      formasResult,
       modelosResult,
     ] = await Promise.all([
       supabaseAdmin.from('igrejas').select('*').eq('id', id).maybeSingle(),
       supabaseAdmin.from('igreja_cultos').select('*').eq('igreja_id', id),
       supabaseAdmin.from('igreja_redes_sociais').select('*').eq('igreja_id', id),
+      supabaseAdmin.from('igreja_formas_contribuir').select('*').eq('igreja_id', id),
       supabaseAdmin.from('modelos_liturgia').select('*').eq('igreja_id', id),
     ]);
 
@@ -252,6 +282,10 @@ export async function GET(
       console.warn('Falha ao carregar redes sociais da igreja no admin:', redesResult.error);
     }
 
+    if (formasResult.error) {
+      console.warn('Falha ao carregar formas de contribuir da igreja no admin:', formasResult.error);
+    }
+
     if (modelosResult.error) {
       console.warn('Falha ao carregar modelos de liturgia da igreja no admin:', modelosResult.error);
     }
@@ -260,6 +294,7 @@ export async function GET(
       igreja,
       cultos: sortByOrdem(cultosResult.data || []),
       redesSociais: sortByOrdem(redesResult.data || []),
+      formasContribuir: sortByOrdem(formasResult.data || []),
       modelosLiturgia: sortByOrdem(modelosResult.data || []),
     });
   } catch (error: any) {
@@ -314,6 +349,7 @@ export async function PATCH(
 
     const cultos = normalizeCultos(id, body.cultos);
     const redesSociais = normalizeRedes(id, body.redesSociais);
+    const formasContribuir = normalizeFormasContribuir(id, body.formasContribuir);
     const modelosLiturgia = normalizeModelosLiturgia(id, body.modelosLiturgia);
 
     const { data: igreja, error: igrejaError } = await supabaseAdmin
@@ -328,15 +364,18 @@ export async function PATCH(
     const [
       { error: deleteCultosError },
       { error: deleteRedesError },
+      { error: deleteFormasError },
       { error: deleteModelosError },
     ] = await Promise.all([
       supabaseAdmin.from('igreja_cultos').delete().eq('igreja_id', id),
       supabaseAdmin.from('igreja_redes_sociais').delete().eq('igreja_id', id),
+      supabaseAdmin.from('igreja_formas_contribuir').delete().eq('igreja_id', id),
       supabaseAdmin.from('modelos_liturgia').delete().eq('igreja_id', id),
     ]);
 
     if (deleteCultosError) throw deleteCultosError;
     if (deleteRedesError) throw deleteRedesError;
+    if (deleteFormasError) throw deleteFormasError;
     if (deleteModelosError) throw deleteModelosError;
 
     if (cultos.length > 0) {
@@ -346,6 +385,11 @@ export async function PATCH(
 
     if (redesSociais.length > 0) {
       const { error } = await supabaseAdmin.from('igreja_redes_sociais').insert(redesSociais);
+      if (error) throw error;
+    }
+
+    if (formasContribuir.length > 0) {
+      const { error } = await supabaseAdmin.from('igreja_formas_contribuir').insert(formasContribuir);
       if (error) throw error;
     }
 
@@ -359,6 +403,7 @@ export async function PATCH(
         igreja,
         cultos,
         redesSociais,
+        formasContribuir,
         modelosLiturgia,
       },
       {

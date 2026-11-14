@@ -20,6 +20,7 @@
     "activeChurch": "Active church",
     "profile": "My Profile",
     "admin": "Administration",
+    "memberArea": "My area",
     "signOut": "Sign out",
     "fallbackUser": "User",
     "loadChurchesError": "Error loading churches."
@@ -282,5 +283,58 @@
       "tecnica": "🎛️ Tech",
       "apoio": "👥 Support"
     }
+  },
+  "memberArea": {
+    "title": "My area",
+    "welcome": "Hi, {nome}",
+    "subtitle": "Content for you, no role required.",
+    "churchInfo": "Church Info",
+    "churchInfoDescription": "Address, contact and ways to give",
+    "repertoire": "Repertoire",
+    "repertoireDescription": "Song lyrics, read-only",
+    "repertoireEmpty": "No songs registered yet.",
+    "repertoireSearchPlaceholder": "Search by name...",
+    "confessions": "Catechisms and Confessions",
+    "confessionsDescription": "Reading and study material",
+    "resources": "Resources",
+    "resourcesDescription": "Church videos and materials",
+    "contributionTitle": "Ways to give",
+    "pixCopy": "Copy",
+    "pixCopied": "Copied!",
+    "contributionEmpty": "This church hasn't set up a way to give yet.",
+    "contributionType": {
+      "pix": "PIX",
+      "iban": "IBAN",
+      "mbway": "MB WAY",
+      "banco": "Bank transfer",
+      "outro": "Other"
+    },
+    "back": "Back to my area",
+    "liturgicalYear": "Liturgical year",
+    "liturgicalYearDescription": "The church calendar's current season",
+    "liturgicalSeasons": {
+      "advento": { "nome": "Advent", "descricao": "A time of waiting and preparation for Christ's coming." },
+      "natal": { "nome": "Christmas", "descricao": "Celebration of Jesus' birth." },
+      "epifania": { "nome": "Epiphany", "descricao": "The manifestation of Christ to the world." },
+      "quaresma": { "nome": "Lent", "descricao": "Forty days of preparation for Easter, with fasting and repentance." },
+      "pascoa": { "nome": "Easter", "descricao": "Celebration of Christ's resurrection." },
+      "pentecostes": { "nome": "Pentecost", "descricao": "The coming of the Holy Spirit upon the church." },
+      "tempoComum": { "nome": "Ordinary Time", "descricao": "A time of growth in ordinary Christian life." }
+    },
+    "events": "Events",
+    "eventsDescription": "What's coming up at church",
+    "eventsEmpty": "No events scheduled right now.",
+    "eventsLocation": "Location",
+    "eventsTime": "Time",
+    "birthdays": "Birthdays this month",
+    "birthdaysDescription": "Who's celebrating this month",
+    "birthdaysEmpty": "No birthdays this month.",
+    "leadership": "Who's who",
+    "leadershipDescription": "Church leadership and contacts",
+    "leadershipEmpty": "No leadership contacts registered yet.",
+    "prayerRequests": "Prayer Requests",
+    "prayerRequestsDescription": "Send or follow prayer requests",
+    "pastBulletins": "Past Bulletins",
+    "pastBulletinsDescription": "Previously published issues"
   }
 }

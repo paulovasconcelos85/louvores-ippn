@@ -56,6 +56,16 @@ export const CARGOS_GERENCIAR_ESCALAS: CargoTipo[] = [
   'superadmin'
 ];
 
+// Cargos que podem gerenciar o calendário de eventos (mesmo grupo de escalas:
+// é gestão operacional, não conteúdo musical/ministerial)
+export const CARGOS_GERENCIAR_EVENTOS: CargoTipo[] = [
+  'presbitero',
+  'pastor',
+  'staff',
+  'admin',
+  'superadmin'
+];
+
 // Cargos que podem gerenciar músicas/cultos
 export const CARGOS_GERENCIAR_CONTEUDO: CargoTipo[] = [
   'diacono',
@@ -159,6 +169,14 @@ export function podeAcessarAdmin(cargo: CargoTipo | null, tags: TagPermissao[] =
 }
 
 /**
+ * Membro comum: cargo 'membro' sem nenhuma tag que dê acesso ao painel admin.
+ * Usado pra mandar esse usuário pra área simplificada (/membro) em vez do painel completo.
+ */
+export function ehMembroComum(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  return cargo === 'membro' && !podeAcessarAdmin(cargo, tags);
+}
+
+/**
  * 👥 Verifica se pode gerenciar usuários
  * ORDEM DE VERIFICAÇÃO:
  * 1. Se está em ADMIN_EMAILS (super-admin) → SEMPRE PODE
@@ -199,6 +217,14 @@ export function podeGerenciarEscalas(cargo: CargoTipo | null): boolean {
 
 export function podeGerenciarEscalasComTags(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
   return podeGerenciarEscalas(cargo) || temTagLouvor(tags);
+}
+
+/**
+ * Verifica se o cargo pode gerenciar o calendário de eventos
+ */
+export function podeGerenciarEventos(cargo: CargoTipo | null, tags: TagPermissao[] = []): boolean {
+  if (cargo && CARGOS_GERENCIAR_EVENTOS.includes(cargo)) return true;
+  return temTagGestao(tags);
 }
 
 /**

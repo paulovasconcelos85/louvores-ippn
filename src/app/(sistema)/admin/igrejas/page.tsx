@@ -17,6 +17,7 @@ import {
   Save,
   Settings2,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -57,6 +58,15 @@ type Culto = {
 type RedeSocial = {
   tipo: string;
   url: string;
+  ativo: boolean;
+  ordem: number;
+};
+
+type FormaContribuir = {
+  tipo: string;
+  label: string;
+  valor: string;
+  beneficiario: string;
   ativo: boolean;
   ordem: number;
 };
@@ -109,6 +119,7 @@ type IgrejaForm = {
   tiposLiturgicos: string[];
   cultos: Culto[];
   redesSociais: RedeSocial[];
+  formasContribuir: FormaContribuir[];
   modelosLiturgia: ModeloLiturgia[];
 };
 
@@ -141,6 +152,7 @@ const PAISES_DISPONIVEIS = [
 ];
 
 const TIPOS_REDE = ['instagram', 'youtube', 'facebook', 'spotify', 'site', 'outro'];
+const TIPOS_CONTRIBUIR = ['pix', 'iban', 'mbway', 'banco', 'outro'];
 
 const TIPOS_LITURGICOS_SUGERIDOS = [
   'Prelúdio',
@@ -200,6 +212,7 @@ function criarFormularioVazio(): IgrejaForm {
     tiposLiturgicos: [],
     cultos: [],
     redesSociais: [],
+    formasContribuir: [],
     modelosLiturgia: [],
   };
 }
@@ -476,6 +489,14 @@ function mapDetailToForm(payload: any): IgrejaForm {
     redesSociais: (payload?.redesSociais || []).map((item: any, index: number) => ({
       tipo: item.tipo || 'instagram',
       url: item.url || '',
+      ativo: item.ativo ?? true,
+      ordem: item.ordem ?? index + 1,
+    })),
+    formasContribuir: (payload?.formasContribuir || []).map((item: any, index: number) => ({
+      tipo: item.tipo || 'pix',
+      label: item.label || '',
+      valor: item.valor || '',
+      beneficiario: item.beneficiario || '',
       ativo: item.ativo ?? true,
       ordem: item.ordem ?? index + 1,
     })),
@@ -1008,6 +1029,7 @@ export default function AdminIgrejasPage() {
       modelo_liturgico_padrao: modelosOrdenados,
       cultos: form.cultos,
       redesSociais: form.redesSociais,
+      formasContribuir: form.formasContribuir,
       modelosLiturgia: modelosOrdenados,
     };
   }
@@ -1354,6 +1376,136 @@ export default function AdminIgrejasPage() {
                       'The logo appears before the church name in the public bulletin header and becomes the app icon on phones.'
                     )}
                   </p>
+                </section>
+
+                <section className="space-y-5">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-emerald-700" />
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {tr('Formas de contribuir', 'Formas de contribuir', 'Ways to give')}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {tr(
+                      'Exibidas na área do membro. PIX ganha botão de copiar e QR Code automaticamente; as outras, só copiar.',
+                      'Se muestran en el área del miembro. PIX recibe botón de copiar y código QR automáticamente; las demás, solo copiar.',
+                      'Shown in the member area. PIX automatically gets a copy button and QR Code; the others just get a copy button.'
+                    )}
+                  </p>
+                  <div className="space-y-3">
+                    {form.formasContribuir.map((forma, index) => (
+                      <div key={`forma-${index}`} className="grid gap-5 rounded-2xl border border-slate-200 p-5 xl:grid-cols-[160px_180px_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                        <label className="block space-y-1">
+                          <span className="text-sm font-medium text-slate-700">{tr('Tipo', 'Tipo', 'Type')}</span>
+                          <select
+                            value={forma.tipo}
+                            onChange={(event) =>
+                              updateForm(
+                                'formasContribuir',
+                                form.formasContribuir.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, tipo: event.target.value } : item
+                                )
+                              )
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          >
+                            {TIPOS_CONTRIBUIR.map((tipo) => (
+                              <option key={tipo} value={tipo}>
+                                {tipo}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <Input
+                          label={tr('Rótulo', 'Etiqueta', 'Label')}
+                          value={forma.label}
+                          onChange={(value) =>
+                            updateForm(
+                              'formasContribuir',
+                              form.formasContribuir.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, label: value } : item
+                              )
+                            )
+                          }
+                          placeholder={tr('Ex: CPF, IBAN, MB WAY', 'Ej: CPF, IBAN, MB WAY', 'E.g. CPF, IBAN, MB WAY')}
+                        />
+                        <Input
+                          label={tr('Valor (chave, conta, etc.)', 'Valor (clave, cuenta, etc.)', 'Value (key, account, etc.)')}
+                          value={forma.valor}
+                          onChange={(value) =>
+                            updateForm(
+                              'formasContribuir',
+                              form.formasContribuir.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, valor: value } : item
+                              )
+                            )
+                          }
+                        />
+                        {forma.tipo === 'pix' ? (
+                          <Input
+                            label={tr('Beneficiário (nome no QR Code)', 'Beneficiario (nombre en el QR)', 'Beneficiary (name on the QR)')}
+                            value={forma.beneficiario}
+                            onChange={(value) =>
+                              updateForm(
+                                'formasContribuir',
+                                form.formasContribuir.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, beneficiario: value } : item
+                                )
+                              )
+                            }
+                            placeholder={form.nome}
+                          />
+                        ) : (
+                          <div />
+                        )}
+                        <div className="flex items-end gap-3">
+                          <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={forma.ativo}
+                              onChange={(event) =>
+                                updateForm(
+                                  'formasContribuir',
+                                  form.formasContribuir.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...item, ativo: event.target.checked }
+                                      : item
+                                  )
+                                )
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
+                            />
+                            {tr('Ativa', 'Activa', 'Active')}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateForm(
+                                'formasContribuir',
+                                form.formasContribuir.filter((_, itemIndex) => itemIndex !== index)
+                              )
+                            }
+                            className="pb-2 text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateForm('formasContribuir', [
+                        ...form.formasContribuir,
+                        { tipo: 'pix', label: '', valor: '', beneficiario: '', ativo: true, ordem: form.formasContribuir.length + 1 },
+                      ])
+                    }
+                    className="inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {tr('Adicionar forma de contribuir', 'Agregar forma de contribuir', 'Add way to give')}
+                  </button>
                 </section>
 
                 <section className="space-y-5">

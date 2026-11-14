@@ -200,9 +200,9 @@ export default function AdminPage() {
       router.push('/login');
     }
     if (!loading && user && !permissoes.podeAcessarAdmin) {
-      router.push('/');
+      router.push(permissoes.ehMembroComum ? '/membro' : '/');
     }
-  }, [user, loading, permissoes.podeAcessarAdmin, router]);
+  }, [user, loading, permissoes.podeAcessarAdmin, permissoes.ehMembroComum, router]);
 
   useEffect(() => {
     if (user) {
@@ -629,6 +629,23 @@ export default function AdminPage() {
               </h3>
               <p className="text-slate-600 text-sm mb-4">
                 {tr('Cultos, EBD e estudos em video', 'Cultos, EBD y estudios en video', 'Services, Sunday school, and studies on video')}
+              </p>
+              <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
+                {tr('Acessar', 'Acceder', 'Access')}
+              </span>
+            </div>
+          </Link>
+
+          <Link href="/eventos" className="block">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-pointer h-full">
+              <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4">
+                <CalendarDays className="w-6 h-6 text-slate-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {tr('Eventos', 'Eventos', 'Events')}
+              </h3>
+              <p className="text-slate-600 text-sm mb-4">
+                {tr('Conferências, encontros e datas especiais', 'Conferencias, encuentros y fechas especiales', 'Conferences, gatherings and special dates')}
               </p>
               <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full">
                 {tr('Acessar', 'Acceder', 'Access')}

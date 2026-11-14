@@ -15,6 +15,8 @@ import {
   podeEditarLiturgiaCompleta,
   podeEditarLouvor,
   podeEditarRecursosMultimidia,
+  podeGerenciarEventos,
+  ehMembroComum,
   isSuperAdmin,
 } from '@/lib/permissions';
 
@@ -71,6 +73,8 @@ interface UsePermissionsReturn {
     podeEditarLiturgiaCompleta: boolean;
     podeEditarLouvor: boolean;
     podeEditarRecursosMultimidia: boolean;
+    podeGerenciarEventos: boolean;
+    ehMembroComum: boolean;
     isSuperAdmin: boolean;
   };
   isSuperAdmin: boolean;
@@ -308,6 +312,8 @@ export function usePermissions(): UsePermissionsReturn {
     podeEditarLiturgiaCompleta: podeEditarLiturgiaCompleta(cargo),
     podeEditarLouvor: podeEditarLouvor(cargo, tags),
     podeEditarRecursosMultimidia: podeEditarRecursosMultimidia(cargo, tags),
+    podeGerenciarEventos: podeGerenciarEventos(cargo, tags),
+    ehMembroComum: ehMembroComum(cargo, tags),
     isSuperAdmin: isSuperAdmin(user?.email, usuarioPermitido?.cargo),
   };
 

@@ -612,6 +612,75 @@ export type Database = {
           },
         ]
       }
+      eventos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          criado_em: string
+          criado_por: string | null
+          data_evento: string
+          descricao: string
+          hora: string | null
+          id: string
+          igreja_id: string | null
+          imagem_url: string | null
+          local: string | null
+          ordem: number
+          responsavel: string | null
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          data_evento: string
+          descricao?: string
+          hora?: string | null
+          id?: string
+          igreja_id?: string | null
+          imagem_url?: string | null
+          local?: string | null
+          ordem?: number
+          responsavel?: string | null
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          data_evento?: string
+          descricao?: string
+          hora?: string | null
+          id?: string
+          igreja_id?: string | null
+          imagem_url?: string | null
+          local?: string | null
+          ordem?: number
+          responsavel?: string | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eventos_igreja_id_fkey"
+            columns: ["igreja_id"]
+            isOneToOne: false
+            referencedRelation: "igrejas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eventos_igreja_id_fkey"
+            columns: ["igreja_id"]
+            isOneToOne: false
+            referencedRelation: "igrejas_endereco_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fin_categorias: {
         Row: {
           ativo: boolean
@@ -1111,6 +1180,57 @@ export type Database = {
           },
           {
             foreignKeyName: "igreja_cultos_igreja_id_fkey"
+            columns: ["igreja_id"]
+            isOneToOne: false
+            referencedRelation: "igrejas_endereco_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      igreja_formas_contribuir: {
+        Row: {
+          ativo: boolean
+          beneficiario: string | null
+          criado_em: string
+          id: string
+          igreja_id: string
+          label: string
+          ordem: number
+          tipo: string
+          valor: string
+        }
+        Insert: {
+          ativo?: boolean
+          beneficiario?: string | null
+          criado_em?: string
+          id?: string
+          igreja_id: string
+          label: string
+          ordem?: number
+          tipo: string
+          valor: string
+        }
+        Update: {
+          ativo?: boolean
+          beneficiario?: string | null
+          criado_em?: string
+          id?: string
+          igreja_id?: string
+          label?: string
+          ordem?: number
+          tipo?: string
+          valor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "igreja_formas_contribuir_igreja_id_fkey"
+            columns: ["igreja_id"]
+            isOneToOne: false
+            referencedRelation: "igrejas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "igreja_formas_contribuir_igreja_id_fkey"
             columns: ["igreja_id"]
             isOneToOne: false
             referencedRelation: "igrejas_endereco_view"
