@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { getStoredChurchId } from '@/lib/church-utils';
 import type { TagPermissao, UsuarioPermitido } from '@/lib/permissions';
 import {
   podeAcessarAdmin,
@@ -102,13 +103,20 @@ async function resolverPermissoes(user: { id: string; email?: string | null }): 
       }
     }
 
-    const { data: vinculo, error: vinculoError } = await supabase
+    // Quem tem vínculo com várias igrejas precisa do cargo da igreja selecionada,
+    // não de um vínculo qualquer. Trocar de igreja recarrega a página, então a
+    // seleção lida aqui é a vigente.
+    const { data: vinculos, error: vinculoError } = await supabase
       .from('usuarios_igrejas')
       .select('cargo, ativo, igreja_id')
       .eq('usuario_id', acesso?.id || '')
       .eq('ativo', true)
-      .limit(1)
-      .maybeSingle();
+      .order('criado_em', { ascending: true });
+
+    const igrejaSelecionada =
+      new URLSearchParams(window.location.search).get('igreja_id') || getStoredChurchId();
+    const vinculo =
+      vinculos?.find((v) => v.igreja_id === igrejaSelecionada) ?? vinculos?.[0] ?? null;
 
     if (vinculoError && vinculoError.code !== 'PGRST116') {
       console.error('Erro ao buscar vínculo de igreja:', vinculoError);
