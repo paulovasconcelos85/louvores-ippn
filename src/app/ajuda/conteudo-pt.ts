@@ -1,0 +1,357 @@
+// Conteúdo da Central de ajuda em português. As versões em inglês e espanhol
+// ficam em conteudo-en.ts e conteudo-es.ts, com os mesmos ids de seção
+// (âncoras usadas pelo roteiro de primeiros passos).
+
+export type Bloco =
+  | { tipo: 'p'; texto: string }
+  | { tipo: 'passos'; itens: string[] }
+  | { tipo: 'lista'; itens: string[] }
+  | { tipo: 'dica'; texto: string };
+
+export type Pergunta = { pergunta: string; resposta: string };
+
+export type Secao = {
+  id: string;
+  titulo: string;
+  resumo: string;
+  onde?: { rotulo: string; href: string };
+  blocos: Bloco[];
+};
+
+// Cada id é âncora usada pelo roteiro de primeiros passos do painel.
+export const SECOES_PT: Secao[] = [
+  {
+    id: 'comecar',
+    titulo: 'Criar a igreja no OIKOS Hub',
+    resumo: 'Quem cria a igreja vira o responsável por ela e já entra no painel.',
+    onde: { rotulo: 'Criar minha igreja', href: '/comecar' },
+    blocos: [
+      {
+        tipo: 'passos',
+        itens: [
+          'Na página inicial, clique em “Criar minha igreja”.',
+          'Informe o nome da igreja, a sigla (opcional), a cidade e o horário do culto principal.',
+          'Escolha o endereço público. O sistema sugere um a partir das iniciais — “Igreja Presbiteriana da Ponta Negra” vira “ippn” — e mostra na hora se está livre.',
+          'Diga se você é pastor(a) ou da liderança/secretaria, informe nome, e-mail e uma senha.',
+          'Pronto: você cai no painel com o roteiro de primeiros passos aberto.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'Endereço curto é melhor: é o que a igreja vai digitar e compartilhar. Se as iniciais já estiverem em uso, acrescente a cidade (ex.: ippn-manaus).',
+      },
+      {
+        tipo: 'p',
+        texto:
+          'Já tem conta no OIKOS Hub (por exemplo, como membro de outra igreja)? Entre primeiro e depois abra “Criar minha igreja”: a nova igreja é adicionada à sua conta e você alterna entre elas pelo seletor no topo do painel.',
+      },
+    ],
+  },
+  {
+    id: 'dados-da-igreja',
+    titulo: 'Dados da igreja: logo, endereço, cultos e liturgia',
+    resumo: 'Tudo o que aparece na página pública e o modelo usado para montar cada boletim.',
+    onde: { rotulo: 'Painel → Dados da igreja', href: '/admin/igrejas' },
+    blocos: [
+      {
+        tipo: 'lista',
+        itens: [
+          'Nomes: o nome de exibição aparece em todo o sistema; o nome curto em menus e no ícone do app; o nome jurídico só se existir um nome oficial maior.',
+          'Endereço do link (slug): pode ser trocado, mas quem já salvou o link antigo vai perdê-lo. Evite mudar depois de divulgar.',
+          'Logo: clique em “Enviar imagem” e escolha um arquivo do computador ou uma foto do celular. Se a imagem não for quadrada, usamos o centro. Ela vira o ícone quando alguém instala o boletim no celular.',
+          'Endereço, telefone, WhatsApp e redes sociais: aparecem para visitantes na página pública.',
+          'Cultos: cadastre cada culto e reunião com dia e horário.',
+          'Apresentação pública: título e texto do “Sobre a igreja”. Se o texto ficar vazio, o link não aparece.',
+        ],
+      },
+      {
+        tipo: 'p',
+        texto:
+          'Liturgia, em duas etapas: (1) em “Tipos disponíveis”, adicione as partes que a igreja usa (Prelúdio, Confissão, Pregação…); (2) em “Ordem padrão do culto”, organize a sequência e o texto padrão de cada parte. Toda igreja nova começa com um modelo reformado simples, que você ajusta à vontade.',
+      },
+      {
+        tipo: 'dica',
+        texto: 'Configure a liturgia antes do primeiro boletim: cada boletim novo já nasce com essa ordem preenchida.',
+      },
+    ],
+  },
+  {
+    id: 'boletins',
+    titulo: 'Boletins e liturgia do culto',
+    resumo: 'O coração do sistema: a ordem do culto, os cânticos e os avisos que a igreja vê no celular.',
+    onde: { rotulo: 'Painel → Boletins', href: '/cultos' },
+    blocos: [
+      {
+        tipo: 'passos',
+        itens: [
+          'Abra “Boletins” e crie um novo. O sistema sugere o próximo domingo e avisa se a data for incomum.',
+          'A liturgia já vem preenchida com o modelo da igreja. Ajuste o que precisar — os títulos dos itens podem ser digitados livremente.',
+          'Nos itens com cântico, escolha as músicas e o tom. Ao lado de cada música aparece há quanto tempo ela não é cantada (recente, moderado, há tempo), para variar o repertório.',
+          'Preencha o texto público dos itens que a igreja deve ler (leituras, confissão, credo).',
+          'Adicione as seções do boletim: Avisos, Pedidos de oração, Agenda, Informativo ou Outros.',
+          'Salve. O boletim aparece no endereço público da igreja.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'Há duas camadas de texto: o “público”, que a igreja vê, e a anotação interna, que só a liderança vê (ex.: “chamar irmão para orar”).',
+      },
+      {
+        tipo: 'p',
+        texto:
+          'Os boletins de semanas anteriores continuam acessíveis pela página pública, em “Boletins anteriores”.',
+      },
+    ],
+  },
+  {
+    id: 'canticos',
+    titulo: 'Cânticos e repertório',
+    resumo: 'O acervo musical da igreja: letra, cifra e tom de cada cântico.',
+    onde: { rotulo: 'Painel → Músicas', href: '/canticos' },
+    blocos: [
+      {
+        tipo: 'lista',
+        itens: [
+          'Cadastre os cânticos que a igreja canta, com letra e cifra. Eles passam a aparecer na escolha de músicas do boletim.',
+          'Igrejas que usam hinário podem escolhê-lo em Dados da igreja → Configurações; os hinos entram junto com os cânticos.',
+          'A equipe de louvor abre letra e cifra direto do celular, a partir do boletim.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'escalas',
+    titulo: 'Escalas de louvor e serviço',
+    resumo: 'Quem toca, canta e serve em cada culto — e a confirmação de cada um.',
+    onde: { rotulo: 'Painel → Escalas', href: '/admin/escalas' },
+    blocos: [
+      {
+        tipo: 'passos',
+        itens: [
+          'Abra “Escalas” e crie uma escala para a data do culto.',
+          'Vincule a um boletim existente ou deixe o sistema criar um novo com a liturgia padrão.',
+          'Adicione as pessoas e a função de cada uma (vocal, violão, som, projeção…). As funções vêm das habilitações cadastradas em Pessoas.',
+          'Mude o status para “Publicada” quando estiver pronta — antes disso só a liderança vê.',
+          'Use “Compartilhar no WhatsApp”: a escala sai formatada, pronta para colar no grupo.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'Cada pessoa escalada que tem acesso ao sistema vê a escala no próprio painel e pode confirmar presença.',
+      },
+    ],
+  },
+  {
+    id: 'pessoas-e-acessos',
+    titulo: 'Pessoas, equipe e acessos',
+    resumo: 'Cadastre a igreja e decida quem entra no painel e com qual cargo.',
+    onde: { rotulo: 'Painel → Usuários', href: '/admin/usuarios' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Existem dois tipos de cadastro. “Pessoas” são registros da base da igreja, sem login. “Usuários” são pessoas com acesso ao painel. Todo usuário é uma pessoa; nem toda pessoa é usuária.',
+      },
+      {
+        tipo: 'passos',
+        itens: [
+          'Cadastre a pessoa com nome, telefone e e-mail.',
+          'Para dar acesso, use “Liberar acesso”. A pessoa precisa ter e-mail cadastrado.',
+          'Escolha o cargo (veja a tabela abaixo) e, se for do louvor ou da técnica, marque as habilitações.',
+          'Mande para a pessoa o link /<endereço-da-igreja>/entrar (ex.: /ippn/entrar). Ele abre o login já com a igreja escolhida; ela entra com o mesmo e-mail — por senha (em “Primeiro acesso”), Google ou Microsoft.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto: 'Para bloquear alguém na hora, desative o acesso. O cadastro da pessoa continua guardado.',
+      },
+    ],
+  },
+  {
+    id: 'cargos',
+    titulo: 'O que cada cargo pode fazer',
+    resumo: 'Permissões definidas pelo cargo da pessoa nesta igreja.',
+    blocos: [
+      {
+        tipo: 'lista',
+        itens: [
+          'Membro: cadastro na base, sem acesso ao painel.',
+          'Músico e diácono: boletins e cânticos.',
+          'Staff: boletins, cânticos e escalas.',
+          'Presbítero: tudo acima, mais membros, liturgia completa, recursos e liberação de acessos.',
+          'Seminarista: boletins, cânticos, membros, liturgia completa, recursos e pedidos pastorais.',
+          'Tesouraria: não depende do cargo. O Conselho designa tesoureiro, auxiliar e comissão de contas dentro do próprio módulo; pastor e presbíteros veem os totais.',
+          'Pastor: acesso completo à igreja, incluindo pedidos pastorais e dados da igreja.',
+          'Administrador: acesso completo à gestão da igreja (dados, pessoas, escalas, boletins); pedidos pastorais ficam com o pastor.',
+        ],
+      },
+      {
+        tipo: 'p',
+        texto:
+          'Habilitações (tags) ampliam o acesso sem mudar o cargo: quem é do louvor gerencia cânticos e escalas; quem é da técnica cuida de boletins; quem é da secretaria ajuda no cadastro de pessoas.',
+      },
+    ],
+  },
+  {
+    id: 'membros',
+    titulo: 'Membros e cuidado pastoral',
+    resumo: 'Rol de membros, famílias, aniversários e ficha de membresia.',
+    onde: { rotulo: 'Painel → Membros', href: '/admin/membros' },
+    blocos: [
+      {
+        tipo: 'lista',
+        itens: [
+          'Cadastro completo de cada membro: dados pessoais, família, classificação eclesiástica e histórico.',
+          '“Pedir cadastro (WhatsApp)”: envia ao membro um link para ele mesmo conferir e completar os próprios dados (e os dos filhos).',
+          'Lista de aniversariantes e relatórios em PDF, inclusive por família.',
+          'Ficha de candidato à membresia com assinatura digital.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'O jeito mais rápido de montar o rol é pedir que cada família complete o próprio cadastro pelo link — você só confere.',
+      },
+    ],
+  },
+  {
+    id: 'cadastro-publico',
+    titulo: 'Cadastro público de visitantes e membros',
+    resumo: 'Um link para qualquer pessoa se cadastrar na igreja sozinha.',
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Toda igreja tem um formulário público em /cadastro/<endereço-da-igreja>. Divulgue no culto, num QR code ou no Instagram. Quem se cadastra entra na base como pessoa da igreja, e a liderança decide depois se libera acesso ao painel.',
+      },
+    ],
+  },
+  {
+    id: 'pedidos-pastorais',
+    titulo: 'Pedidos pastorais e de oração',
+    resumo: 'Canal reservado para a igreja falar com o pastor.',
+    onde: { rotulo: 'Painel → Pedidos pastorais', href: '/admin/pedidos-pastorais' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Os membros enviam pedidos pela página pública /pedidos/<endereço-da-igreja>. Só pastores e seminaristas veem os pedidos, que podem ser copiados ou encaminhados pelo WhatsApp.',
+      },
+    ],
+  },
+  {
+    id: 'recursos',
+    titulo: 'Recursos em vídeo',
+    resumo: 'Cultos, EBD e estudos gravados, organizados para a igreja.',
+    onde: { rotulo: 'Painel → Recursos', href: '/recursos' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Cadastre os vídeos (YouTube) por categoria — culto, escola bíblica, estudo — com data e responsável. Pastores, presbíteros, seminaristas e líderes de ministério podem publicar.',
+      },
+    ],
+  },
+  {
+    id: 'estatisticas',
+    titulo: 'Estatísticas do repertório',
+    resumo: 'Quais músicas a igreja mais canta, por mês e por posição no culto.',
+    onde: { rotulo: 'Painel → Estatísticas', href: '/dashboard' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Os números saem dos boletins: quanto mais boletins a igreja registra, mais útil fica a visão do repertório — e mais fácil evitar repetição ou esquecer músicas boas.',
+      },
+    ],
+  },
+  {
+    id: 'financas',
+    titulo: 'Tesouraria: dízimos, ofertas e despesas',
+    resumo: 'O livro-caixa da igreja no formato que a IPB pede, com balancetes, exame de contas e relatório anual.',
+    onde: { rotulo: 'Menu → Tesouraria', href: '/financas' },
+    blocos: [
+      {
+        tipo: 'p',
+        texto:
+          'Segue o modelo de estatuto da igreja local da IPB: o Conselho elege o tesoureiro todo ano, nomeia uma Comissão de Exame de Contas de três pessoas e recebe dela um parecer a cada trimestre e no fim do exercício.',
+      },
+      {
+        tipo: 'passos',
+        itens: [
+          'O pastor (ou um presbítero) abre Tesouraria → Configurações → Equipe e designa o tesoureiro, o auxiliar e os três membros da comissão. Vale só para esta igreja e para o ano.',
+          'O tesoureiro cadastra as contas: o caixa (dinheiro das ofertas) e cada conta bancária, com o saldo do dia em que começar a usar o sistema.',
+          'Confira as categorias. Elas já vêm prontas e ligadas aos grupos do relatório estatístico da IPB; renomeie ou crie as que a igreja usa.',
+          'Lance cada entrada e saída. No domingo, use “Salvar e lançar outro” para registrar os envelopes em sequência. Dinheiro depositado no banco é uma transferência, não uma nova entrada.',
+          'Anexe o comprovante de toda saída — nota fiscal, recibo ou RPA para serviço de autônomo. Dá para tirar a foto direto do celular.',
+          'Terminado o trimestre, envie o balancete em “Exame de contas”. O período fica travado; a comissão emite o parecer ou devolve para correção, e o Conselho aprova registrando a ata.',
+        ],
+      },
+      {
+        tipo: 'lista',
+        itens: [
+          'Dízimos são nominais: cada dízimo pode ficar ligado ao membro (ou ficar como não identificado). Só o tesoureiro, o auxiliar e o pastor veem os nomes; presbíteros e comissão veem só os totais.',
+          'Dízimo ao Supremo Concílio: o sistema calcula 10% dos dízimos e ofertas, mês a mês, sem contar as ofertas específicas, e mostra quanto falta repassar.',
+          'Relatório anual: a seção IV do relatório estatístico (receitas, despesas por grupo, verba presbiterial, sustento pastoral, saldo) sai pronta em PDF.',
+          'Orçamento: lance o previsto de cada categoria; o realizado aparece ao lado, para o Conselho votar e a assembleia tomar conhecimento.',
+          'Declaração de contribuições: gere para o membro que pedir comprovante do que contribuiu no ano.',
+        ],
+      },
+      {
+        tipo: 'dica',
+        texto:
+          'O sistema organiza a tesouraria, mas não substitui o contador: as obrigações acessórias da igreja (ECF, EFD-Reinf, eSocial e as demais que ele indicar) continuam com ele. Exporte os balancetes e entregue junto com os comprovantes.',
+      },
+    ],
+  },
+  {
+    id: 'app-no-celular',
+    titulo: 'Boletim como app no celular',
+    resumo: 'O endereço público da igreja pode ser instalado como aplicativo, sem loja.',
+    blocos: [
+      {
+        tipo: 'lista',
+        itens: [
+          'iPhone (Safari): abra o endereço da igreja, toque em Compartilhar e depois em “Adicionar à Tela de Início”.',
+          'Android (Chrome): abra o endereço da igreja, toque no menu ⋮ e em “Instalar app” ou “Adicionar à tela inicial”.',
+          'O ícone usa o logo da igreja e o nome curto. Por isso vale cadastrar os dois em Dados da igreja.',
+        ],
+      },
+    ],
+  },
+];
+
+export const PERGUNTAS_PT: Pergunta[] = [
+  {
+    pergunta: 'Esqueci minha senha. E agora?',
+    resposta:
+      'Na tela de entrar, digite seu e-mail e clique em “Esqueci minha senha”. Chega um link por e-mail para criar uma senha nova. Também dá para entrar pelo Google ou pela Microsoft com o mesmo e-mail.',
+  },
+  {
+    pergunta: 'Uma pessoa diz que não consegue entrar.',
+    resposta:
+      'Confira em Usuários se o e-mail dela está correto e se o acesso está liberado e ativo. Ela precisa entrar com exatamente o mesmo e-mail cadastrado.',
+  },
+  {
+    pergunta: 'Participo de duas igrejas. Preciso de duas contas?',
+    resposta: 'Não. Uma conta serve para várias igrejas; troque de igreja pelo seletor no topo do painel.',
+  },
+  {
+    pergunta: 'Posso trocar o endereço (slug) da igreja?',
+    resposta:
+      'Pode, em Dados da igreja. Mas o endereço antigo para de funcionar, inclusive nos apps já instalados. Troque só se for realmente necessário.',
+  },
+  {
+    pergunta: 'O boletim não aparece na página pública.',
+    resposta:
+      'Confira se o boletim foi salvo com a data certa e se a igreja está marcada como visível ao público em Dados da igreja.',
+  },
+  {
+    pergunta: 'Quero transferir a responsabilidade da igreja para outra pessoa.',
+    resposta:
+      'Cadastre a pessoa, libere o acesso com o cargo de pastor ou administrador e, se quiser, rebaixe ou desative o seu próprio acesso.',
+  },
+];

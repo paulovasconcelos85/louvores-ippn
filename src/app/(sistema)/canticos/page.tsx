@@ -6,6 +6,9 @@ import type { Json, Tables } from '@/lib/database.types';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { useLocale } from '@/i18n/provider';
+import { getIntlLocale } from '@/i18n/config';
+import { porIdioma } from '@/i18n/por-idioma';
 import { 
   ArrowLeft, 
   Plus, 
@@ -128,6 +131,20 @@ const TAGS_LITURGICAS = [
   'Consagração', 'Doxologia', 'Bênçãos', 'Gratidão'
 ];
 
+// As tags ficam gravadas em português; aqui só a tradução para exibir. [es, en]
+const ROTULOS_TAGS: Record<string, [string, string]> = {
+  'Prelúdio': ['Preludio', 'Prelude'], 'Poslúdio': ['Postludio', 'Postlude'], 'Oferta': ['Ofrenda', 'Offering'],
+  'Ceia': ['Santa Cena', "Lord's Supper"], 'Comunhão': ['Comunión', 'Communion'], 'Hino': ['Himno', 'Hymn'],
+  'Salmo': ['Salmo', 'Psalm'], 'Adoração': ['Adoración', 'Worship'], 'Confissão': ['Confesión', 'Confession'],
+  'Arrependimento': ['Arrepentimiento', 'Repentance'], 'Edificação': ['Edificación', 'Edification'],
+  'Instrução': ['Instrucción', 'Teaching'], 'Consagração': ['Consagración', 'Consecration'],
+  'Doxologia': ['Doxología', 'Doxology'], 'Bênçãos': ['Bendiciones', 'Blessings'], 'Gratidão': ['Gratitud', 'Thanksgiving'],
+  'Alegre': ['Alegre', 'Joyful'], 'Contemplativo': ['Contemplativo', 'Contemplative'], 'Lento': ['Lento', 'Slow'],
+  'Moderado': ['Moderado', 'Moderate'], 'Rápido': ['Rápido', 'Fast'], 'Animado': ['Animado', 'Upbeat'],
+  'Solene': ['Solemne', 'Solemn'], 'Festivo': ['Festivo', 'Festive'], 'Reflexivo': ['Reflexivo', 'Reflective'],
+  'Triunfante': ['Triunfante', 'Triumphant'], 'Suave': ['Suave', 'Gentle'], 'Poderoso': ['Poderoso', 'Powerful'],
+};
+
 const TAGS_ESTILO = [
   'Alegre', 'Contemplativo', 'Lento', 'Moderado', 'Rápido', 'Animado',
   'Solene', 'Festivo', 'Reflexivo', 'Triunfante', 'Suave', 'Poderoso'
@@ -147,6 +164,15 @@ const SpotifyIcon = ({ size = 18 }: { size?: number }) => (
 
 export default function CanticosPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en),
+    [locale]
+  );
+  const rotuloTag = (tag: string) => {
+    const rotulos = ROTULOS_TAGS[tag];
+    return rotulos ? tr(tag, rotulos[0], rotulos[1]) : tag;
+  };
   const { loading: permLoading, permissoes } = usePermissions();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [canticos, setCanticos] = useState<Cantico[]>([]);
@@ -196,13 +222,13 @@ export default function CanticosPage() {
     permissoes.podeGerenciarCanticos &&
     configuracaoRepertorio?.permite_cadastro_canticos !== false &&
     !usaSomenteHinario;
-  const tituloPagina = usaSomenteHinario ? 'Hinário' : 'Cânticos';
+  const tituloPagina = usaSomenteHinario ? tr('Hinário', 'Himnario', 'Hymnal') : tr('Cânticos', 'Cánticos', 'Songs');
   const placeholderBusca = usaSomenteHinario
-    ? 'Buscar hino por número, título ou letra...'
-    : 'Buscar cântico por nome ou letra...';
+    ? tr('Buscar hino por número, título ou letra...', 'Buscar himno por número, título o letra...', 'Search hymns by number, title or lyrics...')
+    : tr('Buscar cântico por nome ou letra...', 'Buscar cántico por nombre o letra...', 'Search songs by title or lyrics...');
   const mensagemSemResultados = usaSomenteHinario
-    ? 'Nenhum hino encontrado'
-    : 'Nenhum cântico encontrado';
+    ? tr('Nenhum hino encontrado', 'No se encontró ningún himno', 'No hymns found')
+    : tr('Nenhum cântico encontrado', 'No se encontró ningún cántico', 'No songs found');
 
   const textoParaSlides = (texto: string): HolyricsParagraph[] => {
     if (!texto.trim()) return [];
@@ -341,7 +367,7 @@ export default function CanticosPage() {
   const copiarUltimosCultos = useCallback(async () => {
     const igrejaId = getStoredChurchId();
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de copiar.');
+      alert(tr('Selecione uma igreja antes de copiar.', 'Selecciona una iglesia antes de copiar.', 'Select a church before copying.'));
       return;
     }
 
@@ -353,7 +379,7 @@ export default function CanticosPage() {
       .limit(10);
 
     if (erroCultos || !cultos) {
-      alert('❌ Erro ao buscar cultos.');
+      alert(tr('❌ Erro ao buscar cultos.', '❌ Error al buscar los cultos.', '❌ Could not load services.'));
       return;
     }
 
@@ -363,7 +389,7 @@ export default function CanticosPage() {
 
     const ultimosTres = cultosValidos.slice(0, 3);
     if (ultimosTres.length === 0) {
-      alert('Nenhum culto encontrado.');
+      alert(tr('Nenhum culto encontrado.', 'No se encontró ningún culto.', 'No services found.'));
       return;
     }
 
@@ -378,12 +404,12 @@ export default function CanticosPage() {
       .not('cantico_id', 'is', null);
 
     if (erroItens) {
-      alert('❌ Erro ao buscar cânticos dos cultos.');
+      alert(tr('❌ Erro ao buscar cânticos dos cultos.', '❌ Error al buscar los cánticos de los cultos.', '❌ Could not load songs from services.'));
       return;
     }
 
     if (!itens || itens.length === 0) {
-      alert('Nenhum cântico encontrado nos últimos 3 cultos.');
+      alert(tr('Nenhum cântico encontrado nos últimos 3 cultos.', 'No se encontraron cánticos en los últimos 3 cultos.', 'No songs found in the last 3 services.'));
       return;
     }
 
@@ -395,8 +421,8 @@ export default function CanticosPage() {
       if (!canticoId || !dia) return;
 
       const cantico = canticos.find(c => c.id === canticoId);
-      const nome = cantico?.nome || 'Cântico não identificado';
-      const tipo = typeof item.tipo === 'string' && item.tipo.trim() ? item.tipo.trim() : 'Não especificado';
+      const nome = cantico?.nome || tr('Cântico não identificado', 'Cántico no identificado', 'Unidentified song');
+      const tipo = typeof item.tipo === 'string' && item.tipo.trim() ? item.tipo.trim() : tr('Não especificado', 'No especificado', 'Not specified');
 
       if (!mapaMusicas.has(canticoId)) {
         mapaMusicas.set(canticoId, { nome, ocorrencias: [] });
@@ -408,7 +434,7 @@ export default function CanticosPage() {
       a.nome.localeCompare(b.nome, 'pt-BR')
     );
 
-    const linhas: string[] = ['🎵 Músicas dos últimos 3 cultos', ''];
+    const linhas: string[] = [tr('🎵 Músicas dos últimos 3 cultos', '🎵 Música de los últimos 3 cultos', '🎵 Songs from the last 3 services'), ''];
 
     musicasOrdenadas.forEach(musica => {
       linhas.push(musica.nome);
@@ -424,11 +450,11 @@ export default function CanticosPage() {
 
     try {
       await navigator.clipboard.writeText(texto);
-      alert('✅ Texto copiado!');
+      alert(tr('✅ Texto copiado!', '✅ ¡Texto copiado!', '✅ Text copied!'));
     } catch {
-      alert('❌ Não foi possível copiar. Verifique as permissões do navegador.');
+      alert(tr('❌ Não foi possível copiar. Verifique as permissões do navegador.', '❌ No se pudo copiar. Revisa los permisos del navegador.', '❌ Could not copy. Check your browser permissions.'));
     }
-  }, [canticos]);
+  }, [canticos, tr]);
 
   const fetchCanticos = useCallback(async (configuracao?: ConfiguracaoRepertorio | null) => {
     const configuracaoAtual = configuracao || configuracaoRepertorio;
@@ -539,7 +565,7 @@ export default function CanticosPage() {
 
   const formatarData = (data: string): string => {
     const d = new Date(data + 'T00:00:00');
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    return d.toLocaleDateString(getIntlLocale(locale), { day: '2-digit', month: '2-digit', year: '2-digit' });
   };
 
   const abrirModalHolyrics = (cantico: Cantico) => {
@@ -570,13 +596,13 @@ export default function CanticosPage() {
   const salvarConfigHolyrics = async () => {
     if (!modalHolyrics) return;
     if (!podeGerenciarCadastroLocal) {
-      alert('A edição do repertório está desativada para a igreja ativa.');
+      alert(tr('A edição do repertório está desativada para a igreja ativa.', 'La edición del repertorio está desactivada para la iglesia activa.', 'Song editing is turned off for the active church.'));
       return;
     }
 
     const igrejaId = getStoredChurchId();
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de salvar.');
+      alert(tr('Selecione uma igreja antes de salvar.', 'Selecciona una iglesia antes de guardar.', 'Select a church before saving.'));
       return;
     }
 
@@ -602,10 +628,10 @@ export default function CanticosPage() {
       };
       setCanticos(prev => prev.map(c => c.id === modalHolyrics.id ? { ...c, ...holyricsUpdate } : c));
       setModalHolyrics(prev => prev ? { ...prev, ...holyricsUpdate } : prev);
-      alert('✅ Configuração Holyrics salva!');
+      alert(tr('✅ Configuração Holyrics salva!', '✅ ¡Configuración de Holyrics guardada!', '✅ Holyrics settings saved!'));
     } else {
       console.error('Erro ao salvar:', error);
-      alert('❌ Erro ao salvar configuração: ' + error.message);
+      alert(tr('❌ Erro ao salvar configuração: ', '❌ Error al guardar la configuración: ', '❌ Could not save settings: ') + error.message);
     }
   };
 
@@ -689,7 +715,7 @@ export default function CanticosPage() {
     const fileName = file.name.toLowerCase();
     
     if (!fileName.endsWith('.muf') && !fileName.endsWith('.mufl') && !fileName.endsWith('.json')) {
-      alert('❌ Formato não suportado. Use arquivos .muf, .mufl ou .json do Holyrics.');
+      alert(tr('❌ Formato não suportado. Use arquivos .muf, .mufl ou .json do Holyrics.', '❌ Formato no compatible. Usa archivos .muf, .mufl o .json de Holyrics.', '❌ Unsupported format. Use Holyrics .muf, .mufl or .json files.'));
       return;
     }
 
@@ -710,15 +736,15 @@ export default function CanticosPage() {
             letraParaSlides: letraCompleta
           });
           
-          alert('✅ Arquivo importado com sucesso!');
+          alert(tr('✅ Arquivo importado com sucesso!', '✅ ¡Archivo importado!', '✅ File imported!'));
         } else {
-          alert('❌ Arquivo JSON não está no formato Holyrics.');
+          alert(tr('❌ Arquivo JSON não está no formato Holyrics.', '❌ El archivo JSON no está en formato Holyrics.', '❌ The JSON file is not in Holyrics format.'));
         }
       } catch {
-        alert('❌ Erro ao ler arquivo JSON.');
+        alert(tr('❌ Erro ao ler arquivo JSON.', '❌ Error al leer el archivo JSON.', '❌ Could not read the JSON file.'));
       }
     } else {
-      alert('⚠️ Arquivos .muf/.mufl só podem ser abertos no aplicativo Holyrics. Use a exportação JSON para compartilhar entre sistemas.');
+      alert(tr('⚠️ Arquivos .muf/.mufl só podem ser abertos no aplicativo Holyrics. Use a exportação JSON para compartilhar entre sistemas.', '⚠️ Los archivos .muf/.mufl solo se abren en la aplicación Holyrics. Usa la exportación JSON para compartir entre sistemas.', '⚠️ .muf/.mufl files only open in the Holyrics app. Use the JSON export to share between systems.'));
     }
     
     if (fileInputRef.current) {
@@ -770,7 +796,7 @@ export default function CanticosPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-slate-500 text-base">Carregando...</p>
+          <p className="text-slate-500 text-base">{tr('Carregando...', 'Cargando...', 'Loading...')}</p>
         </div>
       </div>
     );
@@ -815,18 +841,18 @@ export default function CanticosPage() {
 
   const salvar = async () => {
     if (!podeGerenciarCadastroLocal) {
-      alert('O cadastro de cânticos está desativado para a igreja ativa.');
+      alert(tr('O cadastro de cânticos está desativado para a igreja ativa.', 'El registro de cánticos está desactivado para la iglesia activa.', 'Adding songs is turned off for the active church.'));
       return;
     }
 
     const igrejaId = getStoredChurchId();
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de salvar.');
+      alert(tr('Selecione uma igreja antes de salvar.', 'Selecciona una iglesia antes de guardar.', 'Select a church before saving.'));
       return;
     }
 
     if (!form.nome.trim()) {
-      alert('O nome do cântico é obrigatório!');
+      alert(tr('O nome do cântico é obrigatório!', '¡El nombre del cántico es obligatorio!', 'The song title is required!'));
       return;
     }
 
@@ -845,8 +871,8 @@ export default function CanticosPage() {
       if (!error) {
         setCanticos(prev => prev.map(c => c.id === editando ? { ...c, ...payload } : c));
         setEditando(null);
-        alert('✅ Cântico atualizado!');
-      } else alert('❌ Erro ao salvar.');
+        alert(tr('✅ Cântico atualizado!', '✅ ¡Cántico actualizado!', '✅ Song updated!'));
+      } else alert(tr('❌ Erro ao salvar.', '❌ Error al guardar.', '❌ Could not save.'));
       return;
     }
 
@@ -856,23 +882,31 @@ export default function CanticosPage() {
         [...prev, mapCanticoRow(novoCantico)].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
       );
       setCriandoNovo(false);
-      alert('✅ Cântico criado!');
-    } else alert('❌ Erro ao criar.');
+      alert(tr('✅ Cântico criado!', '✅ ¡Cántico creado!', '✅ Song created!'));
+    } else alert(tr('❌ Erro ao criar.', '❌ Error al crear.', '❌ Could not create.'));
   };
 
   const deletar = async (id: string, nome: string) => {
     if (!podeGerenciarCadastroLocal) {
-      alert('O cadastro de cânticos está desativado para a igreja ativa.');
+      alert(tr('O cadastro de cânticos está desativado para a igreja ativa.', 'El registro de cánticos está desactivado para la iglesia activa.', 'Adding songs is turned off for the active church.'));
       return;
     }
 
     const igrejaId = getStoredChurchId();
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de remover.');
+      alert(tr('Selecione uma igreja antes de remover.', 'Selecciona una iglesia antes de eliminar.', 'Select a church before removing.'));
       return;
     }
 
-    if (!confirm(`Tem certeza que deseja deletar "${nome}"?\n\nEsta ação não pode ser desfeita.`)) {
+    if (
+      !confirm(
+        tr(
+          `Tem certeza que deseja deletar "${nome}"?\n\nEsta ação não pode ser desfeita.`,
+          `¿Seguro que quieres eliminar "${nome}"?\n\nEsta acción no se puede deshacer.`,
+          `Are you sure you want to delete "${nome}"?\n\nThis cannot be undone.`
+        )
+      )
+    ) {
       return;
     }
 
@@ -882,9 +916,9 @@ export default function CanticosPage() {
       setCanticos(prev => prev.filter(c => c.id !== id));
       if (editando === id) setEditando(null);
       if (expandido === id) setExpandido(null);
-      alert('✅ Cântico deletado!');
+      alert(tr('✅ Cântico deletado!', '✅ ¡Cántico eliminado!', '✅ Song deleted!'));
     } else {
-      alert('❌ Erro ao deletar.');
+      alert(tr('❌ Erro ao deletar.', '❌ Error al eliminar.', '❌ Could not delete.'));
     }
   };
 
@@ -919,7 +953,7 @@ export default function CanticosPage() {
                 : 'bg-white border-slate-300 text-slate-700 hover:border-emerald-400'
             }`}
           >
-            {tag}
+            {rotuloTag(tag)}
           </button>
         ))}
       </div>
@@ -929,12 +963,12 @@ export default function CanticosPage() {
   const renderFormulario = () => (
     <div className="space-y-5">
       <div>
-        <label className="font-bold text-sm text-slate-700 mb-2 block">Nome do Cântico *</label>
+        <label className="font-bold text-sm text-slate-700 mb-2 block">{tr('Nome do Cântico *', 'Nombre del cántico *', 'Song title *')}</label>
         <input
           className="w-full border-2 border-slate-300 p-3 rounded-xl focus:border-emerald-600 outline-none"
           value={form.nome}
           onChange={e => setForm({ ...form, nome: e.target.value })}
-          placeholder="Ex: Castelo Forte"
+          placeholder={tr('Ex: Castelo Forte', 'Ej.: Castillo fuerte', 'E.g. A Mighty Fortress')}
           autoFocus={criandoNovo}
         />
         {avisoSimilaridade.length > 0 && (
@@ -942,7 +976,7 @@ export default function CanticosPage() {
             <div className="flex items-start gap-2">
               <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
               <div>
-                <p className="font-bold text-amber-800 text-sm">Cânticos similares encontrados:</p>
+                <p className="font-bold text-amber-800 text-sm">{tr('Cânticos similares encontrados:', 'Cánticos similares encontrados:', 'Similar songs found:')}</p>
                 <ul className="text-amber-700 text-sm mt-1 space-y-1">
                   {avisoSimilaridade.map((n, i) => <li key={i}>• {n}</li>)}
                 </ul>
@@ -956,7 +990,7 @@ export default function CanticosPage() {
         <div>
           <label className="font-bold text-sm text-slate-700 mb-2 flex items-center gap-2">
             <Youtube size={18} className="text-red-600" />
-            Link do YouTube
+            {tr('Link do YouTube', 'Enlace de YouTube', 'YouTube link')}
           </label>
           <input
             className="w-full border-2 border-slate-300 p-3 rounded-xl focus:border-red-500 outline-none text-sm"
@@ -968,7 +1002,7 @@ export default function CanticosPage() {
         <div>
           <label className="font-bold text-sm text-slate-700 mb-2 flex items-center gap-2">
             <SpotifyIcon size={18} />
-            <span>Link do Spotify</span>
+            <span>{tr('Link do Spotify', 'Enlace de Spotify', 'Spotify link')}</span>
           </label>
           <input
             className="w-full border-2 border-slate-300 p-3 rounded-xl focus:border-green-500 outline-none text-sm"
@@ -979,26 +1013,26 @@ export default function CanticosPage() {
         </div>
       </div>
       
-      {renderTagSelector(TAGS_LITURGICAS, 'Tags Litúrgicas')}
-      {renderTagSelector(TAGS_ESTILO, 'Estilo e Ritmo')}
+      {renderTagSelector(TAGS_LITURGICAS, tr('Tags Litúrgicas', 'Etiquetas litúrgicas', 'Liturgical tags'))}
+      {renderTagSelector(TAGS_ESTILO, tr('Estilo e Ritmo', 'Estilo y ritmo', 'Style and tempo'))}
 
       <div>
-        <label className="font-bold text-sm text-slate-700 mb-2 block">Letra</label>
+        <label className="font-bold text-sm text-slate-700 mb-2 block">{tr('Letra', 'Letra', 'Lyrics')}</label>
         <textarea
           className="w-full border-2 border-slate-300 p-3 rounded-xl min-h-[150px] focus:border-emerald-600 outline-none font-mono text-sm"
           value={form.letra}
           onChange={e => setForm({ ...form, letra: e.target.value })}
-          placeholder="Digite a letra do cântico..."
+          placeholder={tr('Digite a letra do cântico...', 'Escribe la letra del cántico...', 'Type the song lyrics...')}
         />
       </div>
 
       <div>
-        <label className="font-bold text-sm text-slate-700 mb-2 block">Referência Bíblica</label>
+        <label className="font-bold text-sm text-slate-700 mb-2 block">{tr('Referência Bíblica', 'Referencia bíblica', 'Scripture reference')}</label>
         <textarea
           className="w-full border-2 border-slate-300 p-3 rounded-xl min-h-[100px] focus:border-emerald-600 outline-none"
           value={form.referencia}
           onChange={e => setForm({ ...form, referencia: e.target.value })}
-          placeholder="Ex: Salmo 23, João 3:16..."
+          placeholder={tr('Ex: Salmo 23, João 3:16...', 'Ej.: Salmo 23, Juan 3:16...', 'E.g. Psalm 23, John 3:16...')}
         />
       </div>
 
@@ -1008,14 +1042,14 @@ export default function CanticosPage() {
           className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-colors"
         >
           <Save size={20} />
-          {editando ? 'Salvar' : 'Criar Cântico'}
+          {editando ? tr('Salvar', 'Guardar', 'Save') : tr('Criar Cântico', 'Crear cántico', 'Create song')}
         </button>
         <button 
           onClick={cancelar} 
           className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
         >
           <X size={20} />
-          Cancelar
+          {tr('Cancelar', 'Cancelar', 'Cancel')}
         </button>
       </div>
     </div>
@@ -1032,7 +1066,7 @@ export default function CanticosPage() {
             className="text-emerald-700 font-bold flex items-center gap-2 hover:text-emerald-900 transition-colors"
           >
             <ArrowLeft size={20} />
-            <span>Voltar</span>
+            <span>{tr('Voltar', 'Volver', 'Back')}</span>
           </button>
         </div>
 
@@ -1042,7 +1076,7 @@ export default function CanticosPage() {
             {tituloPagina}
           </h1>
           <p className="text-slate-600 mt-2">
-            {canticos.length} {canticos.length === 1 ? (usaSomenteHinario ? 'hino disponível' : 'cântico disponível') : (usaSomenteHinario ? 'hinos disponíveis' : 'cânticos disponíveis')}
+            {canticos.length} {canticos.length === 1 ? (usaSomenteHinario ? tr('hino disponível', 'himno disponible', 'hymn available') : tr('cântico disponível', 'cántico disponible', 'song available')) : (usaSomenteHinario ? tr('hinos disponíveis', 'himnos disponibles', 'hymns available') : tr('cânticos disponíveis', 'cánticos disponibles', 'songs available'))}
           </p>
         </div>
 
@@ -1051,7 +1085,7 @@ export default function CanticosPage() {
           className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold text-base shadow-lg mb-3 flex items-center justify-center gap-2 transition-colors"
         >
           <Copy size={20} />
-          Copiar músicas dos últimos 3 cultos
+          {tr('Copiar músicas dos últimos 3 cultos', 'Copiar música de los últimos 3 cultos', 'Copy songs from the last 3 services')}
         </button>
 
         {podeGerenciarCadastroLocal ? (
@@ -1060,13 +1094,13 @@ export default function CanticosPage() {
             className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-5 rounded-2xl font-bold text-lg shadow-lg mb-6 flex items-center justify-center gap-2 transition-colors"
           >
             <Plus size={24} />
-            Novo Cântico
+            {tr('Novo Cântico', 'Nuevo cántico', 'New song')}
           </button>
         ) : (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
             {usaSomenteHinario
-              ? 'Esta igreja usa o hinário oficial. Os hinos exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.'
-              : 'Esta igreja está usando um repertório controlado. Os itens exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.'}
+              ? tr('Esta igreja usa o hinário oficial. Os hinos exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.', 'Esta iglesia usa el himnario oficial. Los himnos mostrados siguen la configuración de la iglesia activa y no se pueden editar aquí.', 'This church uses the official hymnal. Hymns shown follow the active church settings and cannot be edited here.')
+              : tr('Esta igreja está usando um repertório controlado. Os itens exibidos seguem a configuração da igreja ativa e não podem ser editados aqui.', 'Esta iglesia usa un repertorio controlado. Los elementos mostrados siguen la configuración de la iglesia activa y no se pueden editar aquí.', 'This church uses a managed song list. Items shown follow the active church settings and cannot be edited here.')}
           </div>
         )}
 
@@ -1074,7 +1108,7 @@ export default function CanticosPage() {
           <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-2xl p-5 shadow-lg mb-6">
             <h2 className="text-xl font-bold text-emerald-900 mb-4 flex items-center gap-2">
               <Music size={24} />
-              Criar Novo Cântico
+              {tr('Criar Novo Cântico', 'Crear nuevo cántico', 'Create new song')}
             </h2>
             {renderFormulario()}
           </div>
@@ -1099,7 +1133,7 @@ export default function CanticosPage() {
           >
             <div className="flex items-center gap-2">
               <Filter size={18} className="text-slate-600" />
-              <span className="font-semibold text-slate-700">Filtros por Tags</span>
+              <span className="font-semibold text-slate-700">{tr('Filtros por Tags', 'Filtros por etiquetas', 'Filter by tags')}</span>
               {filtroTags.length > 0 && (
                 <span className="bg-emerald-600 text-white text-xs px-2 py-1 rounded-full">
                   {filtroTags.length}
@@ -1112,7 +1146,7 @@ export default function CanticosPage() {
           {mostrarFiltros && (
             <div className="bg-white border-2 border-slate-200 rounded-xl p-4 space-y-4">
               <div>
-                <label className="font-bold text-sm text-slate-700 mb-2 block">Tags Litúrgicas</label>
+                <label className="font-bold text-sm text-slate-700 mb-2 block">{tr('Tags Litúrgicas', 'Etiquetas litúrgicas', 'Liturgical tags')}</label>
                 <div className="flex flex-wrap gap-2">
                   {TAGS_LITURGICAS.map(tag => (
                     <button
@@ -1124,7 +1158,7 @@ export default function CanticosPage() {
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
-                      {tag}
+                      {rotuloTag(tag)}
                     </button>
                   ))}
                 </div>
@@ -1135,7 +1169,7 @@ export default function CanticosPage() {
                   onClick={() => setFiltroTags([])}
                   className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
                 >
-                  Limpar Filtros
+                  {tr('Limpar Filtros', 'Limpiar filtros', 'Clear filters')}
                 </button>
               )}
             </div>
@@ -1175,7 +1209,7 @@ export default function CanticosPage() {
                                     <span 
                                       key={idx}
                                       className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-md font-medium border border-violet-200"
-                                      title={`Cantado em ${new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+                                      title={`${tr('Cantado em', 'Cantado el', 'Sung on')} ${new Date(data + 'T00:00:00').toLocaleDateString(getIntlLocale(locale))}`}
                                     >
                                       {formatarData(data)}
                                     </span>
@@ -1221,7 +1255,7 @@ export default function CanticosPage() {
                                   onClick={(e) => e.stopPropagation()}
                                   className="flex items-center gap-1.5 text-slate-600 hover:text-slate-700 text-sm font-medium hover:underline"
                                 >
-                                  🎵 Áudio
+                                  {tr('🎵 Áudio', '🎵 Audio', '🎵 Audio')}
                                 </a>
                               )}
                             </div>
@@ -1234,7 +1268,7 @@ export default function CanticosPage() {
                                   key={idx} 
                                   className="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-700 font-medium"
                                 >
-                                  {tag}
+                                  {rotuloTag(tag)}
                                 </span>
                               ))}
                             </div>
@@ -1249,7 +1283,7 @@ export default function CanticosPage() {
                               abrirModalHolyrics(c);
                             }}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Exportar para Holyrics"
+                            title={tr('Exportar para Holyrics', 'Exportar a Holyrics', 'Export to Holyrics')}
                           >
                             <Download size={20} />
                           </button>
@@ -1261,7 +1295,7 @@ export default function CanticosPage() {
                                   iniciarEdicao(c);
                                 }}
                                 className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                                title="Editar"
+                                title={tr('Editar', 'Editar', 'Edit')}
                               >
                                 <Edit2 size={20} />
                               </button>
@@ -1271,7 +1305,7 @@ export default function CanticosPage() {
                                   deletar(c.id, c.nome);
                                 }}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Deletar"
+                                title={tr('Deletar', 'Eliminar', 'Delete')}
                               >
                                 <Trash2 size={20} />
                               </button>
@@ -1289,7 +1323,7 @@ export default function CanticosPage() {
                               <div>
                                 <div className="flex items-center gap-2 mb-3">
                                   <BookOpen size={18} className="text-emerald-700" />
-                                  <h4 className="font-bold text-slate-700">Letra</h4>
+                                  <h4 className="font-bold text-slate-700">{tr('Letra', 'Letra', 'Lyrics')}</h4>
                                 </div>
                                 <div className="bg-white rounded-xl p-4 border-2 border-slate-200 whitespace-pre-wrap font-serif text-slate-800 leading-relaxed">
                                   {c.letra}
@@ -1299,7 +1333,7 @@ export default function CanticosPage() {
 
                             {c.referencia && (
                               <div>
-                                <h4 className="font-bold text-slate-700 mb-2">📖 Referência Bíblica</h4>
+                                <h4 className="font-bold text-slate-700 mb-2">{tr('📖 Referência Bíblica', '📖 Referencia bíblica', '📖 Scripture reference')}</h4>
                                 <div className="bg-amber-50 rounded-xl p-4 border-2 border-amber-200 text-slate-700 whitespace-pre-wrap">
                                   {c.referencia}
                                 </div>
@@ -1311,7 +1345,7 @@ export default function CanticosPage() {
                             <div className="lg:col-span-1">
                               <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
                                 <Youtube size={18} className="text-red-600" />
-                                Vídeo
+                                {tr('Vídeo', 'Video', 'Video')}
                               </h4>
                               <div className="aspect-video w-full rounded-xl overflow-hidden shadow-lg sticky top-4">
                                 <iframe
@@ -1340,7 +1374,7 @@ export default function CanticosPage() {
           <div className="text-center py-12 text-slate-500">
             <Music size={48} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">{mensagemSemResultados}</p>
-            <p className="text-sm mt-2">Tente ajustar os filtros ou a busca</p>
+            <p className="text-sm mt-2">{tr('Tente ajustar os filtros ou a busca', 'Prueba ajustar los filtros o la búsqueda', 'Try adjusting the filters or search')}</p>
           </div>
         )}
       </main>
@@ -1355,7 +1389,7 @@ export default function CanticosPage() {
                 <div>
                   <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                     <Download size={24} className="sm:w-7 sm:h-7" />
-                    Exportar para Holyrics
+                    {tr('Exportar para Holyrics', 'Exportar a Holyrics', 'Export to Holyrics')}
                   </h2>
                   <p className="text-blue-100 mt-1 text-sm sm:text-base truncate">{modalHolyrics.nome}</p>
                 </div>
@@ -1372,24 +1406,24 @@ export default function CanticosPage() {
             <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <div>
-                  <label className="font-bold text-xs sm:text-sm text-slate-700 mb-1 sm:mb-2 block">Artista/Compositor</label>
+                  <label className="font-bold text-xs sm:text-sm text-slate-700 mb-1 sm:mb-2 block">{tr('Artista/Compositor', 'Artista/Compositor', 'Artist/Composer')}</label>
                   <input
                     type="text"
                     value={holyForm.artist}
                     onChange={e => setHolyForm({ ...holyForm, artist: e.target.value })}
                     className="w-full border-2 border-slate-300 p-2 sm:p-3 rounded-xl focus:border-blue-600 outline-none text-sm"
-                    placeholder="Nome do artista"
+                    placeholder={tr('Nome do artista', 'Nombre del artista', 'Artist name')}
                   />
                 </div>
 
                 <div>
-                  <label className="font-bold text-xs sm:text-sm text-slate-700 mb-1 sm:mb-2 block">Tom Musical</label>
+                  <label className="font-bold text-xs sm:text-sm text-slate-700 mb-1 sm:mb-2 block">{tr('Tom Musical', 'Tono musical', 'Key')}</label>
                   <select
                     value={holyForm.key}
                     onChange={e => setHolyForm({ ...holyForm, key: e.target.value })}
                     className="w-full border-2 border-slate-300 p-2 sm:p-3 rounded-xl focus:border-blue-600 outline-none text-sm"
                   >
-                    <option value="">Selecione</option>
+                    <option value="">{tr('Selecione', 'Selecciona', 'Select')}</option>
                     {TONS_MUSICAIS.map(tom => (
                       <option key={tom} value={tom}>{tom}</option>
                     ))}
@@ -1421,39 +1455,35 @@ export default function CanticosPage() {
                   className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold transition-colors text-sm"
                 >
                   <Upload size={16} />
-                  Importar (.json, .muf, .mufl)
+                  {tr('Importar (.json, .muf, .mufl)', 'Importar (.json, .muf, .mufl)', 'Import (.json, .muf, .mufl)')}
                 </button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <label className="font-bold text-xs sm:text-sm text-slate-700 mb-2 block">
-                    Editor de Letra
+                    {tr('Editor de Letra', 'Editor de letra', 'Lyrics editor')}
                     <span className="text-slate-500 font-normal ml-2 text-xs block sm:inline">
-                      (Linha em branco = novo slide)
+                      {tr('(Linha em branco = novo slide)', '(Línea en blanco = nueva diapositiva)', '(Blank line = new slide)')}
                     </span>
                   </label>
                   <textarea
                     value={holyForm.letraParaSlides}
                     onChange={e => setHolyForm({ ...holyForm, letraParaSlides: e.target.value })}
                     className="w-full border-2 border-slate-300 p-3 sm:p-4 rounded-xl focus:border-blue-600 outline-none font-mono text-xs sm:text-sm h-64 sm:h-96"
-                    placeholder="Digite a letra aqui...
-
-Deixe uma linha em branco entre as estrofes.
-
-Cada estrofe separada será um slide diferente no Holyrics."
+                    placeholder={tr('Digite a letra aqui...\n\nDeixe uma linha em branco entre as estrofes.\n\nCada estrofe separada será um slide diferente no Holyrics.', 'Escribe la letra aquí... Deja una línea en blanco entre estrofas. Cada estrofa será una diapositiva distinta en Holyrics.', 'Type the lyrics here... Leave a blank line between verses. Each verse becomes its own slide in Holyrics.')}
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="font-bold text-xs sm:text-sm text-slate-700">Preview dos Slides</label>
+                    <label className="font-bold text-xs sm:text-sm text-slate-700">{tr('Preview dos Slides', 'Vista previa de diapositivas', 'Slide preview')}</label>
                     <button
                       onClick={() => setMostrarPreview(!mostrarPreview)}
                       className="flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 font-semibold"
                     >
                       <Eye size={14} />
-                      {mostrarPreview ? 'Ocultar' : 'Mostrar'}
+                      {mostrarPreview ? tr('Ocultar', 'Ocultar', 'Hide') : tr('Mostrar', 'Mostrar', 'Show')}
                     </button>
                   </div>
 
@@ -1463,7 +1493,7 @@ Cada estrofe separada será um slide diferente no Holyrics."
                         slidesPreview.map((slide, idx) => (
                           <div key={idx} className="bg-white border-2 border-blue-200 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-blue-600">Slide {slide.number}</span>
+                              <span className="text-xs font-bold text-blue-600">{tr('Slide', 'Diapositiva', 'Slide')} {slide.number}</span>
                               <span className="text-xs text-slate-500">{slide.text.split('\n').length} {slide.text.split('\n').length === 1 ? 'linha' : 'linhas'}</span>
                             </div>
                             <div className="whitespace-pre-wrap text-xs sm:text-sm font-serif text-slate-800 leading-relaxed">
@@ -1474,8 +1504,8 @@ Cada estrofe separada será um slide diferente no Holyrics."
                       ) : (
                         <div className="text-center py-8 text-slate-400">
                           <Music size={24} className="mx-auto mb-2 opacity-30" />
-                          <p className="text-xs">Nenhum slide para mostrar</p>
-                          <p className="text-xs mt-1">Digite a letra no editor</p>
+                          <p className="text-xs">{tr('Nenhum slide para mostrar', 'No hay diapositivas para mostrar', 'No slides to show')}</p>
+                          <p className="text-xs mt-1">{tr('Digite a letra no editor', 'Escribe la letra en el editor', 'Type the lyrics in the editor')}</p>
                         </div>
                       )}
                     </div>
@@ -1485,7 +1515,7 @@ Cada estrofe separada será um slide diferente no Holyrics."
                     <div className="border-2 border-dashed border-slate-300 rounded-xl p-3 h-64 sm:h-96 flex items-center justify-center text-slate-400">
                       <div className="text-center">
                         <Eye size={32} className="mx-auto mb-2 opacity-30" />
-                        <p className="text-xs">Preview oculto</p>
+                        <p className="text-xs">{tr('Preview oculto', 'Vista previa oculta', 'Preview hidden')}</p>
                       </div>
                     </div>
                   )}
@@ -1512,7 +1542,7 @@ Cada estrofe separada será um slide diferente no Holyrics."
                     TXT
                   </button>
                   <button
-                    onClick={() => alert('⚠️ Formato .mufl em desenvolvimento. Por favor, envie um exemplo de arquivo .mufl para implementarmos.')}
+                    onClick={() => alert(tr('⚠️ Formato .mufl em desenvolvimento. Por favor, envie um exemplo de arquivo .mufl para implementarmos.', '⚠️ Formato .mufl en desarrollo. Envíanos un archivo .mufl de ejemplo para implementarlo.', '⚠️ .mufl format is in development. Please send us a sample .mufl file so we can add it.'))}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors shadow-md text-sm"
                   >
                     <Download size={16} />
@@ -1527,20 +1557,20 @@ Cada estrofe separada será um slide diferente no Holyrics."
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-lg text-sm"
                   >
                     <Save size={18} />
-                    Salvar
+                    {tr('Salvar', 'Guardar', 'Save')}
                   </button>
                   <button
                     onClick={fecharModalHolyrics}
                     className="px-4 sm:px-6 py-2 sm:py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold transition-colors text-sm"
                   >
-                    Fechar
+                    {tr('Fechar', 'Cerrar', 'Close')}
                   </button>
                 </div>
               </div>
 
               <div className="mt-3 sm:mt-4 text-xs text-slate-500 text-center">
-                <p>💡 Deixe uma linha em branco entre estrofes para criar slides separados</p>
-                <p className="mt-1">🎵 Total de slides: <strong className="text-blue-600">{slidesPreview.length}</strong></p>
+                <p>{tr('💡 Deixe uma linha em branco entre estrofes para criar slides separados', '💡 Deja una línea en blanco entre estrofas para crear diapositivas separadas', '💡 Leave a blank line between verses to create separate slides')}</p>
+                <p className="mt-1">{tr('🎵 Total de slides:', '🎵 Total de diapositivas:', '🎵 Total slides:')} <strong className="text-blue-600">{slidesPreview.length}</strong></p>
               </div>
             </div>
           </div>

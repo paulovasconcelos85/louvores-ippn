@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { BookOpen, Music, Youtube } from 'lucide-react';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 
 interface LetraData {
   tipo: 'hinario' | 'cantico';
@@ -28,6 +30,11 @@ const SpotifyIcon = ({ size = 18 }: { size?: number }) => (
 export default function LetraPage() {
   const { nome } = useParams();
   const router = useRouter();
+  const locale = useLocale();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en),
+    [locale]
+  );
   const [dados, setDados] = useState<LetraData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +52,7 @@ export default function LetraPage() {
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Erro ao buscar dados.');
+          throw new Error(payload.error || tr('Erro ao buscar dados.', 'Error al buscar los datos.', 'Could not load data.'));
         }
 
         setDados((payload.cantico || null) as LetraData | null);
@@ -58,7 +65,7 @@ export default function LetraPage() {
     }
 
     fetchDados();
-  }, [nome]);
+  }, [nome, tr]);
 
   const nomeExibicao = decodeURIComponent(nome as string);
   const ehHinario = dados?.tipo === 'hinario';
@@ -81,13 +88,13 @@ export default function LetraPage() {
             onClick={() => router.back()} 
             className="text-emerald-700 font-bold flex items-center gap-2 hover:text-emerald-900 transition-colors"
           >
-            ← Voltar
+            {tr('← Voltar', '← Volver', '← Back')}
           </button>
           <button 
             onClick={() => router.push('/')} 
             className="text-emerald-700 font-bold hover:text-emerald-900 transition-colors"
           >
-            Home
+            {tr('Home', 'Inicio', 'Home')}
           </button>
         </div>
       </header>
@@ -98,14 +105,14 @@ export default function LetraPage() {
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse flex items-center gap-3">
               <Music className="text-emerald-600" size={32} />
-              <span className="text-xl text-slate-600">Carregando...</span>
+              <span className="text-xl text-slate-600">{tr('Carregando...', 'Cargando...', 'Loading...')}</span>
             </div>
           </div>
         ) : !dados ? (
           <div className="bg-white rounded-2xl p-8 border-2 border-slate-200 text-center">
             <Music className="mx-auto text-slate-400 mb-4" size={48} />
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Cântico não encontrado</h2>
-            <p className="text-slate-600">Este cântico não está disponível no momento.</p>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">{tr('Cântico não encontrado', 'Cántico no encontrado', 'Song not found')}</h2>
+            <p className="text-slate-600">{tr('Este cântico não está disponível no momento.', 'Este cántico no está disponible en este momento.', 'This song is not available right now.')}</p>
           </div>
         ) : (
           <>
@@ -118,7 +125,7 @@ export default function LetraPage() {
                     ? 'bg-blue-100 text-blue-700 border-2 border-blue-200' 
                     : 'bg-green-100 text-green-700 border-2 border-green-200'
                 }`}>
-                  {ehHinario ? '📖 Hinário Novo Cântico' : '🎵 Cântico'}
+                  {ehHinario ? tr('📖 Hinário Novo Cântico', '📖 Himnario Novo Cântico', '📖 Novo Cântico Hymnal') : tr('🎵 Cântico', '🎵 Cántico', '🎵 Song')}
                 </span>
                 {ehHinario && dados.numero && (
                   <span className="text-xs px-3 py-1.5 rounded-full font-mono bg-slate-100 text-slate-700 border-2 border-slate-200">
@@ -140,13 +147,13 @@ export default function LetraPage() {
                     {dados.autor_letra && (
                       <span className="flex items-center gap-1">
                         <span>✍️</span>
-                        <span className="font-medium">Letra:</span> {dados.autor_letra}
+                        <span className="font-medium">{tr('Letra:', 'Letra:', 'Words:')}</span> {dados.autor_letra}
                       </span>
                     )}
                     {dados.compositor && dados.compositor !== dados.autor_letra && (
                       <span className="flex items-center gap-1">
                         <span>🎼</span>
-                        <span className="font-medium">Música:</span> {dados.compositor}
+                        <span className="font-medium">{tr('Música:', 'Música:', 'Music:')}</span> {dados.compositor}
                       </span>
                     )}
                   </div>
@@ -156,7 +163,7 @@ export default function LetraPage() {
                 {dados.referencia && (
                   <p className="text-sm text-slate-600 flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
                     <span>📖</span> 
-                    <span className="font-medium">Referência:</span>
+                    <span className="font-medium">{tr('Referência:', 'Referencia:', 'Reference:')}</span>
                     <span>{dados.referencia}</span>
                   </p>
                 )}
@@ -207,7 +214,7 @@ export default function LetraPage() {
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors border-2 border-slate-200 font-semibold"
                   >
-                    🎵 Áudio
+                    {tr('🎵 Áudio', '🎵 Audio', '🎵 Audio')}
                   </a>
                 )}
               </div>
@@ -218,7 +225,7 @@ export default function LetraPage() {
               <div className="bg-white rounded-2xl p-6 md:p-8 border-2 border-slate-200 shadow-lg">
                 <div className="flex items-center gap-2 mb-6 pb-4 border-b-2 border-slate-200">
                   <BookOpen className="text-emerald-700" size={24} />
-                  <h2 className="text-2xl font-bold text-slate-800">Letra</h2>
+                  <h2 className="text-2xl font-bold text-slate-800">{tr('Letra', 'Letra', 'Lyrics')}</h2>
                 </div>
                 
                 <div className="whitespace-pre-wrap text-xl md:text-2xl leading-relaxed font-serif text-slate-800 pb-8">
@@ -230,7 +237,7 @@ export default function LetraPage() {
                   <div className="mt-8 pt-8 border-t-2 border-slate-200">
                     <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                       <Youtube className="text-red-600" size={24} />
-                      Assista no YouTube
+                      {tr('Assista no YouTube', 'Mira en YouTube', 'Watch on YouTube')}
                     </h3>
                     <div className="aspect-video w-full rounded-xl overflow-hidden shadow-xl">
                       <iframe
@@ -249,7 +256,7 @@ export default function LetraPage() {
             ) : (
               <div className="bg-white rounded-2xl p-8 border-2 border-slate-200 text-center">
                 <BookOpen className="mx-auto text-slate-400 mb-3" size={48} />
-                <p className="text-slate-600 text-lg">Letra ainda não disponível</p>
+                <p className="text-slate-600 text-lg">{tr('Letra ainda não disponível', 'Letra aún no disponible', 'Lyrics not available yet')}</p>
               </div>
             )}
           </>
