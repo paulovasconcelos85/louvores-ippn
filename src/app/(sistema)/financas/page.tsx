@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, ClipboardCheck, HelpCircle, Loader2, PiggyBank, Receipt, Settings, Wallet } from 'lucide-react';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { PAPEIS_EQUIPE, criarFormatadorMoeda } from '@/lib/financas';
-import { finApi, type ContextoFinancas } from '@/components/financas/api';
+import { FinApiError, finApi, type ContextoFinancas } from '@/components/financas/api';
+import { useLocale } from '@/i18n/provider';
+import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import LancamentosTab from '@/components/financas/LancamentosTab';
 import RelatoriosTab from '@/components/financas/RelatoriosTab';
 import OrcamentoTab from '@/components/financas/OrcamentoTab';
@@ -26,16 +28,25 @@ export default function FinancasPage() {
   const [igrejaId, setIgrejaId] = useState<string | null>(null);
   const [contexto, setContexto] = useState<ContextoFinancas | null>(null);
   const [erro, setErro] = useState('');
+  // Igreja fora do Brasil: a Tesouraria não existe para ela (não é falta de permissão).
+  const [indisponivel, setIndisponivel] = useState(false);
   const [aba, setAba] = useState<Aba>('lancamentos');
+  const locale = useLocale();
 
   const carregar = useCallback(async (id: string) => {
     try {
       setErro('');
+      setIndisponivel(false);
       setContexto(await finApi<ContextoFinancas>(`contexto?igreja_id=${encodeURIComponent(id)}`));
     } catch (error: any) {
+      if (error instanceof FinApiError && error.code === 'FINANCE_UNAVAILABLE') {
+        setIndisponivel(true);
+        setErro(resolveApiErrorMessage(locale, { code: error.code }, error.message));
+        return;
+      }
       setErro(error.message);
     }
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     const id = getStoredChurchId();
@@ -60,14 +71,18 @@ export default function FinancasPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
           <Wallet className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 font-semibold text-slate-900">{erro}</p>
-          <p className="mt-2 text-sm text-slate-600">
-            As finanças ficam com a equipe da tesouraria e o Conselho. Se você é o tesoureiro, peça ao pastor para designar você em
-            Finanças → Configurações → Equipe.
-          </p>
-          <Link href="/ajuda#financas" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 underline">
-            <HelpCircle className="h-4 w-4" />
-            Como funciona a tesouraria
-          </Link>
+          {indisponivel ? null : (
+            <>
+              <p className="mt-2 text-sm text-slate-600">
+                As finanças ficam com a equipe da tesouraria e o Conselho. Se você é o tesoureiro, peça ao pastor para designar você em
+                Finanças → Configurações → Equipe.
+              </p>
+              <Link href="/ajuda#financas" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 underline">
+                <HelpCircle className="h-4 w-4" />
+                Como funciona a tesouraria
+              </Link>
+            </>
+          )}
         </div>
       </div>
     );

@@ -266,3 +266,11 @@ export function intervaloDoPeriodo(ano: number, periodo: number) {
 export function nomeDoPeriodo(periodo: number) {
   return periodo === 0 ? 'Exercício completo' : `${periodo}º trimestre`;
 }
+
+/**
+ * A Tesouraria segue as normas da IPB, então só existe para igrejas no Brasil.
+ * Igreja sem país definido conta como brasileira (o cadastro antigo era só BR).
+ */
+export function tesourariaDisponivel(pais: string | null | undefined) {
+  return !pais || pais.trim().toUpperCase() === 'BR';
+}

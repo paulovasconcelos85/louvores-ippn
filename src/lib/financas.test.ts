@@ -5,6 +5,7 @@ import {
   intervaloDoPeriodo,
   lerValorDigitado,
   nomeDoPeriodo,
+  tesourariaDisponivel,
   trimestreDe,
   valorDaMascara,
 } from '@/lib/financas';
@@ -119,5 +120,21 @@ describe('valorDaMascara', () => {
 
   it('limita a 12 dígitos', () => {
     expect(digitar(brl, Array(15).fill('9'))).toBe(999999999999);
+  });
+});
+
+describe('tesourariaDisponivel', () => {
+  it('libera para igrejas no Brasil ou sem país definido', () => {
+    expect(tesourariaDisponivel('BR')).toBe(true);
+    expect(tesourariaDisponivel('br')).toBe(true);
+    expect(tesourariaDisponivel(null)).toBe(true);
+    expect(tesourariaDisponivel(undefined)).toBe(true);
+    expect(tesourariaDisponivel('')).toBe(true);
+  });
+
+  it('esconde para igrejas de outros países', () => {
+    expect(tesourariaDisponivel('CA')).toBe(false);
+    expect(tesourariaDisponivel('PT')).toBe(false);
+    expect(tesourariaDisponivel('US')).toBe(false);
   });
 });

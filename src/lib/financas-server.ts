@@ -1,7 +1,7 @@
 import { apiError } from '@/lib/api-response';
 import { getUserPermissionContext } from '@/lib/server-church';
 import { getSupabaseAdmin } from '@/lib/igreja-onboarding';
-import { CATEGORIAS_PADRAO, trimestreDe, type FinPermissoes, type PapelEquipe } from '@/lib/financas';
+import { CATEGORIAS_PADRAO, tesourariaDisponivel, trimestreDe, type FinPermissoes, type PapelEquipe } from '@/lib/financas';
 import { resumirBase, type BaseFinanceira, type ResumoFinanceiro } from '@/lib/financas-resumo';
 
 export { getSupabaseAdmin, resumirBase };
@@ -31,6 +31,16 @@ export async function contextoFinanceiro(request: Request, igrejaId: string | nu
   }
 
   const supabaseAdmin = getSupabaseAdmin();
+
+  // A Tesouraria segue as normas da IPB (estatuto, relatório estatístico, dízimo
+  // ao Supremo Concílio): só fica disponível para igrejas no Brasil.
+  const { data: igreja } = await supabaseAdmin.from('igrejas').select('pais').eq('id', igrejaId).maybeSingle();
+  if (!tesourariaDisponivel(igreja?.pais)) {
+    return {
+      error: apiError('FINANCE_UNAVAILABLE', 403, 'A Tesouraria está disponível só para igrejas no Brasil.'),
+    };
+  }
+
   const pessoaId = contexto.acesso?.pessoa_id || null;
   const anoAtual = new Date().getFullYear();
 

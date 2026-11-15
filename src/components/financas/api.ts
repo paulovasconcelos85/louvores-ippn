@@ -11,7 +11,14 @@ export interface ContextoFinancas {
   equipe: Array<{ id: string; papel: PapelEquipe; ano: number; pessoa_id: string; nome: string }>;
 }
 
-/** fetch autenticado das rotas /api/financas; lança Error com a mensagem da API. */
+/** Erro das rotas /api/financas, com o código da API (ex.: FINANCE_UNAVAILABLE). */
+export class FinApiError extends Error {
+  constructor(message: string, readonly code: string | null) {
+    super(message);
+  }
+}
+
+/** fetch autenticado das rotas /api/financas; lança FinApiError com a mensagem da API. */
 export async function finApi<T = any>(caminho: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...resto } = init || {};
   const headers = await buildAuthenticatedHeaders(json !== undefined ? { 'Content-Type': 'application/json' } : undefined);
@@ -21,7 +28,7 @@ export async function finApi<T = any>(caminho: string, init?: RequestInit & { js
     body: json !== undefined ? JSON.stringify(json) : resto.body,
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a operação.');
+  if (!response.ok) throw new FinApiError(data.error || 'Não foi possível concluir a operação.', data.code || null);
   return data as T;
 }
 

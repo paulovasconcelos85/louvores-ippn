@@ -21,6 +21,11 @@ const ERROR_MESSAGES: Record<string, TranslationEntry> = {
     es: 'No tienes permiso para realizar esta acción.',
     en: 'You do not have permission to perform this action.',
   },
+  FINANCE_UNAVAILABLE: {
+    pt: 'A Tesouraria está disponível só para igrejas no Brasil.',
+    es: 'La Tesorería está disponible solo para iglesias en Brasil.',
+    en: 'Treasury is only available for churches in Brazil.',
+  },
   CHURCH_REQUIRED: {
     pt: 'Nenhuma igreja selecionada.',
     es: 'No se seleccionó ninguna iglesia.',
