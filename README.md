@@ -83,7 +83,8 @@ src/
 ├── hooks/
 ├── lib/                       # access-sync, permissions, supabase client, …
 └── i18n/                      # Locale (pt/es/en), provider, messages
-sql/                           # Migrations e scripts datados
+supabase/migrations/           # Migrations versionadas do banco
+sql/historico/                 # Scripts antigos, aplicados à mão (só registro)
 ```
 
 ## Começando
@@ -139,9 +140,21 @@ CRON_SECRET=
 
 ## Banco de dados e migrations
 
-Os scripts SQL ficam em [`sql/`](sql/), nomeados por data (`YYYY-MM-DD_descricao.sql`). Eles cobrem o modelo multi-igreja, i18n de conteúdo, boletins, push e provisionamento.
+O banco é versionado em [`supabase/migrations/`](supabase/migrations/). As três primeiras migrações (15/11/2026) reproduzem a produção inteira: o schema `public`, os objetos de `auth`/`storage` e as permissões (grants). Os scripts antigos, aplicados à mão, estão em [`sql/historico/`](sql/historico/) só como registro.
 
-Aplique no **SQL Editor do Supabase**, em ordem cronológica. Scripts de diagnóstico/reconciliação rodam dentro de transação com `rollback` — troque por `commit` só após revisar.
+Pré-requisitos: [Docker Desktop](https://www.docker.com/products/docker-desktop/) e o [Supabase CLI](https://supabase.com/docs/guides/cli).
+
+```bash
+supabase start                      # sobe o Supabase local (Postgres em 127.0.0.1:54322)
+supabase migration new descricao    # cria supabase/migrations/<data>_descricao.sql
+supabase db reset                   # recria o banco local do zero com todas as migrações
+supabase db push                    # aplica na produção as migrações que faltam
+supabase stop                       # desliga os containers
+```
+
+Fluxo para mudar o banco: crie a migração, teste com `supabase db reset` (e, para RLS, impersonando usuários dentro de uma transação com `rollback`), faça o commit e só então aplique na produção.
+
+O Supabase local dá a `anon`/`authenticated` acesso a tudo o que é criado. Ao criar tabela ou função, escreva na própria migração os `revoke`/`grant` que ela deve ter.
 
 ## Autenticação e acesso
 
