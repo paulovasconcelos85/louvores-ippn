@@ -1,6 +1,8 @@
 // lib/permissions.ts
 import { ADMIN_EMAILS } from './admin-config';
 import { Constants, type Database } from './database.types';
+import type { Locale } from '@/i18n/config';
+import { porIdioma } from '@/i18n/por-idioma';
 
 export type CargoTipo = Database['public']['Enums']['cargo_tipo'];
 
@@ -266,20 +268,21 @@ export function podeEditarRecursosMultimidia(cargo: CargoTipo | null, tags: TagP
 /**
  * Retorna label amigável para o cargo
  */
-export function getCargoLabel(cargo: CargoTipo): string {
+export function getCargoLabel(cargo: CargoTipo, locale: Locale = 'pt'): string {
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const labels: Record<CargoTipo, string> = {
-    membro: 'Membro',
-    diacono: 'Diácono',
-    presbitero: 'Presbítero',
-    pastor: 'Pastor',
-    seminarista: 'Seminarista',
-    staff: 'Staff',
-    musico: 'Músico',
-    admin: 'Administrador',
-    secretario: 'Secretário',
-    tesoureiro: 'Tesoureiro',
-    congregado: 'Congregado',
-    visitante: 'Visitante',
+    membro: tr('Membro', 'Miembro', 'Member'),
+    diacono: tr('Diácono', 'Diácono', 'Deacon'),
+    presbitero: tr('Presbítero', 'Presbítero', 'Elder'),
+    pastor: tr('Pastor', 'Pastor', 'Pastor'),
+    seminarista: tr('Seminarista', 'Seminarista', 'Seminarian'),
+    staff: tr('Staff', 'Staff', 'Staff'),
+    musico: tr('Músico', 'Músico', 'Musician'),
+    admin: tr('Administrador', 'Administrador', 'Administrator'),
+    secretario: tr('Secretário', 'Secretario', 'Secretary'),
+    tesoureiro: tr('Tesoureiro', 'Tesorero', 'Treasurer'),
+    congregado: tr('Congregado', 'Congregante', 'Regular attender'),
+    visitante: tr('Visitante', 'Visitante', 'Visitor'),
     superadmin: 'Super Admin'
   };
   return labels[cargo];

@@ -314,24 +314,43 @@ export default function LoginPage() {
             </div>
           </div>
           <p className="mx-auto mt-4 max-w-xl text-lg italic leading-7 text-slate-600">
-            O sistema que organiza boletins, cultos, escalas, louvores e cuidado pastoral em um só lugar.
+            {locale === 'es'
+              ? 'El sistema que organiza boletines, cultos, turnos, alabanza y cuidado pastoral en un solo lugar.'
+              : locale === 'en'
+                ? 'One place for your bulletin, services, volunteer schedules, worship songs and pastoral care.'
+                : 'O sistema que organiza boletins, cultos, escalas, louvores e cuidado pastoral em um só lugar.'}
           </p>
         </div>
 
         <div className="relative grid overflow-hidden rounded-md border border-[#1e1208]/15 bg-white outline outline-1 outline-offset-[-7px] outline-[#1e1208]/10 shadow-[0_1px_2px_rgba(30,18,8,0.04),0_24px_50px_-24px_rgba(30,18,8,0.35)] lg:grid-cols-[0.85fr_1fr]">
           <aside className="hidden border-r border-[#1e1208]/10 bg-[#1e1208]/[0.03] p-10 lg:flex lg:flex-col lg:justify-between">
             <div>
-              <p className="font-fell text-sm tracking-[0.3em] text-rubrica">Gestão para igrejas</p>
+              <p className="font-fell text-sm tracking-[0.3em] text-rubrica">
+                {locale === 'es' ? 'Gestión para iglesias' : locale === 'en' ? 'Church management' : 'Gestão para igrejas'}
+              </p>
               <h2 className="mt-4 text-3xl leading-tight text-slate-950">
-                Menos trabalho espalhado. Mais clareza para cuidar de pessoas.
+                {locale === 'es'
+                  ? 'Menos trabajo disperso. Más claridad para cuidar de las personas.'
+                  : locale === 'en'
+                    ? 'Less scattered work. More clarity to care for people.'
+                    : 'Menos trabalho espalhado. Mais clareza para cuidar de pessoas.'}
               </h2>
               <p className="mt-4 text-lg italic leading-7 text-slate-600">
-                OIKOS Hub conecta a rotina da igreja: equipe, programação, repertório, boletim público e cadastro pastoral.
+                {locale === 'es'
+                  ? 'OIKOS Hub conecta la rutina de la iglesia: equipo, programación, repertorio, boletín público y registro pastoral.'
+                  : locale === 'en'
+                    ? "OIKOS Hub brings your church's week together: team, schedule, songs, public bulletin and member care."
+                    : 'OIKOS Hub conecta a rotina da igreja: equipe, programação, repertório, boletim público e cadastro pastoral.'}
               </p>
             </div>
 
             <div className="mt-8 grid gap-3">
-              {['Boletim público pronto para compartilhar', 'Escalas e cultos sempre conectados', 'Cadastro pastoral com visão da comunidade'].map((item) => (
+              {(locale === 'es'
+                ? ['Boletín público listo para compartir', 'Turnos y cultos siempre conectados', 'Registro pastoral con visión de la comunidad']
+                : locale === 'en'
+                  ? ['A public bulletin ready to share', 'Volunteer schedules tied to every service', 'Member records with a view of the whole church']
+                  : ['Boletim público pronto para compartilhar', 'Escalas e cultos sempre conectados', 'Cadastro pastoral com visão da comunidade']
+              ).map((item) => (
                 <div key={item} className="flex items-baseline gap-3 border-t border-dotted border-[#1e1208]/20 py-3 text-lg text-slate-800">
                   <span className="text-rubrica" aria-hidden>❧</span>
                   {item}

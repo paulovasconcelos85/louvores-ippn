@@ -24,12 +24,14 @@ import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY } from '@/lib/church-utils';
 import { resolveApiErrorMessage } from '@/lib/api-feedback';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
+import { porIdioma } from '@/i18n/por-idioma';
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const locale = useLocale();
   const t = useTranslations();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const { user, loading, signOut } = useAuth();
   const { usuarioPermitido, permissoes } = usePermissions();
   const [menuAberto, setMenuAberto] = useState(false);
@@ -148,7 +150,7 @@ export default function Header() {
             className="flex items-center gap-2 px-3 py-2 text-emerald-700 hover:bg-[#1e1208]/5 hover:text-rubrica rounded-full text-base transition-colors"
           >
             <Home className="w-4 h-4" />
-            <span className="hidden sm:inline">Boletim</span>
+            <span className="hidden sm:inline">{tr('Boletim', 'Boletín', 'Bulletin')}</span>
           </button>
 
           <div className="relative">
@@ -223,7 +225,7 @@ export default function Header() {
                       className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                     >
                       <Library className="w-4 h-4" />
-                      Recursos
+                      {tr('Recursos', 'Recursos', 'Resources')}
                     </button>
 
                     <button
@@ -234,19 +236,22 @@ export default function Header() {
                       className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                     >
                       <CalendarDays className="w-4 h-4" />
-                      Eventos
+                      {tr('Eventos', 'Eventos', 'Events')}
                     </button>
 
-                    <button
-                      onClick={() => {
-                        setMenuAberto(false);
-                        router.push('/confissoes');
-                      }}
-                      className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
-                    >
-                      <ScrollText className="w-4 h-4" />
-                      Confissões e Catecismos
-                    </button>
+                    {/* A biblioteca só tem os textos em português. */}
+                    {locale === 'pt' && (
+                      <button
+                        onClick={() => {
+                          setMenuAberto(false);
+                          router.push('/confissoes');
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
+                      >
+                        <ScrollText className="w-4 h-4" />
+                        Confissões e Catecismos
+                      </button>
+                    )}
 
                     {veTesouraria && (
                       <button
@@ -257,7 +262,7 @@ export default function Header() {
                         className="w-full text-left px-5 py-2.5 text-base hover:bg-[#1e1208]/5 hover:text-rubrica flex items-center gap-3 text-slate-700 transition-colors"
                       >
                         <Wallet className="w-4 h-4" />
-                        Tesouraria
+                        {tr('Tesouraria', 'Tesorería', 'Treasury')}
                       </button>
                     )}
 

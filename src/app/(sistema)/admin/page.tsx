@@ -192,7 +192,7 @@ export default function AdminPage() {
       superadmin: 'Super Admin',
     };
 
-    return labels[cargo] || getCargoLabel(cargo as any);
+    return labels[cargo] || getCargoLabel(cargo as any, locale);
   };
 
   useEffect(() => {

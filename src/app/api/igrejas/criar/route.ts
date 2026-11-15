@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { getAuthenticatedUserFromServerCookies } from '@/lib/server-church';
-import { getSupabaseAdmin, MODELO_LITURGICO_INICIAL, slugsOcupados } from '@/lib/igreja-onboarding';
+import { getSupabaseAdmin, modeloLiturgicoInicial, slugsOcupados } from '@/lib/igreja-onboarding';
+import { getLocaleFromNextRequest } from '@/i18n/server';
 import { normalizarSlug, sugerirSlugs, validarSlug } from '@/lib/slug-igreja';
 
 // POST /api/igrejas/criar
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         ativo: true,
         visivel_publico: true,
         permite_cadastro_canticos: true,
-        modelo_liturgico_padrao: MODELO_LITURGICO_INICIAL,
+        modelo_liturgico_padrao: modeloLiturgicoInicial(getLocaleFromNextRequest(request)),
       })
       .select('id, slug, nome')
       .single();

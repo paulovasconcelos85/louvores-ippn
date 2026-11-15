@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Mail, Phone, UserRound } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useTranslations } from '@/i18n/provider';
+import { useLocale, useTranslations } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { getCargoCor, getCargoLabel, isCargoTipo } from '@/lib/permissions';
 
@@ -20,6 +20,7 @@ interface PessoaLideranca {
 export default function MembroLiderancaPage() {
   const router = useRouter();
   const t = useTranslations();
+  const locale = useLocale();
   const { user, loading: authLoading } = useAuth();
   const { loading: permLoading, permissoes } = usePermissions();
   const loading = authLoading || permLoading;
@@ -100,7 +101,7 @@ export default function MembroLiderancaPage() {
                 <p className="font-semibold text-slate-900">{pessoa.nome}</p>
                 {pessoa.cargo && isCargoTipo(pessoa.cargo) ? (
                   <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getCargoCor(pessoa.cargo)}`}>
-                    {getCargoLabel(pessoa.cargo)}
+                    {getCargoLabel(pessoa.cargo, locale)}
                   </span>
                 ) : null}
                 <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">

@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useNomeIgreja } from '@/hooks/useNomeIgreja';
+import { useLocale } from '@/i18n/provider';
+import { getIntlLocale } from '@/i18n/config';
+import { porIdioma } from '@/i18n/por-idioma';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { resolvePessoaIdForCurrentUser } from '@/lib/client-current-person';
 
@@ -46,6 +49,8 @@ interface Escala {
 export default function EscalaPublicaPage() {
   const params = useParams();
   const router = useRouter();
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const escalaId = params?.id as string;
   const { user } = useAuth();
   
@@ -187,11 +192,11 @@ export default function EscalaPublicaPage() {
       
       await Promise.all(updates);
       
-      setMensagem('✅ Presença confirmada com sucesso!');
+      setMensagem(`✅ ${tr('Presença confirmada com sucesso!', '¡Asistencia confirmada!', 'Attendance confirmed!')}`);
       carregarEscala(); // Recarregar para atualizar status
     } catch (error: any) {
       console.error('Erro ao confirmar:', error);
-      setMensagem('❌ Erro ao confirmar presença');
+      setMensagem(`❌ ${tr('Erro ao confirmar presença', 'Error al confirmar la asistencia', 'Could not confirm attendance')}`);
     } finally {
       setConfirmando(false);
     }
@@ -199,10 +204,10 @@ export default function EscalaPublicaPage() {
 
   const getTipoCultoLabel = (tipo: string | null) => {
     const labels: Record<string, string> = {
-      dominical_manha: 'Dominical - Manhã',
-      dominical_noite: 'Dominical - Noite',
-      quarta: 'Quarta-feira',
-      especial: 'Culto Especial'
+      dominical_manha: tr('Dominical - Manhã', 'Dominical - Mañana', 'Sunday - Morning'),
+      dominical_noite: tr('Dominical - Noite', 'Dominical - Noche', 'Sunday - Evening'),
+      quarta: tr('Quarta-feira', 'Miércoles', 'Wednesday'),
+      especial: tr('Culto Especial', 'Culto especial', 'Special service')
     };
     return tipo ? labels[tipo] || tipo : '';
   };
@@ -212,7 +217,7 @@ export default function EscalaPublicaPage() {
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-slate-50 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Carregando escala...</p>
+          <p className="mt-4 text-slate-600">{tr('Carregando escala...', 'Cargando turno...', 'Loading schedule...')}</p>
         </div>
       </div>
     );
@@ -223,13 +228,21 @@ export default function EscalaPublicaPage() {
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-slate-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <p className="text-6xl mb-4">❌</p>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Escala não encontrada</h1>
-          <p className="text-slate-600 mb-6">Esta escala pode ter sido removida ou o link está incorreto.</p>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">
+            {tr('Escala não encontrada', 'Turno no encontrado', 'Schedule not found')}
+          </h1>
+          <p className="text-slate-600 mb-6">
+            {tr(
+              'Esta escala pode ter sido removida ou o link está incorreto.',
+              'Es posible que este turno haya sido eliminado o que el enlace sea incorrecto.',
+              'This schedule may have been removed, or the link is incorrect.'
+            )}
+          </p>
           <button
             onClick={() => router.push('/')}
             className="text-emerald-700 hover:text-emerald-800 font-medium"
           >
-            ← Voltar para início
+            ← {tr('Voltar para início', 'Volver al inicio', 'Back to home')}
           </button>
         </div>
       </div>
@@ -246,7 +259,7 @@ export default function EscalaPublicaPage() {
         <div className="text-center mb-8">
           <div className="inline-block bg-white rounded-2xl px-6 py-3 shadow-sm border border-emerald-200 mb-4">
             <h2 className="text-emerald-800 font-bold text-sm uppercase tracking-wider">
-              🎵 Sistema de Liturgia IPPN
+              🎵 {nomeIgreja || 'OIKOS Hub'}
             </h2>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
@@ -256,7 +269,7 @@ export default function EscalaPublicaPage() {
             <span className="flex items-center gap-2">
               <span>📅</span>
               <span className="font-medium">
-                {new Date(escala.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                {new Date(escala.data + 'T00:00:00').toLocaleDateString(getIntlLocale(locale), {
                   weekday: 'long',
                   day: '2-digit',
                   month: 'long',
@@ -298,16 +311,20 @@ export default function EscalaPublicaPage() {
                 <span className="text-2xl">🔒</span>
                 <div className="flex-1">
                   <p className="font-semibold text-amber-900 mb-1">
-                    Faça login para confirmar sua presença
+                    {tr('Faça login para confirmar sua presença', 'Inicia sesión para confirmar tu asistencia', 'Sign in to confirm your attendance')}
                   </p>
                   <p className="text-sm text-amber-800 mb-3">
-                    Entre com sua conta para ver suas funções e confirmar.
+                    {tr(
+                      'Entre com sua conta para ver suas funções e confirmar.',
+                      'Entra con tu cuenta para ver tus funciones y confirmar.',
+                      'Sign in to see your roles and confirm.'
+                    )}
                   </p>
                   <button
                     onClick={() => router.push('/login')}
                     className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium text-sm"
                   >
-                    Fazer Login
+                    {tr('Fazer login', 'Iniciar sesión', 'Sign in')}
                   </button>
                 </div>
               </div>
@@ -320,10 +337,14 @@ export default function EscalaPublicaPage() {
                 <span className="text-2xl">⏳</span>
                 <div>
                   <p className="font-semibold text-slate-900 mb-1">
-                    Identificando suas funções
+                    {tr('Identificando suas funções', 'Identificando tus funciones', 'Finding your roles')}
                   </p>
                   <p className="text-sm text-slate-700">
-                    Estamos verificando seu cadastro antes de liberar a confirmação.
+                    {tr(
+                      'Estamos verificando seu cadastro antes de liberar a confirmação.',
+                      'Estamos verificando tu registro antes de habilitar la confirmación.',
+                      'We are checking your profile before enabling confirmation.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -337,10 +358,10 @@ export default function EscalaPublicaPage() {
                 <span className="text-2xl">ℹ️</span>
                 <div>
                   <p className="font-semibold text-blue-900 mb-1">
-                    Você não está escalado(a) para este culto
+                    {tr('Você não está escalado(a) para este culto', 'No estás en el turno de este culto', 'You are not scheduled for this service')}
                   </p>
                   <p className="text-sm text-blue-800">
-                    Esta escala é para outras pessoas da equipe.
+                    {tr('Esta escala é para outras pessoas da equipe.', 'Este turno es para otras personas del equipo.', 'This schedule is for other team members.')}
                   </p>
                 </div>
               </div>
@@ -362,14 +383,14 @@ export default function EscalaPublicaPage() {
                   <h3 className={`text-xl font-bold mb-2 ${
                     todasConfirmadas ? 'text-green-900' : 'text-amber-900'
                   }`}>
-                    {todasConfirmadas 
-                      ? '🎉 Presença confirmada!' 
-                      : '⚠️ Aguardando confirmação'}
+                    {todasConfirmadas
+                      ? `🎉 ${tr('Presença confirmada!', '¡Asistencia confirmada!', 'Attendance confirmed!')}`
+                      : `⚠️ ${tr('Aguardando confirmação', 'Esperando confirmación', 'Awaiting confirmation')}`}
                   </h3>
                   
                   <div className="space-y-2 mb-4">
                     <p className="font-semibold text-slate-900">
-                      Você está escalado(a) para:
+                      {tr('Você está escalado(a) para:', 'Estás en el turno como:', 'You are scheduled as:')}
                     </p>
                     {minhasFuncoes.map(func => (
                       <div key={func.id} className="flex items-center gap-3 bg-white rounded-lg px-4 py-3 border-2 border-slate-200">
@@ -381,7 +402,7 @@ export default function EscalaPublicaPage() {
                           {func.tags_funcoes.icone} {func.tags_funcoes.nome}
                         </span>
                         {func.confirmado && (
-                          <span className="text-green-600 font-bold text-sm">✓ Confirmado</span>
+                          <span className="text-green-600 font-bold text-sm">✓ {tr('Confirmado', 'Confirmado', 'Confirmed')}</span>
                         )}
                       </div>
                     ))}
@@ -393,7 +414,9 @@ export default function EscalaPublicaPage() {
                       disabled={confirmando}
                       className="w-full bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {confirmando ? '⏳ Confirmando...' : '✓ Confirmar Presença'}
+                      {confirmando
+                        ? `⏳ ${tr('Confirmando...', 'Confirmando...', 'Confirming...')}`
+                        : `✓ ${tr('Confirmar presença', 'Confirmar asistencia', 'Confirm attendance')}`}
                     </button>
                   )}
                 </div>
@@ -405,22 +428,22 @@ export default function EscalaPublicaPage() {
           <div className="px-6 py-4">
             <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
               <span>📋</span>
-              Informações do Culto
+              {tr('Informações do culto', 'Información del culto', 'Service details')}
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-slate-600">
-                <span className="font-medium w-20">⛪ Tipo:</span>
+                <span className="font-medium w-20">⛪ {tr('Tipo', 'Tipo', 'Type')}:</span>
                 <span>{getTipoCultoLabel(escala.tipo_culto)}</span>
               </div>
               {escala.culto_id && (
                 <div className="flex items-center gap-2 text-slate-600">
-                  <span className="font-medium w-20">🎵 Culto:</span>
+                  <span className="font-medium w-20">🎵 {tr('Culto', 'Culto', 'Service')}:</span>
                   <span>#{escala.culto_id}</span>
                 </div>
               )}
               {escala.observacoes && (
                 <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-                  <p className="text-xs font-semibold text-slate-700 mb-1">💬 Observações:</p>
+                  <p className="text-xs font-semibold text-slate-700 mb-1">💬 {tr('Observações', 'Observaciones', 'Notes')}:</p>
                   <p className="text-slate-600 whitespace-pre-line">{escala.observacoes}</p>
                 </div>
               )}

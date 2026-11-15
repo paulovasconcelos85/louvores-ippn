@@ -427,7 +427,7 @@ export default function OikosLandingClient() {
       <section className="relative overflow-hidden bg-slate-950 pt-16 text-white sm:pt-20 lg:min-h-[92vh]">
         <Image
           src="/oikos/image-1-1.jpg"
-          alt="Pastor conversando com membros da igreja"
+          alt={locale === 'es' ? 'Pastor conversando con miembros de la iglesia' : locale === 'en' ? 'Pastor talking with church members' : 'Pastor conversando com membros da igreja'}
           fill
           priority
           sizes="100vw"
@@ -482,7 +482,9 @@ export default function OikosLandingClient() {
                 <div className="mb-6 flex items-center justify-between">
                   <div>
                     <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-200/80">OIKOS Hub</p>
-                    <p className="mt-1 text-lg font-semibold">Semana da igreja</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {locale === 'es' ? 'Semana de la iglesia' : locale === 'en' ? 'Church week' : 'Semana da igreja'}
+                    </p>
                   </div>
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-300/10">
                     <ClipboardList className="h-5 w-5 text-emerald-300" />
@@ -699,7 +701,7 @@ export default function OikosLandingClient() {
             <div className="mt-8 overflow-hidden rounded-3xl shadow-xl shadow-slate-900/10 sm:mt-10">
               <Image
                 src="/oikos/image-2-1.jpg"
-                alt="Pastor revisando informações da semana"
+                alt={locale === 'es' ? 'Pastor revisando la información de la semana' : locale === 'en' ? "Pastor reviewing the week's plans" : 'Pastor revisando informações da semana'}
                 width={900}
                 height={900}
                 className="h-56 w-full object-cover sm:h-80"

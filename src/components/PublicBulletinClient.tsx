@@ -38,6 +38,7 @@ import { formatarTextoParaWhatsApp } from '@/lib/formatacao-whatsapp';
 import VersiculoDoDia from '@/components/VersiculoDoDia';
 import ConfissaoDoDia from '@/components/ConfissaoDoDia';
 import { lembrarBoletim } from '@/components/VoltarBoletim';
+import { porIdioma } from '@/i18n/por-idioma';
 
 interface BoletimItem {
   id: string;
@@ -397,8 +398,8 @@ function extrairNomeCardLiturgia(conteudo: string) {
   return corpo || null;
 }
 
-function getTituloCardLiturgia(nome: string | null) {
-  return nome ? `Liturgia - ${nome}` : 'Liturgia';
+function getTituloCardLiturgia(nome: string | null, rotulo: string) {
+  return nome ? `${rotulo} - ${nome}` : rotulo;
 }
 
 function agruparCardsLiturgia(itens: BoletimItem[]) {
@@ -468,6 +469,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const { user, loading: authLoading, signOut } = useAuth();
 
   const [igrejas, setIgrejas] = useState<IgrejaSelecionavel[]>([]);
@@ -700,7 +702,30 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   }, [igrejaSlug]);
 
   const mensagemCompartilhamento = useMemo(() => {
-    const nomeIgreja = igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'nossa igreja';
+    const nomeIgreja =
+      igrejaDetalhes?.nome_completo ||
+      igrejaSelecionada?.nome ||
+      porIdioma(locale, 'nossa igreja', 'nuestra iglesia', 'our church');
+
+    if (locale === 'en') {
+      return (
+        `📖 *Grace and peace!* 🙏\n\n` +
+        `Sharing this week's bulletin from *${nomeIgreja}* with you.\n\n` +
+        `_"How beautiful are the feet of those who bring good news!"_ (Romans 10:15)\n\n` +
+        `May God's Word strengthen your heart this week. Come and worship with us! 🕊️✨\n\n` +
+        `👉 ${linkBoletim}`
+      );
+    }
+
+    if (locale === 'es') {
+      return (
+        `📖 *¡Paz del Señor!* 🙏\n\n` +
+        `Comparto contigo el boletín de *${nomeIgreja}*.\n\n` +
+        `_"¡Qué hermoso es recibir al mensajero que trae buenas nuevas!"_ (Romanos 10:15)\n\n` +
+        `Que la Palabra de Dios edifique tu corazón esta semana. ¡Ven a celebrar con nosotros la comunión de los santos! 🕊️✨\n\n` +
+        `👉 ${linkBoletim}`
+      );
+    }
 
     return (
       `📖 *Paz do Senhor!* 🙏\n\n` +
@@ -709,7 +734,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       `Que a Palavra de Deus edifique o seu coração nesta semana. Venha celebrar conosco a comunhão dos santos! 🕊️✨\n\n` +
       `👉 ${linkBoletim}`
     );
-  }, [igrejaDetalhes?.nome_completo, igrejaSelecionada?.nome, linkBoletim]);
+  }, [igrejaDetalhes?.nome_completo, igrejaSelecionada?.nome, linkBoletim, locale]);
 
   const copiarParaAreaTransferencia = async (texto: string) => {
     // Clipboard API moderna (requer contexto seguro: HTTPS ou localhost).
@@ -790,7 +815,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(13);
-      doc.text(getTituloCardLiturgia(card.nome).toUpperCase(), pw / 2, 11, { align: 'center' });
+      doc.text(getTituloCardLiturgia(card.nome, tr('Liturgia', 'Liturgia', 'Liturgy')).toUpperCase(), pw / 2, 11, { align: 'center' });
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.text(
@@ -1000,7 +1025,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
     secao.id === 'cada-dia-devocional' ||
     ['cada dia', 'meditação do dia'].includes(secao.titulo.trim().toLowerCase());
   const nomeExibicaoIgreja =
-    igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || 'Boletim';
+    igrejaDetalhes?.nome_completo || igrejaSelecionada?.nome || tr('Boletim', 'Boletín', 'Bulletin');
   const logoIgrejaUrl = igrejaDetalhes?.logo_url?.trim() || null;
 
   const boletinsAnterioresHref = igrejaAtualId
@@ -1258,7 +1283,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       .trim();
     const [titulo, ...corpoPartes] = texto.split('\n\n');
     const corpo = corpoPartes.join('\n\n').trim();
-    const textoCadaDia = `*${titulo}*\n\n${formatarTextoParaWhatsApp(corpo)}\n\nFonte: ${fonteUrl}`;
+    const textoCadaDia = `*${titulo}*\n\n${formatarTextoParaWhatsApp(corpo)}\n\n${tr('Fonte', 'Fuente', 'Source')}: ${fonteUrl}`;
     // Bloco inteiro: Versículo + Confissão (quando carregados) + Devocional Cada Dia.
     const textoCompartilhamento = [versiculoCompartilhamento, confissaoCompartilhamento, textoCadaDia]
       .filter(Boolean)
@@ -1278,7 +1303,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               rel="noreferrer"
               className="inline-flex flex-wrap items-center gap-2 italic text-[20px] text-[#365c4d] underline decoration-[#365c4d]/40 underline-offset-4 break-all"
             >
-              <span className="break-all">Fonte: {fonteUrl}</span>
+              <span className="break-all">{tr('Fonte', 'Fuente', 'Source')}: {fonteUrl}</span>
               <ExternalLink className="h-4 w-4 flex-shrink-0" />
             </a>
             <div className="flex flex-shrink-0 items-center gap-1">
@@ -1290,7 +1315,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     '_blank'
                   )
                 }
-                title="Compartilhar o bloco inteiro (versículo, confissão e devocional) no WhatsApp"
+                title={tr('Compartilhar o bloco inteiro (versículo, confissão e devocional) no WhatsApp', 'Compartir el bloque completo (versículo, confesión y devocional) por WhatsApp', 'Share the whole block (verse, confession and devotional) on WhatsApp')}
                 className={botaoDiscreto}
               >
                 <MessageCircle className="h-3.5 w-3.5" />
@@ -1299,7 +1324,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <button
                 type="button"
                 onClick={() => copiarCadaDia(textoCompartilhamento)}
-                title="Copiar o bloco inteiro (versículo, confissão e devocional) para o WhatsApp"
+                title={tr('Copiar o bloco inteiro (versículo, confissão e devocional) para o WhatsApp', 'Copiar el bloque completo (versículo, confesión y devocional) para WhatsApp', 'Copy the whole block (verse, confession and devotional) to WhatsApp')}
                 className={botaoDiscreto}
               >
                 {cadaDiaCopiado ? (
@@ -1307,7 +1332,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 ) : (
                   <Copy className="h-3.5 w-3.5" />
                 )}
-                <span className="hidden sm:inline">{cadaDiaCopiado ? 'Copiado' : 'Copiar'}</span>
+                <span className="hidden sm:inline">{cadaDiaCopiado ? tr('Copiado', 'Copiado', 'Copied') : tr('Copiar', 'Copiar', 'Copy')}</span>
               </button>
             </div>
           </div>
@@ -1433,7 +1458,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       '_blank'
                     );
                   }}
-                  title="Compartilhar no WhatsApp"
+                  title={tr('Compartilhar no WhatsApp', 'Compartir por WhatsApp', 'Share on WhatsApp')}
                   className="inline-flex items-center rounded-full p-1.5 text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]"
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -1445,7 +1470,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     event.stopPropagation();
                     copiarItemCompartilhamento(chaveCopia, textoCompartilhamentoItem);
                   }}
-                  title="Copiar notícia"
+                  title={tr('Copiar notícia', 'Copiar noticia', 'Copy news item')}
                   className="inline-flex items-center rounded-full p-1.5 text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]"
                 >
                   {itemCopiadoId === chaveCopia ? (
@@ -1501,7 +1526,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const getTituloSecao = (secao: BoletimSecao) => {
     if (!isLiturgiaSection(secao)) return secao.titulo;
 
-    return secao.titulo.match(/(\d{4}-\d{2}-\d{2})/) ? 'Liturgia' : secao.titulo;
+    return secao.titulo.match(/(\d{4}-\d{2}-\d{2})/) ? tr('Liturgia', 'Liturgia', 'Liturgy') : secao.titulo;
   };
 
   return (
@@ -1515,7 +1540,11 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   type="button"
                   onClick={() => setMenuSecoesAberto((aberto) => !aberto)}
                   aria-expanded={menuSecoesAberto}
-                  aria-label={menuSecoesAberto ? 'Fechar menu de seções' : 'Abrir menu de seções'}
+                  aria-label={
+                    menuSecoesAberto
+                      ? tr('Fechar menu de seções', 'Cerrar menú de secciones', 'Close section menu')
+                      : tr('Abrir menu de seções', 'Abrir menú de secciones', 'Open section menu')
+                  }
                   className="p-2 rounded-full text-[#1e1208] hover:bg-[#1e1208]/5 transition-colors"
                 >
                   {menuSecoesAberto ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -1528,7 +1557,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                       onClick={() => setMenuSecoesAberto(false)}
                     />
                     <div className={`absolute left-0 top-full mt-3 z-20 w-72 max-h-[70vh] overflow-y-auto py-3 ${folha}`}>
-                      <p className="px-5 pb-2 font-fell text-[1.056rem]/[1.415] tracking-[0.3em] text-[#8b2a1d]">Índice</p>
+                      <p className="px-5 pb-2 font-fell text-[1.056rem]/[1.415] tracking-[0.3em] text-[#8b2a1d]">{tr('Índice', 'Índice', 'Contents')}</p>
                       {boletimSecoes
                         .filter((secao) => !isImageSection(secao))
                         .map((secao) => (
@@ -1627,7 +1656,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               href={pedidosPastoraisHref}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-[#365c4d] hover:bg-[#28463b] px-6 py-2.5 text-[1.381rem]/[1.553] sm:text-[1.544rem]/[1.474] text-[#fffcf4] shadow-[0_10px_24px_-10px_rgba(54,92,77,0.6)] transition-all duration-200 hover:-translate-y-0.5 sm:min-w-[200px]"
             >
-              <span className="truncate">Pedidos de oração</span>
+              <span className="truncate">{tr('Pedidos de oração', 'Pedidos de oración', 'Prayer requests')}</span>
               <ArrowRight className="w-4 h-4 flex-shrink-0" />
             </Link>
             {temApresentacaoIgreja ? (
@@ -1636,7 +1665,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 onClick={() => setSobreIgrejaAberto((valorAtual) => !valorAtual)}
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-[#1e1208]/25 px-6 py-2.5 text-[1.381rem]/[1.553] sm:text-[1.544rem]/[1.474] text-[#1e1208] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1e1208]/50 hover:bg-[#1e1208]/[0.03] sm:min-w-[200px]"
               >
-                <span className="truncate">{sobreIgrejaAberto ? 'Ocultar sobre a igreja' : 'Sobre a igreja'}</span>
+                <span className="truncate">{sobreIgrejaAberto
+                    ? tr('Ocultar sobre a igreja', 'Ocultar sobre la iglesia', 'Hide about the church')
+                    : tr('Sobre a igreja', 'Sobre la iglesia', 'About the church')}</span>
                 <ArrowRight className={`w-4 h-4 flex-shrink-0 transition-transform ${sobreIgrejaAberto ? 'rotate-90' : ''}`} />
               </button>
             ) : null}
@@ -1676,13 +1707,16 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <Library className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{t('home.resources')}</span>
             </Link>
-            <Link
-              href="/confissoes"
-              className="inline-flex items-center gap-1.5 italic text-[#7a5c40] hover:text-[#8b2a1d] transition-colors"
-            >
-              <ScrollText className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Confissões e Catecismos</span>
-            </Link>
+            {/* A biblioteca só tem os textos em português. */}
+            {locale === 'pt' ? (
+              <Link
+                href="/confissoes"
+                className="inline-flex items-center gap-1.5 italic text-[#7a5c40] hover:text-[#8b2a1d] transition-colors"
+              >
+                <ScrollText className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Confissões e Catecismos</span>
+              </Link>
+            ) : null}
             {podeInstalar ? (
               <button
                 type="button"
@@ -1690,14 +1724,19 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 className="inline-flex items-center gap-1.5 italic text-[#365c4d] hover:text-[#8b2a1d] transition-colors"
               >
                 <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Instalar app</span>
+                <span>{tr('Instalar app', 'Instalar app', 'Install app')}</span>
               </button>
             ) : null}
           </div>
           {dicaIosAberta ? (
             <p className="mx-auto mt-4 max-w-md border-t border-dotted border-[#1e1208]/25 pt-4 italic text-[#5a4030]">
-              No iPhone, toque em <span className="not-italic">Compartilhar</span> (o quadrado com a seta) e depois em{' '}
-              <span className="not-italic">Adicionar à Tela de Início</span>.
+              {tr('No iPhone, toque em', 'En el iPhone, toca', 'On iPhone, tap')}{' '}
+              <span className="not-italic">{tr('Compartilhar', 'Compartir', 'Share')}</span>{' '}
+              {tr('(o quadrado com a seta) e depois em', '(el cuadrado con la flecha) y luego', '(the square with the arrow), then')}{' '}
+              <span className="not-italic">
+                {tr('Adicionar à Tela de Início', 'Agregar a pantalla de inicio', 'Add to Home Screen')}
+              </span>
+              .
             </p>
           ) : null}
         </section>
@@ -1706,7 +1745,11 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
           <div className="mt-4 sm:mt-6 -mx-3 sm:mx-0 flex items-start gap-3 border-y sm:border border-[#1e1208]/10 bg-[#fffcf4]/70 px-4 py-3 sm:rounded-md">
             <Eye className="w-4 h-4 text-[#7a5c40] flex-shrink-0 mt-1" />
             <p className="italic text-[20px] text-[#5a4030]">
-              Logado. O painel administrativo segue disponivel para gestao interna da igreja selecionada.
+              {tr(
+                'Logado. O painel administrativo segue disponível para a gestão interna da igreja selecionada.',
+                'Sesión iniciada. El panel administrativo sigue disponible para la gestión interna de la iglesia seleccionada.',
+                'Signed in. The admin panel is still available to manage the selected church.'
+              )}
             </p>
           </div>
         )}
@@ -1721,7 +1764,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               <div className="space-y-5 min-w-0">
                 <div className="space-y-2">
                   <p className="font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.3em] text-[#8b2a1d]">
-                    Sobre a igreja
+                    {tr('Sobre a igreja', 'Sobre la iglesia', 'About the church')}
                   </p>
                   <h3 className="font-fell text-[2.438rem]/[1.2] sm:text-[2.925rem]/[1.111] leading-tight text-[#1e1208] break-words">
                     {apresentacaoTitulo || nomeExibicaoIgreja}
@@ -1751,7 +1794,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                   <div className="overflow-hidden rounded-sm bg-black ring-1 ring-[#1e1208]/15 ring-offset-4 ring-offset-[#fffcf4]">
                     <div className="aspect-video">
                       <iframe
-                        title={`Apresentação de ${nomeExibicaoIgreja}`}
+                        title={`${tr('Apresentação de', 'Presentación de', 'Introducing')} ${nomeExibicaoIgreja}`}
                         src={`https://www.youtube.com/embed/${youtubeApresentacaoId}`}
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowFullScreen
@@ -1786,7 +1829,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
         {loading && (
           <div className="flex flex-col items-center py-24 gap-3">
             <div className="w-8 h-8 border-2 border-[#8b2a1d] border-t-transparent rounded-full animate-spin" />
-            <p className="italic text-[#7a5c40]">Carregando boletim...</p>
+            <p className="italic text-[#7a5c40]">{tr('Carregando boletim...', 'Cargando boletín...', 'Loading bulletin...')}</p>
           </div>
         )}
 
@@ -1796,7 +1839,13 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
               {boletimSecoes.length === 0 ? (
                 <div className={`flex flex-col items-center gap-3 py-16 sm:py-24 px-4 text-center ${folha}`}>
                   <Music className="w-10 h-10 text-[#1e1208]/25" />
-                  <p className="italic text-[#7a5c40]">Nenhuma seção de boletim publicada para esta igreja.</p>
+                  <p className="italic text-[#7a5c40]">
+                    {tr(
+                      'Nenhuma seção de boletim publicada para esta igreja.',
+                      'Esta iglesia aún no publicó secciones del boletín.',
+                      'This church has not published any bulletin sections yet.'
+                    )}
+                  </p>
                 </div>
               ) : (
                 boletimSecoes.map((secao) => (
@@ -1818,7 +1867,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     )}
 
                     {secao.itens.length === 0 ? (
-                      <p className="text-center italic text-[#7a5c40]">Sem itens publicados nesta seção.</p>
+                      <p className="text-center italic text-[#7a5c40]">
+                        {tr('Sem itens publicados nesta seção.', 'Sin elementos publicados en esta sección.', 'Nothing published in this section yet.')}
+                      </p>
                     ) : isLiturgiaSection(secao) ? (
                       <div className="space-y-6">
                         {agruparCardsLiturgia(secao.itens).map((card) => (
@@ -1829,12 +1880,12 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                             <div className="space-y-0">
                               <div className="relative border-b border-[#1e1208]/15 pb-4 text-center">
                                 <p className="font-fell text-[1.625rem]/[1.4] sm:text-[1.95rem]/[1.333] text-[#1e1208] px-12">
-                                  {getTituloCardLiturgia(card.nome)}
+                                  {getTituloCardLiturgia(card.nome, tr('Liturgia', 'Liturgia', 'Liturgy'))}
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => imprimirLiturgiaPdf(card)}
-                                  title="Imprimir PDF"
+                                  title={tr('Imprimir PDF', 'Imprimir PDF', 'Print PDF')}
                                   className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[1.219rem]/[1.44] italic text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#8b2a1d]"
                                 >
                                   <Printer className="h-3.5 w-3.5" />
@@ -1871,16 +1922,16 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                                       <div className="ml-5 rounded-sm border-l-2 border-[#1e1208]/15 bg-[#1e1208]/[0.03] px-4 py-3">
                                         <div className="flex flex-wrap items-baseline gap-2">
                                           <p className="font-fell text-[1.056rem]/[1.415] tracking-[0.25em] text-[#7a5c40]">
-                                            Interno
+                                            {tr('Interno', 'Interno', 'Internal')}
                                           </p>
                                           <p className="italic text-[1.219rem]/[1.44] text-[#7a5c40]/80">
-                                            Visível só para quem está logado
+                                            {tr('Visível só para quem está logado', 'Visible solo para quien inició sesión', 'Only visible to signed-in users')}
                                           </p>
                                         </div>
 
                                         {grupo.horario ? (
                                           <p className="mt-2 text-[20px] text-[#7a5c40]">
-                                            Horário: {grupo.horario}
+                                            {tr('Horário', 'Horario', 'Time')}: {grupo.horario}
                                           </p>
                                         ) : null}
 
@@ -1956,12 +2007,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             <aside className="fade-up space-y-6 min-w-0 xl:sticky xl:top-28">
               <section className={`p-6 sm:p-7 ${folha}`}>
                 <div className="mb-4 text-center">
-                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">Agenda</h3>
+                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">{tr('Agenda', 'Agenda', 'Schedule')}</h3>
                   <Ornamento className="mt-2" pequeno />
                 </div>
 
                 {agendaCultos.length === 0 ? (
-                  <p className="text-center italic text-[#7a5c40]">Nenhum culto configurado para esta igreja.</p>
+                  <p className="text-center italic text-[#7a5c40]">
+                    {tr('Nenhum culto configurado para esta igreja.', 'Esta iglesia aún no configuró sus cultos.', 'No services set up for this church yet.')}
+                  </p>
                 ) : (
                   <div className="space-y-1">
                     {agendaCultos.map((culto) => (
@@ -1984,14 +2037,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
               <section className={`p-6 sm:p-7 ${folha}`}>
                 <div className="mb-4 text-center">
-                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">Canais</h3>
+                  <h3 className="font-fell text-[1.625rem]/[1.4] text-[#1e1208]">{tr('Canais', 'Canales', 'Connect')}</h3>
                   <Ornamento className="mt-2" pequeno />
                 </div>
 
                 <div className="divide-y divide-dotted divide-[#1e1208]/20">
                   {igrejaDetalhes?.site && (
                     <a href={igrejaDetalhes.site} target="_blank" rel="noreferrer" className={linkCanal}>
-                      <span className="truncate">Site oficial</span>
+                      <span className="truncate">{tr('Site oficial', 'Sitio oficial', 'Website')}</span>
                       <ExternalLink className="w-4 h-4 flex-shrink-0" />
                     </a>
                   )}
@@ -2017,26 +2070,32 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                     !igrejaDetalhes?.email &&
                     !igrejaDetalhes?.telefone &&
                     redesSociais.length === 0 && (
-                      <p className="text-center italic text-[#7a5c40]">Nenhum canal publico cadastrado.</p>
+                      <p className="text-center italic text-[#7a5c40]">
+                        {tr('Nenhum canal público cadastrado.', 'No hay canales públicos registrados.', 'No public contact channels yet.')}
+                      </p>
                     )}
                 </div>
               </section>
 
               <section className={`p-6 sm:p-7 text-center ${folha}`}>
                 <p className="font-fell text-[1.056rem]/[1.415] tracking-[0.3em] text-[#8b2a1d]">
-                  Atendimento
+                  {tr('Atendimento', 'Atención', 'Pastoral care')}
                 </p>
                 <h3 className="mt-2 font-fell text-[1.625rem]/[1.4] text-[#1e1208]">
-                  Quer compartilhar um pedido?
+                  {tr('Quer compartilhar um pedido?', '¿Quieres compartir una petición?', 'Would you like to share a request?')}
                 </h3>
                 <p className="mt-2 italic text-[20px] leading-[1.95rem] text-[#5a4030]">
-                  Envie um pedido de oração, aconselhamento ou visita.
+                  {tr(
+                    'Envie um pedido de oração, aconselhamento ou visita.',
+                    'Envía un pedido de oración, consejería o visita.',
+                    'Send a request for prayer, counselling or a visit.'
+                  )}
                 </p>
                 <Link
                   href={pedidosPastoraisHref}
                   className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#365c4d] px-5 py-2 text-[1.381rem]/[1.553] text-[#fffcf4] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#28463b]"
                 >
-                  Abrir pedidos
+                  {tr('Abrir pedidos', 'Abrir pedidos', 'Open requests')}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </section>
@@ -2056,10 +2115,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 icone={<Youtube className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
                 cor="#c4302b"
                 corHover="#a32622"
-                rubrica="Cultos no YouTube"
-                titulo="Siga o nosso canal"
-                texto="Assista aos cultos, reveja as pregações e ative as notificações para não perder nenhuma transmissão."
-                acao="Inscrever-se"
+                rubrica={tr('Cultos no YouTube', 'Cultos en YouTube', 'Services on YouTube')}
+                titulo={tr('Siga o nosso canal', 'Sigue nuestro canal', 'Follow our channel')}
+                texto={tr(
+                  'Assista aos cultos, reveja as pregações e ative as notificações para não perder nenhuma transmissão.',
+                  'Mira los cultos, vuelve a ver las predicaciones y activa las notificaciones para no perderte ninguna transmisión.',
+                  'Watch our services, catch up on sermons and turn on notifications so you never miss a livestream.'
+                )}
+                acao={tr('Inscrever-se', 'Suscribirse', 'Subscribe')}
               />
             )}
             {podcastSpotifyUrl && (
@@ -2068,10 +2131,14 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 icone={<Podcast className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={1.75} />}
                 cor="#1a9e4b"
                 corHover="#157f3c"
-                rubrica="Podcast no Spotify"
-                titulo="Ouça o nosso podcast"
-                texto="Pregações e estudos para ouvir no caminho, em casa ou onde estiver. Siga para receber os novos episódios."
-                acao="Seguir podcast"
+                rubrica={tr('Podcast no Spotify', 'Podcast en Spotify', 'Podcast on Spotify')}
+                titulo={tr('Ouça o nosso podcast', 'Escucha nuestro pódcast', 'Listen to our podcast')}
+                texto={tr(
+                  'Pregações e estudos para ouvir no caminho, em casa ou onde estiver. Siga para receber os novos episódios.',
+                  'Predicaciones y estudios para escuchar en el camino, en casa o donde estés. Síguelo para recibir los nuevos episodios.',
+                  'Sermons and studies to listen to on the go, at home or wherever you are. Follow to get new episodes.'
+                )}
+                acao={tr('Seguir podcast', 'Seguir pódcast', 'Follow podcast')}
               />
             )}
           </div>
@@ -2095,7 +2162,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
             <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-[#1e1208]/15 px-5 py-4 sm:px-8 sm:py-5">
               <div className="space-y-1 min-w-0 flex-1">
                 <p className="font-fell text-[1.056rem]/[1.415] sm:text-[1.219rem]/[1.44] tracking-[0.3em] text-[#8b2a1d]">
-                  {canticoAberto?.tipo === 'hinario' ? 'Hino' : 'Cântico'}
+                  {canticoAberto?.tipo === 'hinario' ? tr('Hino', 'Himno', 'Hymn') : tr('Cântico', 'Cántico', 'Song')}
                 </p>
                 <h2 className="font-fell text-[1.95rem]/[1.333] sm:text-[2.438rem]/[1.2] text-[#1e1208] break-words">
                   {canticoAberto?.nome || canticoAbertoRef.nome}
@@ -2108,7 +2175,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
                 type="button"
                 onClick={() => setCanticoAbertoRef(null)}
                 className="rounded-full p-2 text-[#7a5c40] transition-colors hover:bg-[#1e1208]/5 hover:text-[#1e1208] flex-shrink-0"
-                aria-label="Fechar letra"
+                aria-label={tr('Fechar letra', 'Cerrar letra', 'Close lyrics')}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -2116,15 +2183,21 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 sm:px-8 sm:py-7">
               {loadingCantico ? (
-                <p className="italic text-[#7a5c40]">Carregando letra...</p>
+                <p className="italic text-[#7a5c40]">{tr('Carregando letra...', 'Cargando letra...', 'Loading lyrics...')}</p>
               ) : !canticoAberto?.letra ? (
-                <p className="italic text-[#7a5c40]">A letra deste cântico não está disponível no momento.</p>
+                <p className="italic text-[#7a5c40]">
+                  {tr(
+                    'A letra deste cântico não está disponível no momento.',
+                    'La letra de este cántico no está disponible en este momento.',
+                    'Lyrics for this song are not available right now.'
+                  )}
+                </p>
               ) : (
                 <div className="space-y-5 sm:space-y-6">
                   {(canticoAberto.autor_letra || canticoAberto.compositor) && (
                     <div className="flex flex-wrap gap-x-4 gap-y-1 italic text-[20px] text-[#7a5c40]">
-                      {canticoAberto.autor_letra ? <p>Letra: {canticoAberto.autor_letra}</p> : null}
-                      {canticoAberto.compositor ? <p>Música: {canticoAberto.compositor}</p> : null}
+                      {canticoAberto.autor_letra ? <p>{tr('Letra', 'Letra', 'Words')}: {canticoAberto.autor_letra}</p> : null}
+                      {canticoAberto.compositor ? <p>{tr('Música', 'Música', 'Music')}: {canticoAberto.compositor}</p> : null}
                     </div>
                   )}
                   <div className="whitespace-pre-wrap break-words text-[1.544rem]/[1.474] leading-[2.6rem] text-[#1e1208] sm:text-[1.625rem]/[1.4] sm:leading-[2.925rem] lg:text-[1.82rem]">

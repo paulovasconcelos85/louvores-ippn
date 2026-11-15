@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, ChevronRight, Clock3, MapPin, FileText } from 'luc
 import type { Locale } from '@/i18n/config';
 import { formatDateByLocale } from '@/i18n/format';
 import { useLocale, useTranslations } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import type { IgrejaSelecionavel } from '@/lib/church-utils';
 import { CHURCH_STORAGE_KEY, formatIgrejaLocalizacao } from '@/lib/church-utils';
@@ -80,12 +81,12 @@ function extrairPartesLiturgicas(conteudo: string) {
   };
 }
 
-const TIPOS_BOLETIM: Record<string, string> = {
-  avisos: 'Avisos',
-  oracao: 'Pedidos de Oração',
-  agenda: 'Agenda',
-  informativo: 'Informativo',
-  outro: 'Outros',
+const TIPOS_BOLETIM: Record<string, [string, string, string]> = {
+  avisos: ['Avisos', 'Avisos', 'Announcements'],
+  oracao: ['Pedidos de Oração', 'Pedidos de Oración', 'Prayer Requests'],
+  agenda: ['Agenda', 'Agenda', 'Schedule'],
+  informativo: ['Informativo', 'Informativo', 'Newsletter'],
+  outro: ['Outros', 'Otros', 'Other'],
 };
 
 type TipoSecao = 'liturgia' | 'avisos' | 'oracao' | 'agenda' | 'informativo' | 'outro' | 'default';
@@ -99,11 +100,12 @@ function classificarSecao(titulo: string): TipoSecao {
   return 'default';
 }
 
-function formatarTituloSecao(titulo: string): string {
-  if (titulo === '__liturgia__:nome') return 'Liturgia';
+function formatarTituloSecao(titulo: string, locale: Locale): string {
+  if (titulo === '__liturgia__:nome') return porIdioma(locale, 'Liturgia', 'Liturgia', 'Liturgy');
   if (titulo.startsWith('__boletim__:')) {
     const subtipo = titulo.slice('__boletim__:'.length);
-    return TIPOS_BOLETIM[subtipo] ?? subtipo;
+    const rotulos = TIPOS_BOLETIM[subtipo];
+    return rotulos ? porIdioma(locale, ...rotulos) : subtipo;
   }
   return titulo;
 }
@@ -347,7 +349,9 @@ export default function BoletinsAnterioresPage() {
                         <Calendar className="w-5 h-5 text-emerald-700" />
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Boletim</p>
+                        <p className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                          {porIdioma(locale, 'Boletim', 'Boletín', 'Bulletin')}
+                        </p>
                         <p className="text-lg font-bold text-slate-900">{formatarDataExtenso(boletimSelecionado.data, locale)}</p>
                       </div>
                     </div>
@@ -378,7 +382,7 @@ export default function BoletinsAnterioresPage() {
                     {itensAgrupadosBoletimSelecionado.map((item, index) => {
                       const tipo = classificarSecao(item.titulo);
                       const cores = CORES_SECAO[tipo];
-                      const tituloFormatado = formatarTituloSecao(item.titulo);
+                      const tituloFormatado = formatarTituloSecao(item.titulo, locale);
 
                       return (
                         <div

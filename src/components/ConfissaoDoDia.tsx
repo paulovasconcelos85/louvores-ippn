@@ -43,7 +43,11 @@ interface ConfissaoDoDiaProps {
 export default function ConfissaoDoDia({ locale, onTextoPronto }: ConfissaoDoDiaProps) {
   const [dados, setDados] = useState<DadosConfissaoDoDia | null>(null);
 
+  // Os textos confessionais só existem em português: em outros idiomas o bloco não aparece.
+  const disponivel = locale === 'pt';
+
   useEffect(() => {
+    if (!disponivel) return;
     let ativo = true;
     fetch(`/api/confissoes/do-dia?data=${dataLocal()}`)
       .then((response) => (response.ok ? response.json() : null))
@@ -52,7 +56,7 @@ export default function ConfissaoDoDia({ locale, onTextoPronto }: ConfissaoDoDia
     return () => {
       ativo = false;
     };
-  }, []);
+  }, [disponivel]);
 
   const compartilhamento = dados
     ? [
@@ -75,7 +79,7 @@ export default function ConfissaoDoDia({ locale, onTextoPronto }: ConfissaoDoDia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [compartilhamento]);
 
-  if (!dados) return null;
+  if (!disponivel || !dados) return null;
 
   const { documento, item } = dados;
   const { texto, cortado } = resumir(item.texto);
