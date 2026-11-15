@@ -152,7 +152,16 @@ supabase db push                    # aplica na produção as migrações que fa
 supabase stop                       # desliga os containers
 ```
 
-Fluxo para mudar o banco: crie a migração, teste com `supabase db reset` (e, para RLS, impersonando usuários dentro de uma transação com `rollback`), faça o commit e só então aplique na produção.
+Fluxo para mudar o banco: crie a migração, rode `supabase db reset` e `npm run test:db`, faça o commit e só então aplique na produção.
+
+## Testes
+
+```bash
+npm test          # testes de código (vitest): finanças, validação, permissões, boletim
+npm run test:db   # testes do banco (pgTAP), com o Supabase local rodando
+```
+
+Os testes do banco ficam em [`supabase/tests/database/`](supabase/tests/database/). O `rls_entre_igrejas.test.sql` cria duas igrejas fictícias com pastor, superadmin, líder de louvor e membro, e verifica o que cada um consegue ler e alterar: cultos, liturgia, cânticos, escalas, pessoas, notas pastorais, convites, Tesouraria e imagens. Toda mudança de RLS, grant ou trigger deve passar por eles; se a mudança for intencional, atualize o teste junto.
 
 O Supabase local dá a `anon`/`authenticated` acesso a tudo o que é criado. Ao criar tabela ou função, escreva na própria migração os `revoke`/`grant` que ela deve ter.
 

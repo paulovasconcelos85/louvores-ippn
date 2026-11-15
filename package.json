@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:db": "supabase test db",
     "gen:types": "supabase gen types typescript --project-id xossalftmjzdqwnalqgr --schema public > src/lib/database.types.ts"
   },
   "dependencies": {
