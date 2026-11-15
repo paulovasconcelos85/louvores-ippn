@@ -71,9 +71,17 @@ export default function PerfilPage() {
 
       if (tagsError) throw tagsError;
 
-      const tagsRestritas = ['Pastor', 'Presbítero', 'Pregação', 'Diácono'];
+      // Funções de liderança só o pastor/admin atribui; o banco (tag_autoatribuivel)
+      // recusa as mesmas categorias.
+      const categoriasRestritas = [
+        'louvor_lideranca',
+        'lideranca',
+        'lideranca_pastor',
+        'lideranca_presbitero',
+        'lideranca_diacono',
+      ];
       const tagsFiltradas = ((tagsData || []) as TagFuncao[]).filter(
-        (tag) => !tagsRestritas.includes(tag.nome)
+        (tag) => !categoriasRestritas.includes(tag.categoria)
       );
 
       setTags(tagsFiltradas);
