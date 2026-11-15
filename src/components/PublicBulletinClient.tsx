@@ -137,7 +137,7 @@ interface CanticoModalData {
 interface CanticoAbertoRef {
   nome: string;
   numero: string | null;
-  rotulo: 'Hino' | 'Cântico' | 'Cantico';
+  rotulo: string;
 }
 
 interface LiturgiaGrupo {
@@ -1019,7 +1019,7 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isInformativoSection = (secao: BoletimSecao) => secao.tipo === 'informativo';
   const isNoticiasMesSection = (secao: BoletimSecao) => secao.tipo === 'noticias_mes';
   const isPedidosOracaoSection = (secao: BoletimSecao) =>
-    /pedido[s]?\s*de\s*ora/i.test(secao.titulo);
+    secao.tipo === 'oracao' || /pedido[s]?\s*de\s*ora|prayer\s*request/i.test(secao.titulo);
   const isCadaDiaSection = (secao: BoletimSecao) =>
     secao.tipo === 'cada_dia' ||
     secao.id === 'cada-dia-devocional' ||
@@ -1041,19 +1041,20 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
       : '/pedidos-pastorais';
 
   const extrairCanticoLinha = (linha: string) => {
-    const match = linha.match(/^(C[âa]ntico|Cantico|Hino)(?:\s*[:\-]\s*|\s+)(.+)$/i);
+    // Prefixos gravados pelo editor (getCanticoInlineReference) nos três idiomas.
+    const match = linha.match(/^(C[âáa]ntico|Hino|Himno|Hymn|Song)(?:\s*[:\-]\s*|\s+)(.+)$/i);
     if (!match) return null;
 
     const nomeCompleto = match[2].trim();
     const sufixoMatch = nomeCompleto.match(/\(([^)]+)\)\s*$/);
     const nome = nomeCompleto.replace(/\s+\(([^)]+)\)\s*$/, '').trim();
     const sufixo = sufixoMatch ? sufixoMatch[1].trim() : null;
-    const ehHino = /^hino$/i.test(match[1]);
+    const ehHino = /^(hino|himno|hymn)$/i.test(match[1]);
     const numero = ehHino && sufixo && /^\d{1,3}$/.test(sufixo) ? sufixo.padStart(3, '0') : null;
     const tom = numero ? null : sufixo;
 
     return {
-      rotulo: match[1] as 'Hino' | 'Cântico' | 'Cantico',
+      rotulo: ehHino ? tr('Hino', 'Himno', 'Hymn') : tr('Cântico', 'Cántico', 'Song'),
       nome,
       numero,
       tom,

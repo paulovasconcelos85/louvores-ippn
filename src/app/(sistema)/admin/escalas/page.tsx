@@ -8,6 +8,7 @@ import { useNomeIgreja } from '@/hooks/useNomeIgreja';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { getIntlLocale } from '@/i18n/config';
+import { modeloLiturgicoInicial } from '@/lib/modelo-liturgico';
 import { useLocale } from '@/i18n/provider';
 import {
   Calendar,
@@ -62,13 +63,14 @@ interface Culto {
 }
 
 // 🎵 CATEGORIAS APENAS PARA LOUVOR E TÉCNICA
+// nome: [pt, es, en]
 const CATEGORIAS_MUSICAIS = {
-  'louvor_lideranca': { nome: '🎤 Ministração', ordem: 1 },
-  'louvor_vocal': { nome: '🎵 Vocais', ordem: 2 },
-  'louvor_instrumento': { nome: '🎸 Instrumentos', ordem: 3 },
-  'tecnico_audio': { nome: '🎛️ Mesa/Áudio', ordem: 4 },
-  'tecnico_video': { nome: '📽️ Mídia/Slideshow', ordem: 5 },
-};
+  'louvor_lideranca': { nome: ['🎤 Ministração', '🎤 Dirección', '🎤 Worship leading'], ordem: 1 },
+  'louvor_vocal': { nome: ['🎵 Vocais', '🎵 Voces', '🎵 Vocals'], ordem: 2 },
+  'louvor_instrumento': { nome: ['🎸 Instrumentos', '🎸 Instrumentos', '🎸 Instruments'], ordem: 3 },
+  'tecnico_audio': { nome: ['🎛️ Mesa/Áudio', '🎛️ Consola/Audio', '🎛️ Sound desk'], ordem: 4 },
+  'tecnico_video': { nome: ['📽️ Mídia/Slideshow', '📽️ Medios/Diapositivas', '📽️ Media/Slides'], ordem: 5 },
+} as const;
 
 export default function EscalasPage() {
   const router = useRouter();
@@ -364,20 +366,36 @@ export default function EscalasPage() {
       
       const cultoId = novoCulto['Culto nr.'];
 
-      const modeloPadrao = [
-        { culto_id: cultoId, ordem: 1, tipo: 'Prelúdio', descricao: null, cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 2, tipo: 'Saudação e Acolhida à Igreja', descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 3, tipo: 'Cânticos Congregacionais', descricao: null, cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 4, tipo: 'Cânticos Congregacionais', descricao: null, cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 5, tipo: 'Cânticos Congregacionais', descricao: null, cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 6, tipo: 'Confissão de Pecados', descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 7, tipo: 'Dízimos e Ofertas', descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 8, tipo: 'Cântico para as Ofertas', descricao: 'Oração pelas ofertas e dízimo.', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 9, tipo: 'Pregação da Palavra', descricao: null, cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 10, tipo: 'Cântico Final', descricao: 'Poslúdio', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 11, tipo: 'Oração - Bênção Apostólica', descricao: 'Amém tríplice', cantico_id: null, tom: null },
-        { culto_id: cultoId, ordem: 12, tipo: 'Lembretes - Liturgo', descricao: 'Apresentação dos convidados\nAniversariantes / Casamento', cantico_id: null, tom: null }
-      ];
+      // Liturgia inicial: o modelo configurado da igreja ou, sem ele, o modelo padrão no idioma atual.
+      const { data: igreja } = await supabase
+        .from('igrejas')
+        .select('modelo_liturgico_padrao')
+        .eq('id', igrejaId)
+        .maybeSingle();
+      const modeloIgreja = Array.isArray(igreja?.modelo_liturgico_padrao)
+        ? (igreja.modelo_liturgico_padrao as Array<{
+            tipo?: string | null;
+            bloco?: string | null;
+            ordem?: number | null;
+            descricao_padrao?: string | null;
+            descricao_interna_padrao?: string | null;
+          }>)
+        : [];
+      const modelo = modeloIgreja.length > 0 ? modeloIgreja : modeloLiturgicoInicial(locale);
+
+      const modeloPadrao = [...modelo]
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+        .map((item, index) => ({
+          culto_id: cultoId,
+          ordem: index + 1,
+          tipo: item.tipo || item.bloco || `${tr('Item', 'Elemento', 'Item')} ${index + 1}`,
+          descricao:
+            ('descricao_interna_padrao' in item ? item.descricao_interna_padrao : null) ||
+            item.descricao_padrao ||
+            null,
+          cantico_id: null,
+          tom: null,
+        }));
 
       await supabase.from('louvor_itens').insert(modeloPadrao);
       
@@ -607,7 +625,7 @@ export default function EscalasPage() {
       const catInfo = CATEGORIAS_MUSICAIS[cat as keyof typeof CATEGORIAS_MUSICAIS];
       const funcoes = grupos[cat];
 
-      texto += `${catInfo.nome}\n`;
+      texto += `${tr(catInfo.nome[0], catInfo.nome[1], catInfo.nome[2])}\n`;
       funcoes.forEach(func => {
         texto += `  • ${func.pessoas.nome} - ${func.tags_funcoes.nome}\n`;
       });

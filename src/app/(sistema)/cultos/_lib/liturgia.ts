@@ -1,13 +1,11 @@
 import type { Locale } from '@/i18n/config';
 import { createEmptyLocalizedTextMap, normalizeLocalizedTextMap, resolveLocalizedText } from '@/lib/church-i18n';
-import { TIPOS_LITURGICOS_PADRAO, BOLETIM_FALLBACK_TIPO_PREFIX, LITURGIA_META_TIPO, type LouvorItem, type ModeloLiturgiaConfig, type LiturgiaChurchConfig, type Culto, MESES_HISTORICO_CANTICOS } from './tipos';
+import { getIntlLocale } from '@/i18n/config';
+import { porIdioma } from '@/i18n/por-idioma';
+import { modeloLiturgicoInicial } from '@/lib/modelo-liturgico';
+import { tiposLiturgicosPadrao, BOLETIM_FALLBACK_TIPO_PREFIX, LITURGIA_META_TIPO, type LouvorItem, type ModeloLiturgiaConfig, type LiturgiaChurchConfig, type Culto, MESES_HISTORICO_CANTICOS } from './tipos';
 
 // --- HELPERS ---
-function isPrimeirosDomingo(data: Date): boolean {
-  const d = new Date(data);
-  return d.getDay() === 0 && d.getDate() <= 7;
-}
-
 export function isBoletimFallbackTipo(tipo: string | null | undefined): tipo is string {
   return typeof tipo === 'string' && tipo.startsWith(BOLETIM_FALLBACK_TIPO_PREFIX);
 }
@@ -166,11 +164,11 @@ export function mergeModelosLiturgia(
   return [...merged.values()].sort((a, b) => a.ordem - b.ordem);
 }
 
-export function resolveTiposLiturgicos(config?: LiturgiaChurchConfig | null) {
-  return config?.tiposLiturgicos?.length ? config.tiposLiturgicos : TIPOS_LITURGICOS_PADRAO;
+export function resolveTiposLiturgicos(config?: LiturgiaChurchConfig | null, locale: Locale = 'pt') {
+  return config?.tiposLiturgicos?.length ? config.tiposLiturgicos : tiposLiturgicosPadrao(locale);
 }
 
-export function normalizarTiposLiturgicosDisponiveis(baseTipos: string[], itens: LouvorItem[]) {
+export function normalizarTiposLiturgicosDisponiveis(baseTipos: string[], itens: LouvorItem[], locale: Locale = 'pt') {
   const vistos = new Set<string>();
   const tipos = [...baseTipos, ...itens.map((item) => item.tipo)];
 
@@ -185,14 +183,14 @@ export function normalizarTiposLiturgicosDisponiveis(baseTipos: string[], itens:
     return true;
   });
 
-  return resultado.length > 0 ? resultado : TIPOS_LITURGICOS_PADRAO;
+  return resultado.length > 0 ? resultado : tiposLiturgicosPadrao(locale);
 }
 
-function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null): LouvorItem[] {
+function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null, locale: Locale = 'pt'): LouvorItem[] {
   const modelos = [...(config?.modelosLiturgia || [])].sort((a, b) => a.ordem - b.ordem);
 
   return modelos.map((item, index) => {
-    const tipo = item.tipo || item.bloco || `Item ${index + 1}`;
+    const tipo = item.tipo || item.bloco || `${porIdioma(locale, 'Item', 'Elemento', 'Item')} ${index + 1}`;
 
     return {
       tipo,
@@ -206,50 +204,54 @@ function modeloPadraoDaConfiguracao(config?: LiturgiaChurchConfig | null): Louvo
   });
 }
 
-export function modeloPadrao(dia: string, config?: LiturgiaChurchConfig | null): LouvorItem[] {
-  const modeloConfigurado = modeloPadraoDaConfiguracao(config);
+// O dia do culto não muda mais o modelo (o legado acrescentava a Santa Ceia no
+// primeiro domingo); o parâmetro fica para não mexer em quem chama.
+export function modeloPadrao(
+  _dia: string,
+  config?: LiturgiaChurchConfig | null,
+  locale: Locale = 'pt'
+): LouvorItem[] {
+  const modeloConfigurado = modeloPadraoDaConfiguracao(config, locale);
   if (modeloConfigurado.length > 0) return modeloConfigurado;
 
-  const data = new Date(dia + 'T00:00:00');
-  const primeiroDomingo = isPrimeirosDomingo(data);
-
-  const itens: LouvorItem[] = [
-    { tipo: 'Prelúdio', ordem: 1, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h-9h05', canticos_lista: [] },
-    { tipo: 'Saudação e Acolhida à Igreja', ordem: 2, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Salmo 138.1-2\nIgreja da Família de Deus\nLeitura Responsiva: Salmo ____ (_______)\nOração de Invocação e Entrega do Culto ao Senhor (_______)', horario: '9h05-9h10', canticos_lista: [] },
-    { tipo: 'Cânticos Congregacionais', ordem: 3, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h10-9h25', canticos_lista: [{ cantico_id: null, tom: null }, { cantico_id: null, tom: null }, { cantico_id: null, tom: null }] },
-    { tipo: 'Confissão de Pecados', ordem: 4, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Leitura Não Responsiva e Oração: Salmo 40.1-3 (_______)\nDar minutos para os irmãos.\nOração pelos enfermos.', horario: '9h25-9h30', canticos_lista: [] },
-    { tipo: 'Dízimos e Ofertas', ordem: 5, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Passagem de Dízimos e Ofertas. 1 Tm 6.17-19\nLembrar aos presentes colocar o código 0,09 no PIX;\nEnvelopes de Dízimo.', horario: '9h30-9h35', canticos_lista: [] },
-    { tipo: 'Cântico para as Ofertas e Dízimos', ordem: 6, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Oração pelas ofertas e dízimo.', horario: '9h35-9h40', canticos_lista: [{ cantico_id: null, tom: null }] },
-    { tipo: 'Oração pelas Crianças', ordem: 7, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Chamar irmão (_______)', horario: '9h40-9h45', canticos_lista: [] },
-    { tipo: 'Pregação da Palavra', ordem: 8, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '9h45-10h25', canticos_lista: [] },
-  ];
-
-  if (primeiroDomingo) {
-    itens.push({ tipo: 'Santa Ceia', ordem: 9, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: null, horario: '10h25', canticos_lista: [] });
-  }
-
-  itens.push(
-    { tipo: 'Cântico Final', ordem: itens.length + 1, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Poslúdio', horario: '10h25', canticos_lista: [{ cantico_id: null, tom: null }] },
-    { tipo: 'Oração Final e Bênção Apostólica', ordem: itens.length + 2, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Amém tríplice', horario: '10h30', canticos_lista: [] },
-    { tipo: 'Lembretes', ordem: itens.length + 3, conteudo_publico: null, conteudo_publico_i18n: createEmptyLocalizedTextMap(), descricao: 'Apresentação dos convidados\nAniversariantes / Casamento', horario: '10h35', canticos_lista: [] },
-  );
-
-  return itens.map((it, i) => ({ ...it, ordem: i + 1 }));
+  // Igreja sem modelo configurado: usa a liturgia inicial no idioma de quem edita.
+  return modeloLiturgicoInicial(locale).map((item, index) => ({
+    tipo: item.tipo,
+    ordem: index + 1,
+    conteudo_publico: null,
+    conteudo_publico_i18n: createEmptyLocalizedTextMap(),
+    descricao: item.descricao_padrao || null,
+    horario: null,
+    canticos_lista: item.tem_cantico ? [{ cantico_id: null, tom: null }] : [],
+  }));
 }
 
-export function getStatusMusica(dataStr: string | null | undefined) {
-  if (!dataStr) return { label: 'SEM USO RECENTE', cor: 'text-blue-600', bg: 'bg-blue-50', dias: -1, dataFormatada: `Não tocada nos últimos ${MESES_HISTORICO_CANTICOS} meses` };
+export function getStatusMusica(dataStr: string | null | undefined, locale: Locale = 'pt') {
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
+  if (!dataStr) {
+    return {
+      label: tr('SEM USO RECENTE', 'SIN USO RECIENTE', 'NOT USED RECENTLY'),
+      cor: 'text-blue-600',
+      bg: 'bg-blue-50',
+      dias: -1,
+      dataFormatada: tr(
+        `Não tocada nos últimos ${MESES_HISTORICO_CANTICOS} meses`,
+        `No se tocó en los últimos ${MESES_HISTORICO_CANTICOS} meses`,
+        `Not played in the last ${MESES_HISTORICO_CANTICOS} months`
+      ),
+    };
+  }
   const data = new Date(dataStr + 'T00:00:00');
   const dias = Math.floor((Date.now() - data.getTime()) / 86400000);
-  const fmt = data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  if (dias < 30) return { label: 'RECENTE', cor: 'text-emerald-600', bg: 'bg-emerald-50', dias, dataFormatada: fmt };
-  if (dias < 90) return { label: 'MODERADO', cor: 'text-amber-600', bg: 'bg-amber-50', dias, dataFormatada: fmt };
-  if (dias < 180) return { label: 'HÁ TEMPO', cor: 'text-orange-600', bg: 'bg-orange-50', dias, dataFormatada: fmt };
-  return { label: 'HÁ MUITO', cor: 'text-red-600', bg: 'bg-red-50', dias, dataFormatada: fmt };
+  const fmt = data.toLocaleDateString(getIntlLocale(locale), { day: '2-digit', month: 'short', year: 'numeric' });
+  if (dias < 30) return { label: tr('RECENTE', 'RECIENTE', 'RECENT'), cor: 'text-emerald-600', bg: 'bg-emerald-50', dias, dataFormatada: fmt };
+  if (dias < 90) return { label: tr('MODERADO', 'MODERADO', 'MODERATE'), cor: 'text-amber-600', bg: 'bg-amber-50', dias, dataFormatada: fmt };
+  if (dias < 180) return { label: tr('HÁ TEMPO', 'HACE TIEMPO', 'A WHILE AGO'), cor: 'text-orange-600', bg: 'bg-orange-50', dias, dataFormatada: fmt };
+  return { label: tr('HÁ MUITO', 'HACE MUCHO', 'LONG AGO'), cor: 'text-red-600', bg: 'bg-red-50', dias, dataFormatada: fmt };
 }
 
-export function formatCultoDateLabel(dateValue: string) {
-  const formatted = new Date(dateValue + 'T00:00:00').toLocaleDateString('pt-BR', {
+export function formatCultoDateLabel(dateValue: string, locale: Locale = 'pt') {
+  const formatted = new Date(dateValue + 'T00:00:00').toLocaleDateString(getIntlLocale(locale), {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
@@ -301,16 +303,21 @@ export function proximoDomingoSemBoletim(cultos: Culto[]) {
 }
 
 // Datas que costumam ser erro de digitação (mês ou dia trocado) e merecem confirmação.
-export function avisosDataBoletim(dia: string) {
+export function avisosDataBoletim(dia: string, locale: Locale = 'pt') {
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const avisos: string[] = [];
   const data = new Date(`${getCultoDateKey(dia)}T00:00:00`);
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const diasDeDistancia = Math.round((data.getTime() - hoje.getTime()) / 86400000);
 
-  if (!isDomingoDate(dia)) avisos.push('Não é um domingo.');
-  if (diasDeDistancia < -7) avisos.push(`Está ${-diasDeDistancia} dias no passado.`);
-  if (diasDeDistancia > 21) avisos.push(`Está ${diasDeDistancia} dias à frente.`);
+  if (!isDomingoDate(dia)) avisos.push(tr('Não é um domingo.', 'No es domingo.', 'It is not a Sunday.'));
+  if (diasDeDistancia < -7) {
+    avisos.push(tr(`Está ${-diasDeDistancia} dias no passado.`, `Está ${-diasDeDistancia} días en el pasado.`, `It is ${-diasDeDistancia} days in the past.`));
+  }
+  if (diasDeDistancia > 21) {
+    avisos.push(tr(`Está ${diasDeDistancia} dias à frente.`, `Está ${diasDeDistancia} días en el futuro.`, `It is ${diasDeDistancia} days ahead.`));
+  }
 
   return avisos;
 }

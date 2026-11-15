@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import type { Cantico } from '../_lib/tipos';
 import { getCanticoDisplayLabel, getRepertorioTextos, matchesCanticoQuery } from '../_lib/canticos';
 import { getStatusMusica } from '../_lib/liturgia';
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 
 // --- AUTOCOMPLETE DE CÂNTICO ---
 export function CanticoAutocomplete({ value, onChange, canticos, onCreate, disabled }: {
@@ -14,13 +16,14 @@ export function CanticoAutocomplete({ value, onChange, canticos, onCreate, disab
   onCreate?: (nome: string) => Promise<Cantico>;
   disabled?: boolean;
 }) {
-  const textosRepertorio = getRepertorioTextos(canticos);
-  const [query, setQuery] = useState(getCanticoDisplayLabel(value));
+  const locale = useLocale();
+  const textosRepertorio = getRepertorioTextos(canticos, locale);
+  const [query, setQuery] = useState(getCanticoDisplayLabel(value, locale));
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setQuery(getCanticoDisplayLabel(value)); }, [value]);
+  useEffect(() => { setQuery(getCanticoDisplayLabel(value, locale)); }, [value, locale]);
 
   const filtrados = canticos.filter((c) => matchesCanticoQuery(c, query)).slice(0, 8);
 
@@ -49,14 +52,14 @@ export function CanticoAutocomplete({ value, onChange, canticos, onCreate, disab
       className="bg-white border border-slate-200 rounded-2xl max-h-64 overflow-auto shadow-2xl"
     >
       {filtrados.map(c => {
-        const st = getStatusMusica(c.ultima_vez);
-        const titulo = getCanticoDisplayLabel(c);
+        const st = getStatusMusica(c.ultima_vez, locale);
+        const titulo = getCanticoDisplayLabel(c, locale);
         return (
           <div
             key={c.id}
             className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 active:bg-slate-100"
             onMouseDown={e => e.preventDefault()}
-            onClick={() => { onChange(c); setQuery(getCanticoDisplayLabel(c)); setOpen(false); }}
+            onClick={() => { onChange(c); setQuery(getCanticoDisplayLabel(c, locale)); setOpen(false); }}
           >
             <div className="text-base font-semibold text-slate-800">{titulo}</div>
             <div className={`text-xs font-bold mt-0.5 ${st.cor}`}>{st.label} · {st.dataFormatada}</div>
@@ -75,7 +78,7 @@ export function CanticoAutocomplete({ value, onChange, canticos, onCreate, disab
             setOpen(false);
           }}
         >
-          + Cadastrar &ldquo;{query}&rdquo;
+          + {porIdioma(locale, 'Cadastrar', 'Registrar', 'Add')} &ldquo;{query}&rdquo;
         </div>
       )}
     </div>

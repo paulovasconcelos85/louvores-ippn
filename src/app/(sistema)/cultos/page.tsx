@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLocale } from '@/i18n/provider';
+import { getIntlLocale } from '@/i18n/config';
+import { porIdioma } from '@/i18n/por-idioma';
 import { resolveLocalizedText } from '@/lib/church-i18n';
 import { jsPDF } from 'jspdf';
 import { getStoredChurchId } from '@/lib/church-utils';
@@ -20,6 +22,10 @@ import { CultoCard } from './_components/CultoCard';
 export default function CultosPage() {
   const router = useRouter();
   const locale = useLocale();
+  const tr = useCallback(
+    (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en),
+    [locale]
+  );
   const { loading: permLoading, permissoes } = usePermissions();
   const [canticos, setCanticos] = useState<Cantico[]>([]);
   const [cultos, setCultos] = useState<Culto[]>([]);
@@ -118,7 +124,7 @@ export default function CultosPage() {
           numero: string | null;
           titulo: string | null;
         }>
-      ).map(mapHinarioNovoCanticoToCantico);
+      ).map((item) => mapHinarioNovoCanticoToCantico(item, locale));
       const todosCanticos = [...canticosBaseNormalizados, ...hinarioNovoCanticos].sort((a, b) =>
         a.nome.localeCompare(b.nome, locale)
       );
@@ -258,11 +264,11 @@ export default function CultosPage() {
       setPaginaAnteriores(0);
     } catch (error) {
       console.error('Falha ao carregar boletins anteriores:', error);
-      alert('Não foi possível carregar os boletins anteriores.');
+      alert(tr('Não foi possível carregar os boletins anteriores.', 'No se pudieron cargar los boletines anteriores.', 'Could not load previous bulletins.'));
     } finally {
       setCarregandoAnteriores(false);
     }
-  }, [cultos, locale]);
+  }, [cultos, locale, tr]);
 
   const getPublicBulletinUrl = useCallback(() => {
     if (!igrejaPublicSlug) return null;
@@ -277,24 +283,24 @@ export default function CultosPage() {
     const url = getPublicBulletinUrl();
 
     if (!url) {
-      alert('Esta igreja ainda não tem um slug público configurado.');
+      alert(tr('Esta igreja ainda não tem um slug público configurado.', 'Esta iglesia todavía no tiene una dirección pública configurada.', 'This church does not have a public address set up yet.'));
       return;
     }
 
     window.open(url, '_blank', 'noopener,noreferrer');
-  }, [getPublicBulletinUrl]);
+  }, [getPublicBulletinUrl, tr]);
 
   const compartilharBoletimPublico = useCallback(async () => {
     const url = getPublicBulletinUrl();
 
     if (!url) {
-      alert('Esta igreja ainda não tem um slug público configurado.');
+      alert(tr('Esta igreja ainda não tem um slug público configurado.', 'Esta iglesia todavía no tiene una dirección pública configurada.', 'This church does not have a public address set up yet.'));
       return;
     }
 
     const shareData = {
-      title: 'Boletim da igreja',
-      text: 'Boletim público da igreja',
+      title: tr('Boletim da igreja', 'Boletín de la iglesia', 'Church bulletin'),
+      text: tr('Boletim público da igreja', 'Boletín público de la iglesia', 'The church\'s public bulletin'),
       url,
     };
 
@@ -305,18 +311,18 @@ export default function CultosPage() {
       }
 
       await navigator.clipboard.writeText(url);
-      alert('Link do boletim copiado.');
+      alert(tr('Link do boletim copiado.', 'Enlace del boletín copiado.', 'Bulletin link copied.'));
     } catch (error) {
       if ((error as { name?: string })?.name === 'AbortError') return;
 
       try {
         await navigator.clipboard.writeText(url);
-        alert('Link do boletim copiado.');
+        alert(tr('Link do boletim copiado.', 'Enlace del boletín copiado.', 'Bulletin link copied.'));
       } catch {
-        prompt('Copie o link do boletim:', url);
+        prompt(tr('Copie o link do boletim:', 'Copia el enlace del boletín:', 'Copy the bulletin link:'), url);
       }
     }
-  }, [getPublicBulletinUrl]);
+  }, [getPublicBulletinUrl, tr]);
 
   useEffect(() => {
     if (!permLoading && permissoes.podeGerenciarCultos) {
@@ -341,12 +347,12 @@ export default function CultosPage() {
 
     const agrupados = agruparItensLiturgia(data);
 
-    const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString('pt-BR');
+    const dataFmt = new Date(culto.Dia + 'T00:00:00').toLocaleDateString(getIntlLocale(locale));
     const nomeLiturgia = getCultoNomeLiturgia(culto);
-    let texto = `LITURGIA DO CULTO${nomeLiturgia ? ` *${nomeLiturgia.toUpperCase()}*` : ''} DE *${dataFmt}*\n\n`;
+    let texto = `${tr('LITURGIA DO CULTO', 'LITURGIA DEL CULTO', 'ORDER OF SERVICE')}${nomeLiturgia ? ` *${nomeLiturgia.toUpperCase()}*` : ''} ${tr('DE', 'DEL', 'FOR')} *${dataFmt}*\n\n`;
 
     if (culto.palavra_pastoral) {
-      texto += `✝️ *PALAVRA PASTORAL*\n${culto.palavra_pastoral}\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
+      texto += `✝️ *${tr('PALAVRA PASTORAL', 'PALABRA PASTORAL', 'PASTORAL MESSAGE')}*\n${culto.palavra_pastoral}\n— ${culto.palavra_pastoral_autor || ''}\n\n`;
     }
 
     agrupados.forEach((it, index) => {
@@ -380,7 +386,7 @@ export default function CultosPage() {
     const agrupados = agruparItensLiturgia(data);
 
     const dataFmt = new Date(culto.Dia + 'T00:00:00')
-      .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+      .toLocaleDateString(getIntlLocale(locale), { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
       .toUpperCase();
     const nomeLiturgia = getCultoNomeLiturgia(culto);
 
@@ -412,12 +418,12 @@ export default function CultosPage() {
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(titleSize);
-        doc.text(nomeLiturgia ? `LITURGIA - ${nomeLiturgia.toUpperCase()}` : 'LITURGIA DO CULTO', pw / 2, 11, { align: 'center' });
+        doc.text(nomeLiturgia ? `${tr('LITURGIA', 'LITURGIA', 'ORDER OF SERVICE')} - ${nomeLiturgia.toUpperCase()}` : tr('LITURGIA DO CULTO', 'LITURGIA DEL CULTO', 'ORDER OF SERVICE'), pw / 2, 11, { align: 'center' });
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(subtitleSize);
         doc.text(dataFmt, pw / 2, 17, { align: 'center' });
         doc.setFontSize(metaSize);
-        doc.text('Pagina 1 de 1', pw / 2, 23, { align: 'center' });
+        doc.text(tr('Pagina 1 de 1', 'Página 1 de 1', 'Page 1 of 1'), pw / 2, 23, { align: 'center' });
         doc.setTextColor(0, 0, 0);
         doc.setDrawColor(16, 60, 48);
         doc.line(marginX, headerBottom, pw - marginX, headerBottom);
@@ -465,7 +471,7 @@ export default function CultosPage() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(itemTitleSize);
         doc.setTextColor(0, 0, 0);
-        doc.text('PALAVRA PASTORAL', x, y);
+        doc.text(tr('PALAVRA PASTORAL', 'PALABRA PASTORAL', 'PASTORAL MESSAGE'), x, y);
         y += titleH;
 
         doc.setFont('helvetica', 'normal');
@@ -589,7 +595,7 @@ export default function CultosPage() {
     const doc = bestDoc || renderPdf(bestScale);
 
     if (!doc) {
-      alert('Nao foi possivel montar o PDF em uma unica pagina. Revise a quantidade de texto desta liturgia.');
+      alert(tr('Nao foi possivel montar o PDF em uma unica pagina. Revise a quantidade de texto desta liturgia.', 'No se pudo armar el PDF en una sola página. Revisa la cantidad de texto de esta liturgia.', 'Could not fit the PDF on a single page. Please shorten the text of this order of service.'));
       return;
     }
 
@@ -602,12 +608,16 @@ export default function CultosPage() {
     const cultoId = culto['Culto nr.'];
 
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de excluir a liturgia.');
+      alert(tr('Selecione uma igreja antes de excluir a liturgia.', 'Selecciona una iglesia antes de eliminar la liturgia.', 'Select a church before deleting the order of service.'));
       return;
     }
 
     const confirmar = window.confirm(
-      `Excluir a liturgia de ${formatCultoDateLabel(culto.Dia)}? Esta ação remove a liturgia e todas as seções do boletim.`
+      tr(
+        `Excluir a liturgia de ${formatCultoDateLabel(culto.Dia, locale)}? Esta ação remove a liturgia e todas as seções do boletim.`,
+        `¿Eliminar la liturgia del ${formatCultoDateLabel(culto.Dia, locale)}? Esta acción elimina la liturgia y todas las secciones del boletín.`,
+        `Delete the order of service for ${formatCultoDateLabel(culto.Dia, locale)}? This removes it and every bulletin section.`
+      )
     );
 
     if (!confirmar) return;
@@ -661,7 +671,7 @@ export default function CultosPage() {
 
       setCultos((atuais) => atuais.filter((item) => item['Culto nr.'] !== cultoId));
     } catch (error: any) {
-      alert(`Erro ao excluir liturgia: ${error?.message || 'falha inesperada.'}`);
+      alert(`${tr('Erro ao excluir liturgia', 'Error al eliminar la liturgia', 'Could not delete the order of service')}: ${error?.message || tr('falha inesperada.', 'error inesperado.', 'unexpected error.')}`);
     } finally {
       setCultoExcluindoId(null);
     }
@@ -671,7 +681,7 @@ export default function CultosPage() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-slate-500 text-base">Carregando...</p>
+        <p className="text-slate-500 text-base">{tr('Carregando...', 'Cargando...', 'Loading...')}</p>
       </div>
     </div>
   );
@@ -702,9 +712,9 @@ export default function CultosPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex flex-col gap-4 mb-8 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Liturgias</h1>
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{tr('Liturgias', 'Liturgias', 'Orders of service')}</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              A interface já organiza os cultos por domingo/data. Assim fica mais natural trabalhar um boletim do domingo com uma ou várias liturgias dentro dele.
+              {tr('A interface já organiza os cultos por domingo/data. Assim fica mais natural trabalhar um boletim do domingo com uma ou várias liturgias dentro dele.', 'La interfaz ya organiza los cultos por domingo/fecha. Así es más natural trabajar un boletín del domingo con una o varias liturgias dentro.', 'Services are grouped by Sunday/date, so each Sunday\'s bulletin can hold one or more orders of service.')}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -714,7 +724,7 @@ export default function CultosPage() {
               disabled={!igrejaPublicSlug}
               className="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-white"
             >
-              Abrir boletim
+              {tr('Abrir boletim', 'Abrir boletín', 'Open bulletin')}
             </button>
             <button
               type="button"
@@ -722,14 +732,14 @@ export default function CultosPage() {
               disabled={!igrejaPublicSlug}
               className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100 active:bg-sky-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-white disabled:text-slate-400"
             >
-              Compartilhar link
+              {tr('Compartilhar link', 'Compartir enlace', 'Share link')}
             </button>
             {isLideranca && (
               <button
                 onClick={() => { setNovoDiaInicial(proximoDomingoSemBoletim(cultos)); setEditando('novo'); }}
                 className="bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold text-base hover:bg-emerald-800 active:bg-emerald-900 transition-colors shadow-sm"
               >
-                + Nova
+                {tr('+ Nova', '+ Nueva', '+ New')}
               </button>
             )}
           </div>
@@ -738,7 +748,7 @@ export default function CultosPage() {
         <div className="space-y-6">
           {cultos.length === 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500">
-              Nenhuma liturgia encontrada para a igreja selecionada.
+              {tr('Nenhuma liturgia encontrada para a igreja selecionada.', 'No se encontraron liturgias para la iglesia seleccionada.', 'No orders of service found for the selected church.')}
             </div>
           )}
           {gruposRecentes.map((grupo) => (
@@ -754,15 +764,19 @@ export default function CultosPage() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                    {grupo.isDomingo ? 'Boletim do domingo' : 'Grupo do dia'}
+                    {grupo.isDomingo ? tr('Boletim do domingo', 'Boletín del domingo', 'Sunday bulletin') : tr('Grupo do dia', 'Grupo del día', 'Day group')}
                   </p>
                   <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                    {formatCultoDateLabel(grupo.dia)}
+                    {formatCultoDateLabel(grupo.dia, locale)}
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
                     {grupo.cultos.length === 1
-                      ? '1 liturgia cadastrada neste dia.'
-                      : `${grupo.cultos.length} liturgias cadastradas neste dia.`}
+                      ? tr('1 liturgia cadastrada neste dia.', '1 liturgia registrada en este día.', '1 order of service on this day.')
+                      : tr(
+                          `${grupo.cultos.length} liturgias cadastradas neste dia.`,
+                          `${grupo.cultos.length} liturgias registradas en este día.`,
+                          `${grupo.cultos.length} orders of service on this day.`
+                        )}
                   </p>
                 </div>
 
@@ -771,7 +785,7 @@ export default function CultosPage() {
                     onClick={() => { setNovoDiaInicial(grupo.dia); setEditando('novo'); }}
                     className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
                   >
-                    + Nova liturgia neste dia
+                    {tr('+ Nova liturgia neste dia', '+ Nueva liturgia en este día', '+ New order of service on this day')}
                   </button>
                 )}
               </div>
@@ -789,26 +803,26 @@ export default function CultosPage() {
                   >
                     <div className="max-w-3xl">
                       <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
-                        Boletim compartilhado do dia
+                        {tr('Boletim compartilhado do dia', 'Boletín compartido del día', 'Day\'s shared bulletin')}
                       </p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">
-                        Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.
+                        {tr('Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.', 'Haz clic para abrir y editar la palabra pastoral, la imagen del tema, los avisos, la agenda, los pedidos de oración, los informativos y otros bloques de este domingo.', 'Click to open and edit this Sunday\'s pastoral message, theme image, announcements, schedule, prayer requests, newsletter and other blocks.')}
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                          {boletimReferencia?.palavra_pastoral?.trim() ? 'Palavra pastoral preenchida' : 'Palavra pastoral vazia'}
+                          {boletimReferencia?.palavra_pastoral?.trim() ? tr('Palavra pastoral preenchida', 'Palabra pastoral completada', 'Pastoral message filled in') : tr('Palavra pastoral vazia', 'Palabra pastoral vacía', 'Pastoral message empty')}
                         </span>
                         <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                          {boletimReferencia?.imagem_url ? 'Imagem definida' : 'Sem imagem do tema'}
+                          {boletimReferencia?.imagem_url ? tr('Imagem definida', 'Imagen definida', 'Image set') : tr('Sem imagem do tema', 'Sin imagen del tema', 'No theme image')}
                         </span>
                         <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm">
-                          {boletimDiaEditando?.dia === grupo.dia ? 'Editor aberto abaixo' : 'Editor fechado'}
+                          {boletimDiaEditando?.dia === grupo.dia ? tr('Editor aberto abaixo', 'Editor abierto abajo', 'Editor open below') : tr('Editor fechado', 'Editor cerrado', 'Editor closed')}
                         </span>
                       </div>
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-3">
                       <span className="hidden rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white lg:inline-flex">
-                        {boletimDiaEditando?.dia === grupo.dia ? 'Fechar boletim' : 'Abrir boletim'}
+                        {boletimDiaEditando?.dia === grupo.dia ? tr('Fechar boletim', 'Cerrar boletín', 'Close bulletin') : tr('Abrir boletim', 'Abrir boletín', 'Open bulletin')}
                       </span>
                       <span
                         className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-emerald-700 shadow-sm transition-transform ${
@@ -842,10 +856,10 @@ export default function CultosPage() {
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-                        Liturgias do dia
+                        {tr('Liturgias do dia', 'Liturgias del día', 'Day\'s orders of service')}
                       </p>
                       <p className="mt-2 text-sm leading-6 text-slate-500">
-                        Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.
+                        {tr('Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.', 'Cada tarjeta representa una liturgia específica dentro de este mismo domingo.', 'Each card below is one order of service within this Sunday.')}
                       </p>
                     </div>
                   </div>
@@ -856,12 +870,12 @@ export default function CultosPage() {
                         key={culto['Culto nr.']}
                         culto={culto}
                         tituloExibicao={
-                          grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : 'Liturgia única'
+                          grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : tr('Liturgia única', 'Liturgia única', 'Single order of service')
                         }
                         descricaoExibicao={
                           grupo.cultos.length > 1
-                            ? 'Uma das liturgias deste mesmo domingo.'
-                            : 'Liturgia deste domingo.'
+                            ? tr('Uma das liturgias deste mesmo domingo.', 'Una de las liturgias de este mismo domingo.', 'One of the orders of service for this Sunday.')
+                            : tr('Liturgia deste domingo.', 'Liturgia de este domingo.', 'This Sunday\'s order of service.')
                         }
                         esconderResumoBoletim
                         podeEditar={permissoes.podeEditarLouvor}
@@ -890,7 +904,7 @@ export default function CultosPage() {
                 disabled={carregandoAnteriores}
                 className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm italic text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-wait disabled:opacity-60"
               >
-                {carregandoAnteriores ? 'Carregando boletins anteriores…' : 'Ver boletins anteriores'}
+                {carregandoAnteriores ? tr('Carregando boletins anteriores…', 'Cargando boletines anteriores…', 'Loading previous bulletins…') : tr('Ver boletins anteriores', 'Ver boletines anteriores', 'See previous bulletins')}
               </button>
             </div>
           )}
@@ -900,7 +914,7 @@ export default function CultosPage() {
               <div className="flex items-center gap-3">
                 <div className="flex-1 border-t border-slate-200" />
                 <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                  Boletins anteriores
+                  {tr('Boletins anteriores', 'Boletines anteriores', 'Previous bulletins')}
                 </p>
                 <div className="flex-1 border-t border-slate-200" />
               </div>
@@ -918,15 +932,19 @@ export default function CultosPage() {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                        {grupo.isDomingo ? 'Boletim do domingo' : 'Grupo do dia'}
+                        {grupo.isDomingo ? tr('Boletim do domingo', 'Boletín del domingo', 'Sunday bulletin') : tr('Grupo do dia', 'Grupo del día', 'Day group')}
                       </p>
                       <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                        {formatCultoDateLabel(grupo.dia)}
+                        {formatCultoDateLabel(grupo.dia, locale)}
                       </h2>
                       <p className="mt-2 text-sm leading-6 text-slate-500">
                         {grupo.cultos.length === 1
-                          ? '1 liturgia cadastrada neste dia.'
-                          : `${grupo.cultos.length} liturgias cadastradas neste dia.`}
+                          ? tr('1 liturgia cadastrada neste dia.', '1 liturgia registrada en este día.', '1 order of service on this day.')
+                          : tr(
+                          `${grupo.cultos.length} liturgias cadastradas neste dia.`,
+                          `${grupo.cultos.length} liturgias registradas en este día.`,
+                          `${grupo.cultos.length} orders of service on this day.`
+                        )}
                       </p>
                     </div>
 
@@ -935,7 +953,7 @@ export default function CultosPage() {
                         onClick={() => { setNovoDiaInicial(grupo.dia); setEditando('novo'); }}
                         className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
                       >
-                        + Nova liturgia neste dia
+                        {tr('+ Nova liturgia neste dia', '+ Nueva liturgia en este día', '+ New order of service on this day')}
                       </button>
                     )}
                   </div>
@@ -953,26 +971,26 @@ export default function CultosPage() {
                       >
                         <div className="max-w-3xl">
                           <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
-                            Boletim compartilhado do dia
+                            {tr('Boletim compartilhado do dia', 'Boletín compartido del día', 'Day\'s shared bulletin')}
                           </p>
                           <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.
+                            {tr('Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.', 'Haz clic para abrir y editar la palabra pastoral, la imagen del tema, los avisos, la agenda, los pedidos de oración, los informativos y otros bloques de este domingo.', 'Click to open and edit this Sunday\'s pastoral message, theme image, announcements, schedule, prayer requests, newsletter and other blocks.')}
                           </p>
                           <div className="mt-4 flex flex-wrap gap-2">
                             <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                              {boletimReferencia?.palavra_pastoral?.trim() ? 'Palavra pastoral preenchida' : 'Palavra pastoral vazia'}
+                              {boletimReferencia?.palavra_pastoral?.trim() ? tr('Palavra pastoral preenchida', 'Palabra pastoral completada', 'Pastoral message filled in') : tr('Palavra pastoral vazia', 'Palabra pastoral vacía', 'Pastoral message empty')}
                             </span>
                             <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                              {boletimReferencia?.imagem_url ? 'Imagem definida' : 'Sem imagem do tema'}
+                              {boletimReferencia?.imagem_url ? tr('Imagem definida', 'Imagen definida', 'Image set') : tr('Sem imagem do tema', 'Sin imagen del tema', 'No theme image')}
                             </span>
                             <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm">
-                              {boletimDiaEditando?.dia === grupo.dia ? 'Editor aberto abaixo' : 'Editor fechado'}
+                              {boletimDiaEditando?.dia === grupo.dia ? tr('Editor aberto abaixo', 'Editor abierto abajo', 'Editor open below') : tr('Editor fechado', 'Editor cerrado', 'Editor closed')}
                             </span>
                           </div>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-3">
                           <span className="hidden rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white lg:inline-flex">
-                            {boletimDiaEditando?.dia === grupo.dia ? 'Fechar boletim' : 'Abrir boletim'}
+                            {boletimDiaEditando?.dia === grupo.dia ? tr('Fechar boletim', 'Cerrar boletín', 'Close bulletin') : tr('Abrir boletim', 'Abrir boletín', 'Open bulletin')}
                           </span>
                           <span
                             className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-emerald-700 shadow-sm transition-transform ${
@@ -1006,10 +1024,10 @@ export default function CultosPage() {
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-                            Liturgias do dia
+                            {tr('Liturgias do dia', 'Liturgias del día', 'Day\'s orders of service')}
                           </p>
                           <p className="mt-2 text-sm leading-6 text-slate-500">
-                            Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.
+                            {tr('Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.', 'Cada tarjeta representa una liturgia específica dentro de este mismo domingo.', 'Each card below is one order of service within this Sunday.')}
                           </p>
                         </div>
                       </div>
@@ -1020,12 +1038,12 @@ export default function CultosPage() {
                             key={culto['Culto nr.']}
                             culto={culto}
                             tituloExibicao={
-                              grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : 'Liturgia única'
+                              grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : tr('Liturgia única', 'Liturgia única', 'Single order of service')
                             }
                             descricaoExibicao={
                               grupo.cultos.length > 1
-                                ? 'Uma das liturgias deste mesmo domingo.'
-                                : 'Liturgia deste domingo.'
+                                ? tr('Uma das liturgias deste mesmo domingo.', 'Una de las liturgias de este mismo domingo.', 'One of the orders of service for this Sunday.')
+                                : tr('Liturgia deste domingo.', 'Liturgia de este domingo.', 'This Sunday\'s order of service.')
                             }
                             esconderResumoBoletim
                             podeEditar={permissoes.podeEditarLouvor}
@@ -1054,7 +1072,7 @@ export default function CultosPage() {
                     disabled={paginaAnteriores === 0}
                     className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
-                    ← Anterior
+                    {tr('← Anterior', '← Anterior', '← Previous')}
                   </button>
                   {Array.from({ length: totalPaginasAnteriores }, (_, i) => (
                     <button
@@ -1076,7 +1094,7 @@ export default function CultosPage() {
                     disabled={paginaAnteriores === totalPaginasAnteriores - 1}
                     className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
-                    Próximo →
+                    {tr('Próximo →', 'Siguiente →', 'Next →')}
                   </button>
                 </div>
               )}

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import type { Cantico } from '../_lib/tipos';
 import { getCanticoInlineReference, getRepertorioTextos, matchesCanticoQuery } from '../_lib/canticos';
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 
 export function PublicCanticoTextarea({
   value,
@@ -20,7 +22,8 @@ export function PublicCanticoTextarea({
   className?: string;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const textosRepertorio = getRepertorioTextos(canticos);
+  const locale = useLocale();
+  const textosRepertorio = getRepertorioTextos(canticos, locale);
   const [triggerState, setTriggerState] = useState<{
     trigger: '@' | '#';
     query: string;
@@ -111,7 +114,7 @@ export function PublicCanticoTextarea({
   const aplicarSugestao = (cantico: Cantico) => {
     if (!triggerState) return;
 
-    const referencia = getCanticoInlineReference(cantico);
+    const referencia = getCanticoInlineReference(cantico, locale);
     const proximoValor = `${value.slice(0, triggerState.start)}${referencia}${value.slice(triggerState.end)}`;
     onChange(proximoValor);
     setTriggerState(null);
@@ -185,7 +188,7 @@ export function PublicCanticoTextarea({
         <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-xl">
           <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">
             {triggerState.trigger === '#'
-              ? 'Buscar hino por número'
+              ? porIdioma(locale, 'Buscar hino por número', 'Buscar himno por número', 'Search hymn by number')
               : textosRepertorio.tituloBuscaNome}
           </div>
           <div className="max-h-72 overflow-y-auto">
@@ -206,7 +209,7 @@ export function PublicCanticoTextarea({
                       {cantico.nome}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {getCanticoInlineReference(cantico)}
+                      {getCanticoInlineReference(cantico, locale)}
                     </p>
                   </div>
                   {cantico.numero ? (

@@ -81,22 +81,23 @@ const ICONES_CATEGORIAS: Record<string, any> = {
 };
 
 // Labels amigáveis
-const LABELS_CATEGORIAS: Record<string, string> = {
-  lideranca_pastor: 'Pastor',
-  lideranca_presbitero: 'Presbítero',
-  lideranca_diacono: 'Diácono',
-  lideranca: 'Liderança',
-  louvor_lideranca: 'Ministração',
-  louvor_vocal: 'Vozes',
-  louvor_instrumento: 'Instrumentos',
-  instrumento: 'Instrumentos',
-  tecnica: 'Técnica',
-  tecnico_audio: 'Áudio',
-  tecnico_video: 'Vídeo',
-  ministerio_infantil: 'Ministério Infantil',
-  apoio_seguranca: 'Segurança',
-  apoio_geral: 'Apoio',
-  apoio: 'Apoio'
+// [pt, es, en]
+const LABELS_CATEGORIAS: Record<string, [string, string, string]> = {
+  lideranca_pastor: ['Pastor', 'Pastor', 'Pastor'],
+  lideranca_presbitero: ['Presbítero', 'Presbítero', 'Elder'],
+  lideranca_diacono: ['Diácono', 'Diácono', 'Deacon'],
+  lideranca: ['Liderança', 'Liderazgo', 'Leadership'],
+  louvor_lideranca: ['Ministração', 'Dirección de alabanza', 'Worship leading'],
+  louvor_vocal: ['Vozes', 'Voces', 'Vocals'],
+  louvor_instrumento: ['Instrumentos', 'Instrumentos', 'Instruments'],
+  instrumento: ['Instrumentos', 'Instrumentos', 'Instruments'],
+  tecnica: ['Técnica', 'Técnica', 'Tech'],
+  tecnico_audio: ['Áudio', 'Audio', 'Sound'],
+  tecnico_video: ['Vídeo', 'Video', 'Video'],
+  ministerio_infantil: ['Ministério Infantil', 'Ministerio infantil', "Children's ministry"],
+  apoio_seguranca: ['Segurança', 'Seguridad', 'Security'],
+  apoio_geral: ['Apoio', 'Apoyo', 'Support'],
+  apoio: ['Apoio', 'Apoyo', 'Support']
 };
 
 export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaIntegradaProps) {
@@ -229,7 +230,8 @@ export function EscalaIntegrada({ dataCulto, cultoConcluido = false }: EscalaInt
               {/* Equipe de serviço */}
               {categoriasOrdenadas.map((categoria) => {
                 const funcoes = funcoesPorCategoria![categoria];
-                const label = LABELS_CATEGORIAS[categoria] || categoria;
+                const rotulos = LABELS_CATEGORIAS[categoria];
+                const label = rotulos ? tr(...rotulos) : categoria;
                 const IconeCategoria = ICONES_CATEGORIAS[categoria] || User;
                 
                 return (

@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { getCultoTituloExibicao, formatCultoDateLabel } from '../_lib/liturgia';
 
 // --- CARD DE CULTO NA LISTAGEM ---
@@ -16,7 +18,9 @@ export function CultoCard({
   excluindo,
   esconderResumoBoletim,
 }: any) {
-  const dataFormatada = formatCultoDateLabel(culto.Dia);
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
+  const dataFormatada = formatCultoDateLabel(culto.Dia, locale);
   const titulo = getCultoTituloExibicao(culto, tituloExibicao || dataFormatada);
 
   return (
@@ -31,7 +35,7 @@ export function CultoCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Liturgia do dia</p>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{tr('Liturgia do dia', 'Liturgia del día', 'Order of service')}</p>
             <h3 className="mt-2 text-xl font-black tracking-tight text-slate-900">
               {titulo}
             </h3>
@@ -40,7 +44,7 @@ export function CultoCard({
             ) : null}
             {!esconderResumoBoletim && culto.palavra_pastoral ? (
               <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                Palavra pastoral disponível
+                {tr('Palavra pastoral disponível', 'Palabra pastoral disponible', 'Pastoral message available')}
               </p>
             ) : null}
           </div>
@@ -51,9 +55,9 @@ export function CultoCard({
             <button
               onClick={() => onEditar(culto)}
               className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
-              title="Editar liturgia"
+              title={tr('Editar liturgia', 'Editar liturgia', 'Edit order of service')}
             >
-              Editar liturgia
+              {tr('Editar liturgia', 'Editar liturgia', 'Edit order of service')}
             </button>
           ) : null}
           <button onClick={() => onWhatsApp(culto)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors hover:bg-emerald-100 active:bg-emerald-200" title="WhatsApp">
@@ -71,7 +75,7 @@ export function CultoCard({
               onClick={() => onExcluir(culto)}
               disabled={excluindo}
               className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-lg text-red-600 transition-colors hover:bg-red-100 active:bg-red-200 disabled:opacity-50"
-              title="Excluir"
+              title={tr('Excluir', 'Eliminar', 'Delete')}
             >
               {excluindo ? '⏳' : '🗑️'}
             </button>

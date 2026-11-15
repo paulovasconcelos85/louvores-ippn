@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { compactLocalizedTextMap, createEmptyLocalizedTextMap, normalizeLocalizedTextMap, resolveLocalizedText, type LocalizedTextMapForm } from '@/lib/church-i18n';
 import { getStoredChurchId } from '@/lib/church-utils';
 import { TIPOS_LITURGICOS_PADRAO, HABILITAR_BOLETIM_SECOES_NEXT, BOLETIM_FALLBACK_TIPO_PREFIX, type Cantico, type LouvorItem, type BoletimSecaoRascunho, type Culto, type LouvorItemRow } from '../_lib/tipos';
@@ -28,6 +29,7 @@ export function EditorLiturgia({
   configuracaoIgreja,
 }: any) {
   const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const [dia, setDia] = useState<string>(culto?.Dia || diaInicial || '');
   const [nomeLiturgia, setNomeLiturgia] = useState<string>(culto?.nome_liturgia || '');
   const [nomeLiturgiaI18n, setNomeLiturgiaI18n] = useState<LocalizedTextMapForm>(
@@ -52,16 +54,16 @@ export function EditorLiturgia({
   const podeCadastrarCanticos =
     canEditarMusica && configuracaoIgreja?.permiteCadastroCanticos !== false;
   const tiposLiturgicos = normalizarTiposLiturgicosDisponiveis(
-    resolveTiposLiturgicos(configuracaoIgreja),
+    resolveTiposLiturgicos(configuracaoIgreja, locale),
     itens
   );
   const temModeloDaIgreja = (configuracaoIgreja?.modelosLiturgia?.length || 0) > 0;
-  const dataCultoFormatada = dia ? formatCultoDateLabel(dia) : 'Escolha a data do culto';
+  const dataCultoFormatada = dia ? formatCultoDateLabel(dia, locale) : tr('Escolha a data do culto', 'Elige la fecha del culto', 'Choose the service date');
   const nomeLiturgiaAtual = nomeLiturgia.trim();
   const totalItensComTextoPublico = itens.filter((item) => item.conteudo_publico?.trim()).length;
   const tituloLiturgiaAtual = getCultoTituloExibicao(
     culto,
-    nomeLiturgiaAtual || (culto ? 'Editar Liturgia' : 'Nova Liturgia')
+    nomeLiturgiaAtual || (culto ? tr('Editar Liturgia', 'Editar liturgia', 'Edit order of service') : tr('Nova Liturgia', 'Nueva liturgia', 'New order of service'))
   );
   const cultosDoMesmoDiaAtual = useMemo(
     () =>
@@ -85,7 +87,7 @@ export function EditorLiturgia({
     if (culto) {
       carregarItens(culto['Culto nr.']);
     } else if (dia) {
-      setItens(modeloPadrao(dia, configuracaoIgreja));
+      setItens(modeloPadrao(dia, configuracaoIgreja, locale));
     }
   }, [culto, dia, configuracaoIgreja]);
 
@@ -279,23 +281,30 @@ export function EditorLiturgia({
 
   const aplicarModeloDaIgreja = () => {
     const baseDia = dia || new Date().toISOString().split('T')[0];
-    setItens(modeloPadrao(baseDia, configuracaoIgreja));
+    setItens(modeloPadrao(baseDia, configuracaoIgreja, locale));
   };
 
   const salvar = async () => {
-    if (!dia) return alert('Selecione a data!');
+    if (!dia) return alert(tr('Selecione a data!', '¡Selecciona la fecha!', 'Select the date!'));
     // O campo de data aceita anos como 0206 quando o ano é digitado à mão.
     const anoDia = Number(dia.slice(0, 4));
     const anoAtual = new Date().getFullYear();
     if (anoDia < 2000 || anoDia > anoAtual + 2) {
-      return alert(`A data ${dia.split('-').reverse().join('/')} parece ter o ano errado. Confira o ano antes de salvar.`);
+      const dataDigitada = dia.split('-').reverse().join('/');
+      return alert(
+        tr(
+          `A data ${dataDigitada} parece ter o ano errado. Confira o ano antes de salvar.`,
+          `La fecha ${dataDigitada} parece tener el año equivocado. Revisa el año antes de guardar.`,
+          `The date ${dataDigitada} seems to have the wrong year. Check the year before saving.`
+        )
+      );
     }
     const dataAlterada = !culto || getCultoDateKey(culto.Dia) !== getCultoDateKey(dia);
-    const avisosData = dataAlterada ? avisosDataBoletim(dia) : [];
+    const avisosData = dataAlterada ? avisosDataBoletim(dia, locale) : [];
     if (
       avisosData.length > 0 &&
       !confirm(
-        `Confira a data do boletim:\n\n${formatCultoDateLabel(dia)}\n\n${avisosData.join('\n')}\n\nSalvar mesmo assim?`
+        `${tr('Confira a data do boletim:', 'Revisa la fecha del boletín:', 'Check the bulletin date:')}\n\n${formatCultoDateLabel(dia, locale)}\n\n${avisosData.join('\n')}\n\n${tr('Salvar mesmo assim?', '¿Guardar de todos modos?', 'Save anyway?')}`
       )
     ) {
       return;
@@ -303,7 +312,7 @@ export function EditorLiturgia({
     setLoading(true);
     try {
       const igrejaId = getStoredChurchId();
-      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar a liturgia');
+      if (!igrejaId) throw new Error(tr('Selecione uma igreja antes de salvar a liturgia', 'Selecciona una iglesia antes de guardar la liturgia', 'Select a church before saving the order of service'));
       const palavraPastoralAtualizadaI18n = compactLocalizedTextMap(
         updateLocalizedDraftValue(palavraPastoralI18n, locale, palavraPastoral)
       );
@@ -454,7 +463,7 @@ export function EditorLiturgia({
         await sincronizarBoletimFallbackLegado(cultoIdsMesmoDia, boletimSecoes);
       }
 
-      alert('✅ Salvo com sucesso!');
+      alert(tr('✅ Salvo com sucesso!', '✅ ¡Guardado!', '✅ Saved!'));
       onSalvo();
     } catch (e: any) {
       alert(`Erro: ${e.message}`);
@@ -469,19 +478,19 @@ export function EditorLiturgia({
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-4 px-4 py-4 lg:px-8">
           <button onClick={onCancelar} className="rounded-2xl px-4 py-2.5 text-base font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100">
-            ← Voltar
+            {tr('← Voltar', '← Volver', '← Back')}
           </button>
           <div className="min-w-0 text-center">
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Editor de liturgia</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">{tr('Editor de liturgia', 'Editor de liturgia', 'Order of service editor')}</p>
             <h2 className="truncate text-base font-black uppercase tracking-wider text-slate-800">
               {tituloLiturgiaAtual}
             </h2>
             <p className="mt-1 truncate text-xs font-semibold text-slate-500">
-              Boletim do dia: {dataCultoFormatada}
+              {tr('Boletim do dia:', 'Boletín del día:', 'Day\'s bulletin:')} {dataCultoFormatada}
             </p>
           </div>
           <div className="hidden min-w-[220px] justify-end text-right text-xs text-slate-500 lg:flex">
-            Preencha com calma. Tudo foi pensado para parecer um editor simples e guiado.
+            {tr('Preencha com calma. Tudo foi pensado para parecer um editor simples e guiado.', 'Complétalo con calma. Todo está pensado para ser un editor simple y guiado.', 'Take your time. Everything is laid out as a simple, guided editor.')}
           </div>
         </div>
       </header>
@@ -489,59 +498,59 @@ export function EditorLiturgia({
       <main className="mx-auto grid w-full max-w-[1800px] gap-6 px-4 pt-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-8">
         <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
           <div className="rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.98),rgba(255,255,255,0.98))] p-5 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Como editar</p>
-            <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">Uma folha simples para montar o culto</h3>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">{tr('Como editar', 'Cómo editar', 'How to edit')}</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">{tr('Uma folha simples para montar o culto', 'Una hoja simple para armar el culto', 'A simple sheet to plan the service')}</h3>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Pense nesta tela como um editor guiado da liturgia. O boletim do dia é único; aqui você mexe apenas na liturgia que faz parte dele.
+              {tr('Pense nesta tela como um editor guiado da liturgia. O boletim do dia é único; aqui você mexe apenas na liturgia que faz parte dele.', 'Piensa en esta pantalla como un editor guiado de la liturgia. El boletín del día es único; aquí solo cambias la liturgia que forma parte de él.', 'Think of this screen as a guided editor for the order of service. There is one bulletin per day; here you only change the order of service inside it.')}
             </p>
           </div>
 
           <div className="rounded-[28px] border border-slate-200 bg-white/95 p-5 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Resumo rápido</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">{tr('Resumo rápido', 'Resumen rápido', 'Quick summary')}</p>
             <div className="mt-4 grid gap-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Boletim do dia</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Boletim do dia', 'Boletín del día', 'Day\'s bulletin')}</p>
                 <p className="mt-2 text-sm font-semibold text-slate-800">{dataCultoFormatada}</p>
               </div>
               {nomeLiturgiaAtual ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Liturgia em edição</p>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Liturgia em edição', 'Liturgia en edición', 'Order of service being edited')}</p>
                   <p className="mt-2 text-sm font-semibold text-slate-800">{nomeLiturgiaAtual}</p>
                 </div>
               ) : null}
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Itens da liturgia</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Itens da liturgia', 'Elementos de la liturgia', 'Service items')}</p>
                 <p className="mt-2 text-2xl font-black text-slate-900">{itens.length}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Texto público preenchido</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Texto público preenchido', 'Texto público completado', 'Items with public text')}</p>
                 <p className="mt-2 text-2xl font-black text-slate-900">{totalItensComTextoPublico}</p>
               </div>
             </div>
           </div>
 
           <div className="rounded-[28px] border border-slate-200 bg-white/95 p-5 shadow-sm">
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">Dicas</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">{tr('Dicas', 'Consejos', 'Tips')}</p>
             <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-              <p>O campo <strong>Público</strong> é o que pode aparecer no boletim e nas saídas públicas.</p>
-              <p>O campo <strong>Interno</strong> é só para orientar quem vai conduzir o culto.</p>
-              <p>Nos títulos dos itens, você pode digitar livremente. Não precisa cadastrar antes.</p>
-              <p>Se a igreja já tem um modelo, você pode usá-lo como ponto de partida e depois ajustar tudo.</p>
+              <p>{tr('O campo', 'El campo', 'The')} <strong>{tr('Público', 'Público', 'Public')}</strong> {tr('é o que pode aparecer no boletim e nas saídas públicas.', 'es lo que puede aparecer en el boletín y en las publicaciones.', 'field is what can appear in the bulletin and public outputs.')}</p>
+              <p>{tr('O campo', 'El campo', 'The')} <strong>{tr('Interno', 'Interno', 'Internal')}</strong> {tr('é só para orientar quem vai conduzir o culto.', 'es solo para orientar a quien dirigirá el culto.', 'field is only to guide whoever leads the service.')}</p>
+              <p>{tr('Nos títulos dos itens, você pode digitar livremente. Não precisa cadastrar antes.', 'En los títulos de los elementos puedes escribir libremente. No hace falta registrarlos antes.', 'You can type item titles freely. No need to set them up first.')}</p>
+              <p>{tr('Se a igreja já tem um modelo, você pode usá-lo como ponto de partida e depois ajustar tudo.', 'Si la iglesia ya tiene un modelo, puedes usarlo como punto de partida y luego ajustarlo todo.', 'If your church has a template, start from it and adjust everything afterwards.')}</p>
             </div>
           </div>
         </aside>
 
         <section className="overflow-hidden rounded-[34px] border border-slate-200/90 bg-white/95 shadow-[0_40px_120px_-70px_rgba(15,23,42,0.35)]">
           <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.96))] px-6 py-8 lg:px-10">
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">Liturgia do boletim</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">{tr('Liturgia do boletim', 'Liturgia del boletín', 'Bulletin order of service')}</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 lg:text-4xl">
               {tituloLiturgiaAtual}
             </h1>
             <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600">
-              Este editor altera só a liturgia atual. Os campos compartilhados do boletim ficam fora daqui, no boletim único deste dia.
+              {tr('Este editor altera só a liturgia atual. Os campos compartilhados do boletim ficam fora daqui, no boletim único deste dia.', 'Este editor cambia solo la liturgia actual. Los campos compartidos del boletín están fuera de aquí, en el boletín único de este día.', 'This editor only changes the current order of service. Shared bulletin fields live outside, in this day\'s single bulletin.')}
             </p>
             <div className="mt-5 inline-flex rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-              Boletim do dia: {dataCultoFormatada}
+              {tr('Boletim do dia:', 'Boletín del día:', 'Day\'s bulletin:')} {dataCultoFormatada}
             </div>
           </div>
 
@@ -551,15 +560,19 @@ export function EditorLiturgia({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-[0.28em] text-sky-700">
-                      Domingo em conjunto
+                      {tr('Domingo em conjunto', 'Domingo en conjunto', 'Shared Sunday')}
                     </p>
                     <h3 className="mt-2 text-xl font-black text-slate-900">
                       {cultosDoMesmoDiaAtual.length === 1
-                        ? 'Este domingo tem 1 liturgia cadastrada'
-                        : `Este domingo tem ${cultosDoMesmoDiaAtual.length} liturgias cadastradas`}
+                        ? tr('Este domingo tem 1 liturgia cadastrada', 'Este domingo tiene 1 liturgia registrada', 'This Sunday has 1 order of service')
+                        : tr(
+                            `Este domingo tem ${cultosDoMesmoDiaAtual.length} liturgias cadastradas`,
+                            `Este domingo tiene ${cultosDoMesmoDiaAtual.length} liturgias registradas`,
+                            `This Sunday has ${cultosDoMesmoDiaAtual.length} orders of service`
+                          )}
                     </h3>
                     <p className="mt-3 max-w-4xl text-sm leading-7 text-slate-600">
-                      O boletim deste dia pode ter várias liturgias. Você pode alternar entre elas ou abrir uma nova sem sair desta tela.
+                      {tr('O boletim deste dia pode ter várias liturgias. Você pode alternar entre elas ou abrir uma nova sem sair desta tela.', 'El boletín de este día puede tener varias liturgias. Puedes alternar entre ellas o abrir una nueva sin salir de esta pantalla.', 'This day\'s bulletin can hold several orders of service. Switch between them or open a new one without leaving this screen.')}
                     </p>
                   </div>
 
@@ -569,7 +582,7 @@ export function EditorLiturgia({
                       onClick={() => onNovaLiturgiaNoDia(dia)}
                       className="rounded-2xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-bold text-sky-800 transition-colors hover:bg-sky-100"
                     >
-                      + Nova liturgia neste boletim
+                      {tr('+ Nova liturgia neste boletim', '+ Nueva liturgia en este boletín', '+ New order of service in this bulletin')}
                     </button>
                   ) : null}
                 </div>
@@ -591,8 +604,8 @@ export function EditorLiturgia({
                               : 'border-sky-200 bg-white text-sky-800 hover:bg-sky-100'
                           }`}
                         >
-                          {estaAberta ? 'Editando agora: ' : ''}
-                          {getCultoNomeLiturgia(item) || `Liturgia ${index + 1}`}
+                          {estaAberta ? tr('Editando agora: ', 'Editando ahora: ', 'Editing now: ') : ''}
+                          {getCultoNomeLiturgia(item) || `${tr('Liturgia', 'Liturgia', 'Service')} ${index + 1}`}
                         </button>
                       );
                     })}
@@ -604,15 +617,15 @@ export function EditorLiturgia({
             <div className="space-y-4">
               <div className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-5">
                 <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700 shadow-sm">
-                  Etapa 1
+                  {tr('Etapa 1', 'Paso 1', 'Step 1')}
                 </span>
                 <h3 className="mt-3 text-xl font-black text-slate-900">
-                  {criandoNovaLiturgiaNoMesmoBoletim ? 'Boletim já aberto' : 'Data do boletim'}
+                  {criandoNovaLiturgiaNoMesmoBoletim ? tr('Boletim já aberto', 'Boletín ya abierto', 'Bulletin already open') : tr('Data do boletim', 'Fecha del boletín', 'Bulletin date')}
                 </h3>
                 {criandoNovaLiturgiaNoMesmoBoletim ? (
                   <>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Você está adicionando outra liturgia ao mesmo boletim. Por isso a data já fica presa a este boletim e os campos compartilhados não aparecem de novo aqui.
+                      {tr('Você está adicionando outra liturgia ao mesmo boletim. Por isso a data já fica presa a este boletim e os campos compartilhados não aparecem de novo aqui.', 'Estás agregando otra liturgia al mismo boletín. Por eso la fecha queda fija en este boletín y los campos compartidos no vuelven a aparecer aquí.', 'You are adding another order of service to the same bulletin, so the date is fixed to this bulletin and shared fields are not shown again here.')}
                     </p>
                     <div className="mt-4 rounded-2xl border border-emerald-200 bg-white px-4 py-4 text-2xl font-black text-emerald-800">
                       {dataCultoFormatada}
@@ -621,7 +634,7 @@ export function EditorLiturgia({
                 ) : (
                   <>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Escolha o domingo ou o dia ao qual este boletim pertence. Depois você pode ter uma ou várias liturgias diferentes dentro dele.
+                      {tr('Escolha o domingo ou o dia ao qual este boletim pertence. Depois você pode ter uma ou várias liturgias diferentes dentro dele.', 'Elige el domingo o el día al que pertenece este boletín. Después puedes tener una o varias liturgias dentro de él.', 'Choose the Sunday or day this bulletin belongs to. You can then have one or more orders of service inside it.')}
                     </p>
                     <input
                       type="date"
@@ -629,7 +642,7 @@ export function EditorLiturgia({
                       value={dia}
                       onChange={e => {
                         setDia(e.target.value);
-                        if (!culto && e.target.value) setItens(modeloPadrao(e.target.value, configuracaoIgreja));
+                        if (!culto && e.target.value) setItens(modeloPadrao(e.target.value, configuracaoIgreja, locale));
                       }}
                       disabled={!isLideranca}
                       className="mt-4 w-full bg-transparent py-1 text-2xl font-black text-emerald-800 outline-none"
@@ -637,7 +650,7 @@ export function EditorLiturgia({
                     {dia && (
                       <p className={`mt-2 text-sm font-bold ${isDomingoDate(dia) ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {dataCultoFormatada}
-                        {!isDomingoDate(dia) && ' — atenção: não é domingo'}
+                        {!isDomingoDate(dia) && tr(' — atenção: não é domingo', ' — atención: no es domingo', ' — note: not a Sunday')}
                       </p>
                     )}
                   </>
@@ -647,11 +660,11 @@ export function EditorLiturgia({
 
             <div className="rounded-[28px] border border-sky-200 bg-sky-50/50 p-5">
               <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em] text-sky-700 shadow-sm">
-                Etapa 2
+                {tr('Etapa 2', 'Paso 2', 'Step 2')}
               </span>
-              <h3 className="mt-3 text-xl font-black text-slate-900">Liturgia</h3>
+              <h3 className="mt-3 text-xl font-black text-slate-900">{tr('Liturgia', 'Liturgia', 'Order of service')}</h3>
               <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-600">
-                Os campos compartilhados do boletim não aparecem aqui para não duplicar o boletim. Aqui você edita somente esta liturgia.
+                {tr('Os campos compartilhados do boletim não aparecem aqui para não duplicar o boletim. Aqui você edita somente esta liturgia.', 'Los campos compartidos del boletín no aparecen aquí para no duplicarlo. Aquí editas solo esta liturgia.', 'Shared bulletin fields are not shown here so the bulletin is not duplicated. Here you edit only this order of service.')}
               </p>
             </div>
 
@@ -659,15 +672,15 @@ export function EditorLiturgia({
               <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-3xl">
                   <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
-                    Etapa 3
+                    {tr('Etapa 3', 'Paso 3', 'Step 3')}
                   </span>
-                  <h3 className="mt-3 text-xs font-black uppercase tracking-[0.24em] text-slate-400">Liturgia</h3>
+                  <h3 className="mt-3 text-xs font-black uppercase tracking-[0.24em] text-slate-400">{tr('Liturgia', 'Liturgia', 'Order of service')}</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Aqui você edita uma liturgia específica dentro do boletim deste dia. É nesta parte que entram o nome da liturgia e os momentos da celebração.
+                    {tr('Aqui você edita uma liturgia específica dentro do boletim deste dia. É nesta parte que entram o nome da liturgia e os momentos da celebração.', 'Aquí editas una liturgia específica dentro del boletín de este día. En esta parte van el nombre de la liturgia y los momentos de la celebración.', 'Here you edit one order of service inside this day\'s bulletin: its name and each part of the service.')}
                   </p>
                   {isLideranca && temModeloDaIgreja && (
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      Se quiser acelerar, use o modelo da igreja e depois personalize cada item.
+                      {tr('Se quiser acelerar, use o modelo da igreja e depois personalize cada item.', 'Para ir más rápido, usa el modelo de la iglesia y luego personaliza cada elemento.', 'To go faster, use your church\'s template and then customize each item.')}
                     </p>
                   )}
                 </div>
@@ -678,23 +691,23 @@ export function EditorLiturgia({
                         onClick={aplicarModeloDaIgreja}
                         className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100 active:bg-emerald-200"
                       >
-                        Usar modelo da igreja
+                        {tr('Usar modelo da igreja', 'Usar modelo de la iglesia', 'Use church template')}
                       </button>
                     )}
                     <button
                       onClick={() => adicionarItem(0)}
                       className="rounded-2xl px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 active:bg-emerald-100"
                     >
-                      + item no início
+                      {tr('+ item no início', '+ elemento al inicio', '+ item at the top')}
                     </button>
                   </div>
                 )}
               </div>
 
               <div className="mb-5 rounded-[24px] border border-slate-200 bg-slate-50/70 p-5">
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Nome desta liturgia</p>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{tr('Nome desta liturgia', 'Nombre de esta liturgia', 'Name of this order of service')}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Dê um nome livre para esta liturgia específica dentro do boletim, como Culto da Manhã, Culto da Noite, Culto de Ceia do Senhor ou Escola Bíblica Dominical.
+                  {tr('Dê um nome livre para esta liturgia específica dentro do boletim, como Culto da Manhã, Culto da Noite, Culto de Ceia do Senhor ou Escola Bíblica Dominical.', 'Dale un nombre libre a esta liturgia dentro del boletín, como Culto de la mañana, Culto de la noche, Culto de Santa Cena o Escuela Dominical.', 'Give this order of service any name, like Morning Service, Evening Service, Lord\'s Supper Service or Sunday School.')}
                 </p>
                 <input
                   type="text"
@@ -706,11 +719,11 @@ export function EditorLiturgia({
                     );
                   }}
                   disabled={!isLideranca}
-                  placeholder="Ex.: Culto da Manhã"
+                  placeholder={tr('Ex.: Culto da Manhã', 'Ej.: Culto de la mañana', 'E.g. Morning Service')}
                   className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-2xl font-black text-slate-800 outline-none transition-colors focus:border-emerald-400 disabled:bg-slate-100"
                 />
                 <p className="mt-3 text-sm font-medium text-slate-500">
-                  Esse nome identifica apenas esta liturgia. O boletim do domingo continua sendo único.
+                  {tr('Esse nome identifica apenas esta liturgia. O boletim do domingo continua sendo único.', 'Este nombre identifica solo esta liturgia. El boletín del domingo sigue siendo único.', 'This name identifies only this order of service. Sunday\'s bulletin stays a single bulletin.')}
                 </p>
               </div>
 
@@ -725,7 +738,7 @@ export function EditorLiturgia({
                         ? async (nome: string) => {
                             const igrejaId = getStoredChurchId();
                             if (!igrejaId) {
-                              throw new Error('Selecione uma igreja antes de cadastrar um cântico.');
+                              throw new Error(tr('Selecione uma igreja antes de cadastrar um cântico.', 'Selecciona una iglesia antes de registrar un cántico.', 'Select a church before adding a song.'));
                             }
 
                             const payload = {
@@ -745,7 +758,7 @@ export function EditorLiturgia({
                               .single();
 
                             if (error) {
-                              throw new Error(error.message || 'Nao foi possivel criar o cântico.');
+                              throw new Error(error.message || tr('Nao foi possivel criar o cântico.', 'No se pudo crear el cántico.', 'Could not create the song.'));
                             }
 
                             const novo = { ...data, ultima_vez: null };
@@ -777,7 +790,7 @@ export function EditorLiturgia({
                         onClick={() => adicionarItem(idx + 1)}
                         className="mt-2 w-full rounded-2xl border border-dashed border-slate-300 py-3 text-sm font-semibold text-slate-500 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100"
                       >
-                        + adicionar item aqui
+                        {tr('+ adicionar item aqui', '+ agregar elemento aquí', '+ add item here')}
                       </button>
                     )}
                   </div>
@@ -793,7 +806,7 @@ export function EditorLiturgia({
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur">
           <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:px-4">
             <div className="text-sm leading-6 text-slate-500">
-              Salve quando terminar. Este botão salva apenas a liturgia atual dentro do boletim deste dia.
+              {tr('Salve quando terminar. Este botão salva apenas a liturgia atual dentro do boletim deste dia.', 'Guarda cuando termines. Este botón guarda solo la liturgia actual dentro del boletín de este día.', 'Save when you\'re done. This button only saves the current order of service in this day\'s bulletin.')}
             </div>
             <button
               onClick={salvar}
@@ -801,10 +814,10 @@ export function EditorLiturgia({
               className="block rounded-2xl bg-emerald-700 px-8 py-4 text-base font-bold text-white shadow-lg transition-colors hover:bg-emerald-800 disabled:opacity-60"
             >
               {loading
-                ? '⏳ Salvando...'
+                ? tr('⏳ Salvando...', '⏳ Guardando...', '⏳ Saving...')
                 : criandoNovaLiturgiaNoMesmoBoletim
-                  ? '✅ Salvar nova liturgia neste boletim'
-                  : '✅ Salvar Liturgia'}
+                  ? tr('✅ Salvar nova liturgia neste boletim', '✅ Guardar nueva liturgia en este boletín', '✅ Save new order of service in this bulletin')
+                  : tr('✅ Salvar Liturgia', '✅ Guardar liturgia', '✅ Save order of service')}
             </button>
           </div>
         </div>

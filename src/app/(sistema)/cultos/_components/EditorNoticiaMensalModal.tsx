@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { getStoredChurchId } from '@/lib/church-utils';
 import type { NoticiaMensal } from '../_lib/tipos';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
@@ -23,6 +25,8 @@ export function EditorNoticiaMensalModal({
   onFechar: () => void;
   onSalvo: () => void;
 }) {
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const [titulo, setTitulo] = useState('');
   const [corpo, setCorpo] = useState('');
   const [imagemUrl, setImagemUrl] = useState('');
@@ -42,12 +46,12 @@ export function EditorNoticiaMensalModal({
   const salvar = async () => {
     const igrejaId = getStoredChurchId();
     if (!igrejaId) {
-      alert('Selecione uma igreja antes de cadastrar a notícia.');
+      alert(tr('Selecione uma igreja antes de cadastrar a notícia.', 'Selecciona una iglesia antes de registrar la noticia.', 'Select a church before adding the news item.'));
       return;
     }
 
     if (!titulo.trim() || !corpo.trim()) {
-      alert('Preencha título e corpo da notícia.');
+      alert(tr('Preencha título e corpo da notícia.', 'Completa el título y el texto de la noticia.', 'Fill in the title and body of the news item.'));
       return;
     }
 
@@ -83,7 +87,7 @@ export function EditorNoticiaMensalModal({
       onSalvo();
     } catch (error) {
       console.error('Erro ao salvar notícia do mês:', error);
-      alert('❌ Erro ao salvar notícia.');
+      alert(tr('❌ Erro ao salvar notícia.', '❌ Error al guardar la noticia.', '❌ Could not save the news item.'));
     } finally {
       setSalvando(false);
     }
@@ -95,10 +99,10 @@ export function EditorNoticiaMensalModal({
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
-              Notícias do mês · {String(mesReferencia).padStart(2, '0')}/{anoReferencia}
+              {tr('Notícias do mês ·', 'Noticias del mes ·', 'News of the month ·')} {String(mesReferencia).padStart(2, '0')}/{anoReferencia}
             </p>
             <h3 className="mt-1 text-xl font-black text-slate-900">
-              {noticiaExistente ? 'Editar notícia' : 'Nova notícia'}
+              {noticiaExistente ? tr('Editar notícia', 'Editar noticia', 'Edit news item') : tr('Nova notícia', 'Nueva noticia', 'New news item')}
             </h3>
           </div>
           <button
@@ -106,33 +110,33 @@ export function EditorNoticiaMensalModal({
             onClick={onFechar}
             className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            Cancelar
+            {tr('Cancelar', 'Cancelar', 'Cancel')}
           </button>
         </div>
 
         <div className="space-y-4 px-6 py-6">
           <label className="block text-sm font-semibold text-slate-700">
-            Título da notícia
+            {tr('Título da notícia', 'Título de la noticia', 'News title')}
             <input
               value={titulo}
               onChange={(event) => setTitulo(event.target.value)}
-              placeholder="Ex.: Congresso Nacional de Jovens Presbiterianos"
+              placeholder={tr('Ex.: Congresso Nacional de Jovens Presbiterianos', 'Ej.: Congreso Nacional de Jóvenes Presbiterianos', 'E.g. National Presbyterian Youth Conference')}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
             />
           </label>
 
           <label className="block text-sm font-semibold text-slate-700">
-            Corpo da notícia
+            {tr('Corpo da notícia', 'Texto de la noticia', 'News text')}
             <AutoResizeTextarea
               value={corpo}
               onChange={(event) => setCorpo(event.target.value)}
-              placeholder="Cole aqui a matéria completa..."
+              placeholder={tr('Cole aqui a matéria completa...', 'Pega aquí el artículo completo...', 'Paste the full article here...')}
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition-colors focus:border-emerald-400"
             />
           </label>
 
           <label className="block text-sm font-semibold text-slate-700">
-            Imagem da notícia (opcional)
+            {tr('Imagem da notícia (opcional)', 'Imagen de la noticia (opcional)', 'News image (optional)')}
             <input
               type="url"
               value={imagemUrl}
@@ -146,7 +150,7 @@ export function EditorNoticiaMensalModal({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imagemUrl.trim()}
-              alt={titulo.trim() || 'Pré-visualização da notícia'}
+              alt={titulo.trim() || tr('Pré-visualização da notícia', 'Vista previa de la noticia', 'News preview')}
               className="max-h-48 w-full rounded-xl border border-slate-200 object-contain"
             />
           ) : null}
@@ -158,7 +162,7 @@ export function EditorNoticiaMensalModal({
               onChange={(event) => setAtivo(event.target.checked)}
               className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-200"
             />
-            Publicar nos boletins deste mês
+            {tr('Publicar nos boletins deste mês', 'Publicar en los boletines de este mes', 'Publish in this month\'s bulletins')}
           </label>
         </div>
 
@@ -168,7 +172,7 @@ export function EditorNoticiaMensalModal({
             onClick={onFechar}
             className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
-            Cancelar
+            {tr('Cancelar', 'Cancelar', 'Cancel')}
           </button>
           <button
             type="button"
@@ -176,7 +180,7 @@ export function EditorNoticiaMensalModal({
             disabled={salvando}
             className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
           >
-            {salvando ? 'Salvando...' : 'Salvar notícia'}
+            {salvando ? 'Salvando...' : tr('Salvar notícia', 'Guardar noticia', 'Save news item')}
           </button>
         </div>
       </div>

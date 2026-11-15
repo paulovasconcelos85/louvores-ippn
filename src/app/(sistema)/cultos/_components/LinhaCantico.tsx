@@ -1,11 +1,14 @@
 'use client';
 
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { TONS_MUSICAIS_VALIDOS } from '../_lib/canticos';
 import type { Cantico } from '../_lib/tipos';
 import { CanticoAutocomplete } from './CanticoAutocomplete';
 
 // --- LINHA DE CÂNTICO ---
 export function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, onCreate, canEditarMusica }: any) {
+  const locale = useLocale();
   const cantico =
     canticos.find((c: Cantico) => String(c.id) === String(musica.cantico_id || '')) || null;
 
@@ -26,7 +29,7 @@ export function LinhaCantico({ musica, canticos, onChange, onRemove, podVerTom, 
           disabled={!canEditarMusica}
           className="border border-slate-200 rounded-xl px-2 py-3 text-base bg-white w-24 focus:outline-none focus:border-emerald-500 disabled:bg-slate-50 flex-shrink-0"
         >
-          <option value="">Tom</option>
+          <option value="">{porIdioma(locale, 'Tom', 'Tono', 'Key')}</option>
           {TONS_MUSICAIS_VALIDOS.map(t => (
             <option key={t} value={t}>{t}</option>
           ))}

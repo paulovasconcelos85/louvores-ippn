@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { compactLocalizedTextMap, createEmptyLocalizedTextMap, normalizeLocalizedTextMap, resolveLocalizedText, withPtFallback, type LocalizedTextMapForm } from '@/lib/church-i18n';
 import { getStoredChurchId } from '@/lib/church-utils';
 import type { BoletimSecaoRascunho, NoticiaMensal, Culto, LouvorItemRow } from '../_lib/tipos';
@@ -30,6 +31,7 @@ export function EditorBoletimDoDiaModal({
   inline?: boolean;
 }) {
   const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const [palavraPastoral, setPalavraPastoral] = useState('');
   const [palavraPastoralI18n, setPalavraPastoralI18n] = useState<LocalizedTextMapForm>(
     createEmptyLocalizedTextMap()
@@ -89,7 +91,7 @@ export function EditorBoletimDoDiaModal({
   }, [aberto, carregarNoticiasMensais]);
 
   const excluirNoticiaMensal = async (noticia: NoticiaMensal) => {
-    if (!confirm(`Remover a notícia "${noticia.titulo}"?`)) return;
+    if (!confirm(tr(`Remover a notícia "${noticia.titulo}"?`, `¿Eliminar la noticia "${noticia.titulo}"?`, `Remove the news item "${noticia.titulo}"?`))) return;
 
     try {
       const { error } = await supabase.from('noticias_mensais').delete().eq('id', noticia.id);
@@ -97,7 +99,7 @@ export function EditorBoletimDoDiaModal({
       await carregarNoticiasMensais();
     } catch (error) {
       console.error('Erro ao remover notícia do mês:', error);
-      alert('❌ Erro ao remover notícia.');
+      alert(tr('❌ Erro ao remover notícia.', '❌ Error al eliminar la noticia.', '❌ Could not remove the news item.'));
     }
   };
 
@@ -111,7 +113,7 @@ export function EditorBoletimDoDiaModal({
       await carregarNoticiasMensais();
     } catch (error) {
       console.error('Erro ao atualizar notícia do mês:', error);
-      alert('❌ Erro ao atualizar notícia.');
+      alert(tr('❌ Erro ao atualizar notícia.', '❌ Error al actualizar la noticia.', '❌ Could not update the news item.'));
     }
   };
 
@@ -138,7 +140,7 @@ export function EditorBoletimDoDiaModal({
       await carregarNoticiasMensais();
     } catch (error) {
       console.error('Erro ao reordenar notícias do mês:', error);
-      alert('❌ Erro ao reordenar notícias.');
+      alert(tr('❌ Erro ao reordenar notícias.', '❌ Error al reordenar las noticias.', '❌ Could not reorder the news.'));
     }
   };
 
@@ -274,7 +276,7 @@ export function EditorBoletimDoDiaModal({
     setImportando(true);
     try {
       const postId = instagramUrl.match(/\/p\/([^\/]+)/)?.[1] || instagramUrl.match(/\/reel\/([^\/]+)/)?.[1];
-      if (!postId) { alert('URL inválida'); return; }
+      if (!postId) { alert(tr('URL inválida', 'URL inválida', 'Invalid URL')); return; }
       const response = await fetch('/api/instagram-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,9 +290,9 @@ export function EditorBoletimDoDiaModal({
       reader.onload = event => setImagemPreview(event.target?.result as string);
       reader.readAsDataURL(file);
       setInstagramUrl('');
-      alert('✅ Imagem importada!');
+      alert(tr('✅ Imagem importada!', '✅ ¡Imagen importada!', '✅ Image imported!'));
     } catch {
-      alert('❌ Erro ao importar');
+      alert(tr('❌ Erro ao importar', '❌ Error al importar', '❌ Import failed'));
     } finally {
       setImportando(false);
     }
@@ -298,14 +300,14 @@ export function EditorBoletimDoDiaModal({
 
   const salvarBoletim = async () => {
     if (cultoIds.length === 0) {
-      alert('Crie pelo menos uma liturgia neste dia antes de editar o boletim.');
+      alert(tr('Crie pelo menos uma liturgia neste dia antes de editar o boletim.', 'Crea al menos una liturgia en este día antes de editar el boletín.', 'Create at least one order of service for this day before editing the bulletin.'));
       return;
     }
 
     setSalvando(true);
     try {
       const igrejaId = getStoredChurchId();
-      if (!igrejaId) throw new Error('Selecione uma igreja antes de salvar o boletim.');
+      if (!igrejaId) throw new Error(tr('Selecione uma igreja antes de salvar o boletim.', 'Selecciona una iglesia antes de guardar el boletín.', 'Select a church before saving the bulletin.'));
 
       let imagemUrlFinal =
         imagemPreview === null && !imagemUpload
@@ -456,7 +458,7 @@ export function EditorBoletimDoDiaModal({
 
       await sincronizarBoletimFallbackLegado(cultoIds, secoesNormalizadas);
 
-      alert('✅ Boletim do dia salvo com sucesso!');
+      alert(tr('✅ Boletim do dia salvo com sucesso!', '✅ ¡Boletín del día guardado!', '✅ Day\'s bulletin saved!'));
       onSalvo();
     } catch (error: any) {
       alert(`Erro: ${error.message}`);
@@ -470,10 +472,10 @@ export function EditorBoletimDoDiaModal({
       <div className={surfaceClassName}>
         <div className={headerClassName}>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">Boletim do dia</p>
-            <h3 className="mt-1 text-2xl font-black text-slate-900">{formatCultoDateLabel(dia)}</h3>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">{tr('Boletim do dia', 'Boletín del día', 'Day\'s bulletin')}</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-900">{formatCultoDateLabel(dia, locale)}</h3>
             <p className="mt-2 text-sm text-slate-500">
-              Este conteúdo é compartilhado entre todas as liturgias deste dia.
+              {tr('Este conteúdo é compartilhado entre todas as liturgias deste dia.', 'Este contenido se comparte entre todas las liturgias de este día.', 'This content is shared by every order of service on this day.')}
             </p>
           </div>
           <button
@@ -481,34 +483,34 @@ export function EditorBoletimDoDiaModal({
             onClick={onFechar}
             className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            {inline ? 'Fechar editor' : 'Fechar'}
+            {inline ? tr('Fechar editor', 'Cerrar editor', 'Close editor') : tr('Fechar', 'Cerrar', 'Close')}
           </button>
         </div>
 
         <div className="space-y-6 px-6 py-6">
           {inline ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-4 text-sm leading-6 text-emerald-950/80">
-              Aqui voce edita o boletim compartilhado deste domingo sem precisar entrar em uma liturgia especifica.
+              {tr('Aqui voce edita o boletim compartilhado deste domingo sem precisar entrar em uma liturgia especifica.', 'Aquí editas el boletín compartido de este domingo sin entrar en una liturgia específica.', 'Here you edit this Sunday\'s shared bulletin without opening a specific order of service.')}
             </div>
           ) : null}
 
           <div className="rounded-[28px] border border-emerald-200 bg-emerald-50/50 p-6">
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-700">Palavra Pastoral</p>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-700">{tr('Palavra Pastoral', 'Palabra pastoral', 'Pastoral message')}</p>
             <p className="mt-2 text-sm leading-7 text-emerald-950/75">
-              Mensagem pastoral, estudo, editorial ou reflexão do boletim deste dia.
+              {tr('Mensagem pastoral, estudo, editorial ou reflexão do boletim deste dia.', 'Mensaje pastoral, estudio, editorial o reflexión del boletín de este día.', 'Pastoral message, study, editorial or reflection for this day\'s bulletin.')}
             </p>
 
             <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/70 px-4 py-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 mb-2">Formatação disponível</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-700 mb-2">{tr('Formatação disponível', 'Formato disponible', 'Available formatting')}</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] text-slate-500 font-mono">
-                <span><span className="text-emerald-700"># Título</span> → Título grande</span>
-                <span><span className="text-emerald-700">## Subtítulo</span> → Subtítulo</span>
-                <span><span className="text-emerald-700">### Menor</span> → Título menor</span>
-                <span><span className="text-emerald-700">&gt; Texto</span> → Citação/versículo</span>
-                <span><span className="text-emerald-700">**texto**</span> → <strong>Negrito</strong></span>
-                <span><span className="text-emerald-700">*texto*</span> → <em>Itálico</em></span>
-                <span><span className="text-emerald-700">__texto__</span> → <u>Sublinhado</u></span>
-                <span className="text-slate-400">Linha em branco = parágrafo</span>
+                <span><span className="text-emerald-700">{tr('# Título', '# Título', '# Title')}</span> {tr('→ Título grande', '→ Título grande', '→ Large heading')}</span>
+                <span><span className="text-emerald-700">{tr('## Subtítulo', '## Subtítulo', '## Subheading')}</span> {tr('→ Subtítulo', '→ Subtítulo', '→ Subheading')}</span>
+                <span><span className="text-emerald-700">{tr('### Menor', '### Menor', '### Smaller')}</span> {tr('→ Título menor', '→ Título menor', '→ Small heading')}</span>
+                <span><span className="text-emerald-700">{tr('> Texto', '> Texto', '> Text')}</span> {tr('→ Citação/versículo', '→ Cita/versículo', '→ Quote/verse')}</span>
+                <span><span className="text-emerald-700">{tr('**texto**', '**texto**', '**text**')}</span> → <strong>{tr('Negrito', 'Negrita', 'Bold')}</strong></span>
+                <span><span className="text-emerald-700">{tr('*texto*', '*texto*', '*text*')}</span> → <em>{tr('Itálico', 'Cursiva', 'Italic')}</em></span>
+                <span><span className="text-emerald-700">{tr('__texto__', '__texto__', '__text__')}</span> → <u>{tr('Sublinhado', 'Subrayado', 'Underline')}</u></span>
+                <span className="text-slate-400">{tr('Linha em branco = parágrafo', 'Línea en blanco = párrafo', 'Blank line = paragraph')}</span>
               </div>
             </div>
 
@@ -520,13 +522,13 @@ export function EditorBoletimDoDiaModal({
                   updateLocalizedDraftValue(current, locale, e.target.value)
                 );
               }}
-              placeholder="Escreva aqui a palavra pastoral do boletim..."
+              placeholder={tr('Escreva aqui a palavra pastoral do boletim...', 'Escribe aquí la palabra pastoral del boletín...', 'Write the pastoral message here...')}
               className="mt-4 w-full rounded-[24px] border border-emerald-200 bg-white px-5 py-4 text-[17px] leading-8 text-slate-700 outline-none transition-colors focus:border-emerald-400 resize-none placeholder:text-slate-300"
             />
             <input
               value={palavraPastoralAutor}
               onChange={e => setPalavraPastoralAutor(e.target.value)}
-              placeholder="Autor da palavra"
+              placeholder={tr('Autor da palavra', 'Autor del mensaje', 'Message author')}
               className="mt-4 w-full max-w-xl rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-base italic text-slate-600 outline-none transition-colors focus:border-emerald-400"
             />
           </div>
@@ -534,9 +536,9 @@ export function EditorBoletimDoDiaModal({
           <div className="rounded-[28px] border border-slate-200 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
-                <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Imagem do tema</h3>
+                <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">{tr('Imagem do tema', 'Imagen del tema', 'Theme image')}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Essa imagem também é compartilhada entre todas as liturgias do dia.
+                  {tr('Essa imagem também é compartilhada entre todas as liturgias do dia.', 'Esta imagen también se comparte entre todas las liturgias del día.', 'This image is also shared by every order of service on this day.')}
                 </p>
               </div>
             </div>
@@ -544,12 +546,12 @@ export function EditorBoletimDoDiaModal({
             <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                 <label className="block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
-                  Importar do Instagram
+                  {tr('Importar do Instagram', 'Importar de Instagram', 'Import from Instagram')}
                 </label>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
                     type="url"
-                    placeholder="URL do post do Instagram..."
+                    placeholder={tr('URL do post do Instagram...', 'URL de la publicación de Instagram...', 'Instagram post URL...')}
                     value={instagramUrl}
                     onChange={e => setInstagramUrl(e.target.value)}
                     className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-purple-400"
@@ -559,7 +561,7 @@ export function EditorBoletimDoDiaModal({
                     disabled={importando}
                     className="rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    {importando ? 'Importando...' : 'Importar imagem'}
+                    {importando ? 'Importando...' : tr('Importar imagem', 'Importar imagen', 'Import image')}
                   </button>
                 </div>
                 <input
@@ -571,10 +573,10 @@ export function EditorBoletimDoDiaModal({
               </div>
 
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Pré-visualização</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Pré-visualização', 'Vista previa', 'Preview')}</p>
                 {imagemPreview ? (
                   <div className="relative mt-4 group">
-                    <img src={imagemPreview} alt="Preview" className="h-72 w-full rounded-2xl object-cover" />
+                    <img src={imagemPreview} alt={tr('Preview', 'Vista previa', 'Preview')} className="h-72 w-full rounded-2xl object-cover" />
                     <button
                       onClick={() => { setImagemPreview(null); setImagemUpload(null); }}
                       className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -584,7 +586,7 @@ export function EditorBoletimDoDiaModal({
                   </div>
                 ) : (
                   <div className="mt-4 flex h-72 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-center text-sm leading-6 text-slate-400">
-                    Nenhuma imagem selecionada para este boletim.
+                    {tr('Nenhuma imagem selecionada para este boletim.', 'No hay imagen seleccionada para este boletín.', 'No image selected for this bulletin.')}
                   </div>
                 )}
               </div>
@@ -595,12 +597,10 @@ export function EditorBoletimDoDiaModal({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
-                  Notícias do mês
+                  {tr('Notícias do mês', 'Noticias del mes', 'News of the month')}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Matérias grandes (ex.: jornal Brasil Presbiteriano) que aparecem em <strong>todos</strong> os
-                  boletins {mesAnoReferencia ? `de ${String(mesAnoReferencia.mes).padStart(2, '0')}/${mesAnoReferencia.ano}` : 'deste mês'},
-                  sem precisar recadastrar a cada culto.
+                  {tr('Matérias grandes (ex.: jornal Brasil Presbiteriano) que aparecem em', 'Artículos largos (ej.: periódico denominacional) que aparecen en', 'Longer articles (e.g. a denominational newsletter) that appear in')} <strong>{tr('todos', 'todos', 'all')}</strong> {tr('os boletins', 'los boletines', 'the bulletins')} {mesAnoReferencia ? `${tr('de', 'de', 'of')} ${String(mesAnoReferencia.mes).padStart(2, '0')}/${mesAnoReferencia.ano}` : tr('deste mês', 'de este mes', 'of this month')}{tr(', sem precisar recadastrar a cada culto.', ', sin tener que volver a cargarlos en cada culto.', ', without re-entering them for each service.')}
                 </p>
               </div>
               <button
@@ -612,17 +612,17 @@ export function EditorBoletimDoDiaModal({
                 disabled={!mesAnoReferencia}
                 className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
               >
-                + Nova notícia
+                {tr('+ Nova notícia', '+ Nueva noticia', '+ New news item')}
               </button>
             </div>
 
             {loadingNoticias ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                Carregando notícias do mês...
+                {tr('Carregando notícias do mês...', 'Cargando noticias del mes...', 'Loading news of the month...')}
               </div>
             ) : noticiasMensais.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm leading-6 text-slate-500">
-                Nenhuma notícia recorrente cadastrada para este mês.
+                {tr('Nenhuma notícia recorrente cadastrada para este mês.', 'No hay noticias recurrentes registradas para este mes.', 'No recurring news for this month yet.')}
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -632,15 +632,15 @@ export function EditorBoletimDoDiaModal({
                       <div className="min-w-0">
                         <p className="font-bold text-slate-900">{noticia.titulo}</p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {noticia.ativo ? 'Ativa' : 'Oculta'}
-                          {noticia.imagem_url ? ' · com imagem' : ''}
+                          {noticia.ativo ? tr('Ativa', 'Activa', 'Active') : tr('Oculta', 'Oculta', 'Hidden')}
+                          {noticia.imagem_url ? tr(' · com imagem', ' · con imagen', ' · with image') : ''}
                         </p>
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {!noticia.ativo ? (
                           <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                            Oculta
+                            {tr('Oculta', 'Oculta', 'Hidden')}
                           </span>
                         ) : null}
                         <button
@@ -648,7 +648,7 @@ export function EditorBoletimDoDiaModal({
                           onClick={() => alternarAtivoNoticiaMensal(noticia)}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
                         >
-                          {noticia.ativo ? 'Ocultar' : 'Publicar'}
+                          {noticia.ativo ? tr('Ocultar', 'Ocultar', 'Hide') : tr('Publicar', 'Publicar', 'Publish')}
                         </button>
                         <button
                           type="button"
@@ -658,7 +658,7 @@ export function EditorBoletimDoDiaModal({
                           }}
                           className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
                         >
-                          Editar
+                          {tr('Editar', 'Editar', 'Edit')}
                         </button>
                         <button
                           type="button"
@@ -687,7 +687,7 @@ export function EditorBoletimDoDiaModal({
                           onClick={() => excluirNoticiaMensal(noticia)}
                           className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
                         >
-                          Remover
+                          {tr('Remover', 'Eliminar', 'Remove')}
                         </button>
                       </div>
                     </div>
@@ -714,10 +714,10 @@ export function EditorBoletimDoDiaModal({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-3xl">
                 <h3 className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
-                  Seções do boletim
+                  {tr('Seções do boletim', 'Secciones del boletín', 'Bulletin sections')}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Avisos, pedidos de oração, agenda, informativo e outros blocos compartilhados.
+                  {tr('Avisos, pedidos de oração, agenda, informativo e outros blocos compartilhados.', 'Avisos, pedidos de oración, agenda, informativo y otros bloques compartidos.', 'Announcements, prayer requests, schedule, newsletter and other shared blocks.')}
                 </p>
               </div>
               <button
@@ -725,24 +725,23 @@ export function EditorBoletimDoDiaModal({
                 onClick={() => setShowEscolherTipo(true)}
                 className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800"
               >
-                + Nova seção
+                {tr('+ Nova seção', '+ Nueva sección', '+ New section')}
               </button>
             </div>
 
             {secoesReaproveitadasDe ? (
               <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-6 text-sky-950/80">
-                As seções do boletim de {formatCultoDateLabel(secoesReaproveitadasDe)} foram carregadas
-                automaticamente. Revise, retire o que saiu e acrescente o que entrou antes de salvar.
+                {tr('As seções do boletim de', 'Las secciones del boletín del', 'The bulletin sections from')} {formatCultoDateLabel(secoesReaproveitadasDe, locale)} {tr('foram carregadas automaticamente. Revise, retire o que saiu e acrescente o que entrou antes de salvar.', 'se cargaron automáticamente. Revisa, quita lo que ya no va y agrega lo nuevo antes de guardar.', 'were loaded automatically. Review them, remove what is outdated and add anything new before saving.')}
               </div>
             ) : null}
 
             {loadingBoletim ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                Carregando seções do boletim...
+                {tr('Carregando seções do boletim...', 'Cargando secciones del boletín...', 'Loading bulletin sections...')}
               </div>
             ) : boletimSecoes.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm leading-6 text-slate-500">
-                Nenhuma seção adicional cadastrada para este boletim.
+                {tr('Nenhuma seção adicional cadastrada para este boletim.', 'No hay secciones adicionales registradas para este boletín.', 'No additional sections for this bulletin yet.')}
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -757,10 +756,10 @@ export function EditorBoletimDoDiaModal({
                             {config.emoji}
                           </span>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900">{secao.titulo || config.titulo}</p>
+                            <p className="font-bold text-slate-900">{secao.titulo || config.tituloI18n[locale]}</p>
                             <p className="mt-1 text-sm text-slate-500">
-                              {secao.itens.length} item(ns)
-                              {secao.visivel ? ' publicado(s)' : ' em rascunho'}
+                              {secao.itens.length} {tr('item(ns)', 'elemento(s)', 'item(s)')}
+                              {secao.visivel ? tr(' publicado(s)', ' publicado(s)', ' published') : tr(' em rascunho', ' en borrador', ' draft')}
                             </p>
                           </div>
                         </div>
@@ -768,7 +767,7 @@ export function EditorBoletimDoDiaModal({
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           {!secao.visivel ? (
                             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                              Oculto
+                              {tr('Oculto', 'Oculto', 'Hidden')}
                             </span>
                           ) : null}
                           <button
@@ -784,14 +783,14 @@ export function EditorBoletimDoDiaModal({
                             }
                             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
                           >
-                            {secao.visivel ? 'Ocultar' : 'Publicar'}
+                            {secao.visivel ? tr('Ocultar', 'Ocultar', 'Hide') : tr('Publicar', 'Publicar', 'Publish')}
                           </button>
                           <button
                             type="button"
                             onClick={() => setSecaoEditandoIndex(index)}
                             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white"
                           >
-                            Editar
+                            {tr('Editar', 'Editar', 'Edit')}
                           </button>
                           <button
                             type="button"
@@ -824,7 +823,7 @@ export function EditorBoletimDoDiaModal({
                             }
                             className="rounded-xl border border-red-100 px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
                           >
-                            Excluir
+                            {tr('Excluir', 'Eliminar', 'Delete')}
                           </button>
                         </div>
                       </div>
@@ -842,7 +841,7 @@ export function EditorBoletimDoDiaModal({
             onClick={onFechar}
             className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
-            Cancelar
+            {tr('Cancelar', 'Cancelar', 'Cancel')}
           </button>
           <button
             type="button"
@@ -850,7 +849,7 @@ export function EditorBoletimDoDiaModal({
             disabled={salvando}
             className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
           >
-            {salvando ? 'Salvando boletim...' : 'Salvar boletim do dia'}
+            {salvando ? tr('Salvando boletim...', 'Guardando boletín...', 'Saving bulletin...') : tr('Salvar boletim do dia', 'Guardar boletín del día', 'Save day\'s bulletin')}
           </button>
         </div>
       </div>

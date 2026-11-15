@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useLocale } from '@/i18n/provider';
-import { TIPOS_LITURGICOS_PADRAO, HABILITAR_BOLETIM_SECOES_NEXT, type CanticoNoItem } from '../_lib/tipos';
+import { porIdioma } from '@/i18n/por-idioma';
+import { tiposLiturgicosPadrao, HABILITAR_BOLETIM_SECOES_NEXT, type CanticoNoItem } from '../_lib/tipos';
 import { getRepertorioTextos } from '../_lib/canticos';
 import { updateLocalizedDraftValue } from '../_lib/boletim';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
@@ -12,11 +13,13 @@ import { LinhaCantico } from './LinhaCantico';
 // --- ITEM DA LITURGIA (linha) ---
 export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemove, onMove, isLideranca, podVerTom, canEditarMusica }: any) {
   const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
   const [expandido, setExpandido] = useState(true);
-  const tiposDisponiveis = item.tiposLiturgicosDisponiveis || TIPOS_LITURGICOS_PADRAO;
+  const tiposDisponiveis = item.tiposLiturgicosDisponiveis || tiposLiturgicosPadrao(locale);
   const tipoInputId = `tipo-liturgico-${index}`;
-  const tituloItem = item.tipo?.trim() || `Item ${index + 1}`;
-  const textosRepertorio = getRepertorioTextos(canticos);
+  const nomeItemPadrao = `${tr('Item', 'Elemento', 'Item')} ${index + 1}`;
+  const tituloItem = item.tipo?.trim() || nomeItemPadrao;
+  const textosRepertorio = getRepertorioTextos(canticos, locale);
   const mostrarHorarioInterno = HABILITAR_BOLETIM_SECOES_NEXT && isLideranca;
 
   const adicionarCantico = () => {
@@ -43,11 +46,15 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
 
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-            Momento da liturgia
+            {tr('Momento da liturgia', 'Momento de la liturgia', 'Part of the service')}
           </p>
           <h3 className="mt-1 truncate text-lg font-black text-slate-900">{tituloItem}</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Edite abaixo o nome desta etapa, o texto que vai aparecer no boletim e as observações internas.
+            {tr(
+              'Edite abaixo o nome desta etapa, o texto que vai aparecer no boletim e as observações internas.',
+              'Edita abajo el nombre de esta parte, el texto que aparecerá en el boletín y las notas internas.',
+              'Edit the name of this part, the text shown in the bulletin and the internal notes below.'
+            )}
           </p>
         </div>
 
@@ -71,13 +78,17 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 shadow-sm">
-                Comece aqui
+                {tr('Comece aqui', 'Empieza aquí', 'Start here')}
               </span>
               <label className="mt-3 block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
-                Nome da etapa
+                {tr('Nome da etapa', 'Nombre de la parte', 'Name of this part')}
               </label>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Dê o nome deste momento do culto. Você pode digitar livremente ou aproveitar uma sugestão já usada pela igreja.
+                {tr(
+                  'Dê o nome deste momento do culto. Você pode digitar livremente ou aproveitar uma sugestão já usada pela igreja.',
+                  'Ponle nombre a este momento del culto. Puedes escribir libremente o usar una sugerencia que la iglesia ya usó.',
+                  'Name this part of the service. Type freely or pick a suggestion your church has used before.'
+                )}
               </p>
               {isLideranca ? (
                 <>
@@ -85,8 +96,8 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
                     list={tipoInputId}
                     value={item.tipo}
                     onChange={e => onUpdate({ ...item, tipo: e.target.value })}
-                    onBlur={e => onUpdate({ ...item, tipo: e.target.value.trim() || `Item ${index + 1}` })}
-                    placeholder="Ex.: Pregação da Palavra"
+                    onBlur={e => onUpdate({ ...item, tipo: e.target.value.trim() || nomeItemPadrao })}
+                    placeholder={tr('Ex.: Pregação da Palavra', 'Ej.: Predicación de la Palabra', 'E.g. Preaching of the Word')}
                     className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-800 outline-none transition-colors focus:border-emerald-400"
                   />
                   <datalist id={tipoInputId}>
@@ -103,18 +114,23 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
             {mostrarHorarioInterno && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 shadow-sm">
-                  Próxima etapa
+                  {tr('Próxima etapa', 'Siguiente paso', 'Next step')}
                 </span>
                 <label className="mt-3 block text-xs font-black uppercase tracking-[0.22em] text-slate-400">
-                  Horário interno
+                  {tr('Horário interno', 'Horario interno', 'Internal timing')}
                 </label>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Esse campo ajuda a equipe a se organizar. Você pode usar formatos como <code>09:30</code> ou <code>9h30-9h40</code>.
+                  {tr(
+                    'Esse campo ajuda a equipe a se organizar. Você pode usar formatos como',
+                    'Este campo ayuda al equipo a organizarse. Puedes usar formatos como',
+                    'This helps the team stay organized. You can use formats like'
+                  )}{' '}
+                  <code>09:30</code> {tr('ou', 'o', 'or')} <code>{tr('9h30-9h40', '9:30-9:40', '9:30-9:40')}</code>.
                 </p>
                 <input
                   value={item.horario || ''}
                   onChange={e => onUpdate({ ...item, horario: e.target.value })}
-                  placeholder="Ex.: 9h30-9h40"
+                  placeholder={tr('Ex.: 9h30-9h40', 'Ej.: 9:30-9:40', 'E.g. 9:30-9:40')}
                   className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-700 outline-none transition-colors focus:border-emerald-400"
                 />
               </div>
@@ -124,10 +140,10 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
           {/* Campo público */}
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
               <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-emerald-700 shadow-sm">
-                Texto visível
+                {tr('Texto visível', 'Texto visible', 'Visible text')}
               </span>
               <label className="mb-2 mt-3 flex items-center gap-1.5 text-xs font-black text-emerald-600 uppercase tracking-widest">
-                <span>📢</span> Público
+                <span>📢</span> {tr('Público', 'Público', 'Public')}
               </label>
               <p className="mb-3 text-sm leading-6 text-emerald-900/70">
                 <span dangerouslySetInnerHTML={{ __html: textosRepertorio.ajudaPublico }} />
@@ -156,18 +172,22 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
           {isLideranca && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
               <span className="inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-500 shadow-sm">
-                Orientação da equipe
+                {tr('Orientação da equipe', 'Orientación del equipo', 'Team notes')}
               </span>
               <label className="mb-2 mt-3 flex items-center gap-1.5 text-xs font-black text-slate-400 uppercase tracking-widest">
-                <span>🔒</span> Interno
+                <span>🔒</span> {tr('Interno', 'Interno', 'Internal')}
               </label>
               <p className="mb-3 text-sm leading-6 text-slate-500">
-                Use este espaço para instruções da equipe, lembretes, nomes de pessoas, observações de condução e tudo o que não deve ir para o público.
+                {tr(
+                  'Use este espaço para instruções da equipe, lembretes, nomes de pessoas, observações de condução e tudo o que não deve ir para o público.',
+                  'Usa este espacio para instrucciones del equipo, recordatorios, nombres, notas de conducción y todo lo que no debe ser público.',
+                  'Use this for team instructions, reminders, names, leading notes and anything that should not be public.'
+                )}
               </p>
               <AutoResizeTextarea
                 value={item.descricao || ''}
                 onChange={e => onUpdate({ ...item, descricao: e.target.value })}
-                placeholder="Ex.: Quem conduz, qual salmo será lido, orientação para a equipe..."
+                placeholder={tr('Ex.: Quem conduz, qual salmo será lido, orientação para a equipe...', 'Ej.: Quién dirige, qué salmo se leerá, orientación para el equipo...', 'E.g. who leads, which psalm is read, notes for the team...')}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-600 outline-none transition-colors focus:border-slate-400 resize-none placeholder:text-slate-300"
               />
             </div>
@@ -177,7 +197,7 @@ export function ItemLiturgia({ item, index, canticos, onCreate, onUpdate, onRemo
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-3">
               <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-600 shadow-sm">
-                Finalize aqui
+                {tr('Finalize aqui', 'Termina aquí', 'Finish here')}
               </span>
               <label className="mt-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-slate-400">
                 <span>🎵</span> {textosRepertorio.rotuloPlural}

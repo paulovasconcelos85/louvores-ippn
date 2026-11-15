@@ -1,5 +1,7 @@
 'use client';
 
+import { useLocale } from '@/i18n/provider';
+import { porIdioma } from '@/i18n/por-idioma';
 import { TIPOS_SECOES_BOLETIM } from '../_lib/tipos';
 
 export function EscolherTipoSecaoModal({
@@ -11,6 +13,9 @@ export function EscolherTipoSecaoModal({
   onFechar: () => void;
   onEscolher: (tipo: string) => void;
 }) {
+  const locale = useLocale();
+  const tr = (pt: string, es: string, en: string) => porIdioma(locale, pt, es, en);
+
   if (!aberto) return null;
 
   return (
@@ -18,15 +23,15 @@ export function EscolherTipoSecaoModal({
       <div className="w-full max-w-lg rounded-[28px] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Boletim</p>
-            <h3 className="mt-1 text-xl font-black text-slate-900">Nova seção</h3>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">{tr('Boletim', 'Boletín', 'Bulletin')}</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">{tr('Nova seção', 'Nueva sección', 'New section')}</h3>
           </div>
           <button
             type="button"
             onClick={onFechar}
             className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            Fechar
+            {tr('Fechar', 'Cerrar', 'Close')}
           </button>
         </div>
 
@@ -42,9 +47,11 @@ export function EscolherTipoSecaoModal({
                 {tipo.emoji}
               </span>
               <div className="flex-1">
-                <p className="font-bold text-slate-900">{tipo.titulo}</p>
+                <p className="font-bold text-slate-900">{tipo.tituloI18n[locale]}</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Adicionar seção do tipo {tipo.titulo.toLowerCase()} ao boletim.
+                  {tr('Adicionar seção do tipo', 'Agregar una sección de tipo', 'Add a section of type')}{' '}
+                  {tipo.tituloI18n[locale].toLowerCase()}
+                  {tr(' ao boletim.', ' al boletín.', ' to the bulletin.')}
                 </p>
               </div>
               <span className="text-lg text-slate-300">›</span>

@@ -16,12 +16,50 @@ export const TIPOS_LITURGICOS_PADRAO = [
   'Lembretes',
 ];
 
+const TIPOS_LITURGICOS_PADRAO_ES = [
+  'Preludio',
+  'Saludo y bienvenida a la iglesia',
+  'Cánticos congregacionales',
+  'Confesión de pecados',
+  'Diezmos y ofrendas',
+  'Cántico para las ofrendas y diezmos',
+  'Oración por los niños',
+  'Predicación de la Palabra',
+  'Santa Cena',
+  'Cántico final',
+  'Oración final y bendición apostólica',
+  'Anuncios',
+];
+
+const TIPOS_LITURGICOS_PADRAO_EN = [
+  'Prelude',
+  'Call to Worship and Welcome',
+  'Congregational Singing',
+  'Confession of Sin',
+  'Tithes and Offerings',
+  'Offertory Hymn',
+  'Prayer for the Children',
+  'Preaching of the Word',
+  "Lord's Supper",
+  'Closing Hymn',
+  'Closing Prayer and Benediction',
+  'Announcements',
+];
+
+export function tiposLiturgicosPadrao(locale: Locale) {
+  if (locale === 'en') return TIPOS_LITURGICOS_PADRAO_EN;
+  if (locale === 'es') return TIPOS_LITURGICOS_PADRAO_ES;
+  return TIPOS_LITURGICOS_PADRAO;
+}
+
+// `titulo` é o nome padrão em português (gravado como base); `tituloI18n`
+// é o que aparece no idioma de quem está usando.
 export const TIPOS_SECOES_BOLETIM = [
-  { tipo: 'avisos', titulo: 'Avisos', icone: 'megaphone', emoji: '📢' },
-  { tipo: 'oracao', titulo: 'Pedidos de Oração', icone: 'hands.sparkles', emoji: '🙏' },
-  { tipo: 'agenda', titulo: 'Agenda', icone: 'calendar', emoji: '📅' },
-  { tipo: 'informativo', titulo: 'Informativo', icone: 'info.circle', emoji: 'ℹ️' },
-  { tipo: 'outro', titulo: 'Outros', icone: 'list.bullet', emoji: '📝' },
+  { tipo: 'avisos', titulo: 'Avisos', tituloI18n: { pt: 'Avisos', es: 'Avisos', en: 'Announcements' }, icone: 'megaphone', emoji: '📢' },
+  { tipo: 'oracao', titulo: 'Pedidos de Oração', tituloI18n: { pt: 'Pedidos de Oração', es: 'Pedidos de Oración', en: 'Prayer Requests' }, icone: 'hands.sparkles', emoji: '🙏' },
+  { tipo: 'agenda', titulo: 'Agenda', tituloI18n: { pt: 'Agenda', es: 'Agenda', en: 'Schedule' }, icone: 'calendar', emoji: '📅' },
+  { tipo: 'informativo', titulo: 'Informativo', tituloI18n: { pt: 'Informativo', es: 'Informativo', en: 'Newsletter' }, icone: 'info.circle', emoji: 'ℹ️' },
+  { tipo: 'outro', titulo: 'Outros', tituloI18n: { pt: 'Outros', es: 'Otros', en: 'Other' }, icone: 'list.bullet', emoji: '📝' },
 ] as const;
 
 export const HABILITAR_BOLETIM_SECOES_NEXT = true;
