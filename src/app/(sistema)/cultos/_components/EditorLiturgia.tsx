@@ -6,6 +6,7 @@ import { useLocale } from '@/i18n/provider';
 import { porIdioma } from '@/i18n/por-idioma';
 import { compactLocalizedTextMap, createEmptyLocalizedTextMap, normalizeLocalizedTextMap, resolveLocalizedText, type LocalizedTextMapForm } from '@/lib/church-i18n';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { mensagemErroAoSalvar } from '@/lib/erro-banco';
 import { TIPOS_LITURGICOS_PADRAO, HABILITAR_BOLETIM_SECOES_NEXT, BOLETIM_FALLBACK_TIPO_PREFIX, type Cantico, type LouvorItem, type BoletimSecaoRascunho, type Culto, type LouvorItemRow } from '../_lib/tipos';
 import { normalizeTomMusicalForSave } from '../_lib/canticos';
 import { isBoletimFallbackTipo, isLiturgiaMetaTipo, getCultoNomeLiturgia, getCultoTituloExibicao, resolveTiposLiturgicos, normalizarTiposLiturgicosDisponiveis, modeloPadrao, formatCultoDateLabel, getCultoDateKey, isDomingoDate, avisosDataBoletim, getCultoBoletimReferencia, erroColunaNaoEncontrada } from '../_lib/liturgia';
@@ -465,8 +466,8 @@ export function EditorLiturgia({
 
       alert(tr('✅ Salvo com sucesso!', '✅ ¡Guardado!', '✅ Saved!'));
       onSalvo();
-    } catch (e: any) {
-      alert(`Erro: ${e.message}`);
+    } catch (e) {
+      alert(mensagemErroAoSalvar(e, locale, 'salvar_liturgia'));
     } finally {
       setLoading(false);
     }

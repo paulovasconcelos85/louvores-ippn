@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useNomeIgreja } from '@/hooks/useNomeIgreja';
 import { supabase } from '@/lib/supabase';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { mensagemErroAoSalvar } from '@/lib/erro-banco';
 import { getIntlLocale } from '@/i18n/config';
 import { modeloLiturgicoInicial } from '@/lib/modelo-liturgico';
 import { useLocale } from '@/i18n/provider';
@@ -401,8 +402,9 @@ export default function EscalasPage() {
       
       return cultoId;
     } catch (error) {
+      // Repassa o erro original para handleSalvar mostrar o código e reportar ao Sentry.
       console.error('Erro ao criar culto:', error);
-      return null;
+      throw error;
     }
   };
 
@@ -552,9 +554,8 @@ export default function EscalasPage() {
 
       fecharModal();
       carregarEscalas();
-    } catch (error: any) {
-      console.error('Erro ao salvar escala:', error);
-      setMensagem(`${tr('Erro', 'Error', 'Error')}: ${error.message}`);
+    } catch (error) {
+      setMensagem(mensagemErroAoSalvar(error, locale, 'salvar_escala'));
       setMensagemTipo('error');
     } finally {
       setSalvando(false);
