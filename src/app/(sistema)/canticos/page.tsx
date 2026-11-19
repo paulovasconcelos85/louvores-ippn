@@ -1200,6 +1200,15 @@ export default function CanticosPage() {
                         >
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <h3 className="font-bold text-lg text-emerald-800">{c.nome}</h3>
+                            {c.letra?.trim() && (
+                              <span title={tr('Tem letra', 'Tiene letra', 'Has lyrics')}>
+                                <BookOpen
+                                  size={16}
+                                  className="text-emerald-600"
+                                  aria-label={tr('Tem letra', 'Tiene letra', 'Has lyrics')}
+                                />
+                              </span>
+                            )}
 
                             {datasUsado.length > 0 && (
                               <div className="flex items-center gap-1.5 ml-2">
