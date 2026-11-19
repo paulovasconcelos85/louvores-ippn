@@ -1294,6 +1294,7 @@ export type Database = {
           apresentacao_youtube_url: string | null
           ativo: boolean | null
           bairro: string | null
+          boletim_reaproveitar_secoes: boolean
           cep: string | null
           cidade: string | null
           complemento: string | null
@@ -1334,6 +1335,7 @@ export type Database = {
           apresentacao_youtube_url?: string | null
           ativo?: boolean | null
           bairro?: string | null
+          boletim_reaproveitar_secoes?: boolean
           cep?: string | null
           cidade?: string | null
           complemento?: string | null
@@ -1374,6 +1376,7 @@ export type Database = {
           apresentacao_youtube_url?: string | null
           ativo?: boolean | null
           bairro?: string | null
+          boletim_reaproveitar_secoes?: boolean
           cep?: string | null
           cidade?: string | null
           complemento?: string | null

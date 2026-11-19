@@ -83,6 +83,10 @@ function normalizeChurchPayload(body: Record<string, unknown>) {
     modelo_liturgico_padrao: (body.modelo_liturgico_padrao ?? null) as Json,
     modo_repertorio: sanitizeString(body.modo_repertorio),
     permite_cadastro_canticos: sanitizeBoolean(body.permite_cadastro_canticos, true),
+    // Só grava quando a tela envia: sem a migração aplicada a coluna não existe.
+    ...(typeof body.boletim_reaproveitar_secoes === 'boolean'
+      ? { boletim_reaproveitar_secoes: body.boletim_reaproveitar_secoes }
+      : {}),
     pais: normalizePais(body.pais),
     regiao: sanitizeString(body.regiao),
     email: sanitizeString(body.email)?.toLowerCase() || null,

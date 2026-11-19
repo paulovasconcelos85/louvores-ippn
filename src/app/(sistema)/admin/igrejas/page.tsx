@@ -112,6 +112,8 @@ type IgrejaForm = {
   apresentacao_youtube_url: string;
   apresentacao_galeria: string;
   permite_cadastro_canticos: boolean;
+  // null: coluna ainda não existe no banco (migração pendente); a opção fica oculta.
+  boletim_reaproveitar_secoes: boolean | null;
   modo_repertorio: string;
   horario_publicacao_boletim: string;
   dia_publicacao_boletim: string;
@@ -205,6 +207,7 @@ function criarFormularioVazio(): IgrejaForm {
     apresentacao_youtube_url: '',
     apresentacao_galeria: '',
     permite_cadastro_canticos: true,
+    boletim_reaproveitar_secoes: null,
     modo_repertorio: '',
     horario_publicacao_boletim: '',
     dia_publicacao_boletim: '',
@@ -470,6 +473,8 @@ function mapDetailToForm(payload: any): IgrejaForm {
       ? igreja.apresentacao_galeria.filter((item: unknown) => typeof item === 'string').join('\n')
       : '',
     permite_cadastro_canticos: igreja.permite_cadastro_canticos ?? true,
+    boletim_reaproveitar_secoes:
+      typeof igreja.boletim_reaproveitar_secoes === 'boolean' ? igreja.boletim_reaproveitar_secoes : null,
     modo_repertorio: igreja.modo_repertorio || '',
     horario_publicacao_boletim: normalizeHorarioToHHMM(igreja.horario_publicacao_boletim || ''),
     dia_publicacao_boletim:
@@ -1021,6 +1026,7 @@ export default function AdminIgrejasPage() {
       apresentacao_youtube_url: form.apresentacao_youtube_url,
       apresentacao_galeria: parseListaUrls(form.apresentacao_galeria),
       permite_cadastro_canticos: form.permite_cadastro_canticos,
+      boletim_reaproveitar_secoes: form.boletim_reaproveitar_secoes ?? undefined,
       modo_repertorio: form.modo_repertorio,
       horario_publicacao_boletim: form.horario_publicacao_boletim,
       dia_publicacao_boletim: form.dia_publicacao_boletim ? Number(form.dia_publicacao_boletim) : null,
@@ -1701,6 +1707,24 @@ export default function AdminIgrejasPage() {
                       className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
                     />
                   </label>
+                  {form.boletim_reaproveitar_secoes !== null && (
+                    <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
+                      <span>
+                        <span className="block text-sm font-medium text-slate-700">
+                          {tr('Boletim novo copia as seções do anterior', 'El boletín nuevo copia las secciones del anterior', 'New bulletin copies the previous sections')}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          {tr('Desligado: o boletim novo começa só com a liturgia.', 'Desactivado: el boletín nuevo empieza solo con la liturgia.', 'Off: the new bulletin starts with only the order of service.')}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={form.boletim_reaproveitar_secoes}
+                        onChange={(event) => updateForm('boletim_reaproveitar_secoes', event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
+                      />
+                    </label>
+                  )}
                 </section>
 
                 <section className="space-y-5">

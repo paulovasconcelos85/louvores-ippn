@@ -56,6 +56,18 @@ export async function carregarUltimasSecoesBoletimPorTipo(
   tipoDesejado: string | null,
   locale: Locale
 ): Promise<{ secoes: BoletimSecaoRascunho[]; origemDia: string | null }> {
+  // Igreja que desligou o reaproveitamento quer o boletim novo só com a liturgia.
+  // Se a coluna ainda não existe (migração não aplicada), mantém o comportamento antigo.
+  const { data: igreja, error: igrejaError } = await supabase
+    .from('igrejas')
+    .select('boletim_reaproveitar_secoes')
+    .eq('id', igrejaId)
+    .maybeSingle();
+
+  if (!igrejaError && igreja?.boletim_reaproveitar_secoes === false) {
+    return { secoes: [], origemDia: null };
+  }
+
   const { data: cultosAnterioresRaw, error: cultosError } = await supabase
     .from('Louvores IPPN')
     .select('"Culto nr.", Dia')
