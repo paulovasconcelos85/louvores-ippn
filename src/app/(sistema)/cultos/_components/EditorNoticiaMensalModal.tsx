@@ -7,6 +7,7 @@ import { porIdioma } from '@/i18n/por-idioma';
 import { getStoredChurchId } from '@/lib/church-utils';
 import type { NoticiaMensal } from '../_lib/tipos';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
+import { CampoImagemBoletim } from './CampoImagemBoletim';
 
 export function EditorNoticiaMensalModal({
   aberto,
@@ -135,25 +136,12 @@ export function EditorNoticiaMensalModal({
             />
           </label>
 
-          <label className="block text-sm font-semibold text-slate-700">
-            {tr('Imagem da notícia (opcional)', 'Imagen de la noticia (opcional)', 'News image (optional)')}
-            <input
-              type="url"
-              value={imagemUrl}
-              onChange={(event) => setImagemUrl(event.target.value)}
-              placeholder="https://..."
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
-            />
-          </label>
-
-          {imagemUrl.trim() ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imagemUrl.trim()}
-              alt={titulo.trim() || tr('Pré-visualização da notícia', 'Vista previa de la noticia', 'News preview')}
-              className="max-h-48 w-full rounded-xl border border-slate-200 object-contain"
-            />
-          ) : null}
+          <CampoImagemBoletim
+            rotulo={tr('Imagem da notícia (opcional)', 'Imagen de la noticia (opcional)', 'News image (optional)')}
+            valor={imagemUrl}
+            textoAlternativo={titulo.trim() || tr('Pré-visualização da notícia', 'Vista previa de la noticia', 'News preview')}
+            onChange={setImagemUrl}
+          />
 
           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
             <input

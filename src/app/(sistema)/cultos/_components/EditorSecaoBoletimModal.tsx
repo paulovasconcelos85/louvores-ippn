@@ -8,6 +8,7 @@ import type { BoletimItemRascunho, AgendaItemRascunho, AvisoItemRascunho, Inform
 import { createDraftId } from '../_lib/liturgia';
 import { getBoletimTipoConfig, createEmptyBoletimItem, createEmptyAgendaItem, createEmptyAvisoItem, createEmptyInformativoItem, updateLocalizedDraftValue, replicateLocalizedDraftValue, parseAgendaConteudo, serializeAgendaConteudo, parseAvisoConteudo, serializeAvisoConteudo, parseInformativoConteudo, serializeInformativoConteudo } from '../_lib/boletim';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
+import { CampoImagemBoletim } from './CampoImagemBoletim';
 
 export function EditorSecaoBoletimModal({
   aberto,
@@ -409,30 +410,18 @@ export function EditorSecaoBoletimModal({
                       />
                     </label>
 
-                    <label className="mt-3 block text-sm font-semibold text-slate-700">
-                      {tr('Imagem do aviso (opcional)', 'Imagen del aviso (opcional)', 'Announcement image (optional)')}
-                      <input
-                        type="url"
-                        value={item.imagem_url}
-                        onChange={(event) => {
-                          const atualizados = avisoItens.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, imagem_url: event.target.value } : entry
-                          );
-                          setAvisoItens(garantirCampoAvisoExtra(atualizados));
-                        }}
-                        placeholder="https://..."
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
-                      />
-                    </label>
-
-                    {item.imagem_url.trim() ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.imagem_url.trim()}
-                        alt={item.titulo.trim() || tr('Pré-visualização do aviso', 'Vista previa del aviso', 'Announcement preview')}
-                        className="mt-3 max-h-48 w-full rounded-xl border border-slate-200 object-contain"
-                      />
-                    ) : null}
+                    <CampoImagemBoletim
+                      className="mt-3"
+                      rotulo={tr('Imagem do aviso (opcional)', 'Imagen del aviso (opcional)', 'Announcement image (optional)')}
+                      valor={item.imagem_url}
+                      textoAlternativo={item.titulo.trim() || tr('Pré-visualização do aviso', 'Vista previa del aviso', 'Announcement preview')}
+                      onChange={(url) => {
+                        const atualizados = avisoItens.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, imagem_url: url } : entry
+                        );
+                        setAvisoItens(garantirCampoAvisoExtra(atualizados));
+                      }}
+                    />
 
                     {(item.titulo.trim() && item.corpo.trim()) ? (
                       <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
@@ -512,30 +501,18 @@ export function EditorSecaoBoletimModal({
                       />
                     </label>
 
-                    <label className="mt-3 block text-sm font-semibold text-slate-700">
-                      {tr('Imagem do informativo (opcional)', 'Imagen del informativo (opcional)', 'Newsletter item image (optional)')}
-                      <input
-                        type="url"
-                        value={item.imagem_url}
-                        onChange={(event) => {
-                          const atualizados = informativoItens.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, imagem_url: event.target.value } : entry
-                          );
-                          setInformativoItens(garantirCampoInformativoExtra(atualizados));
-                        }}
-                        placeholder="https://..."
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none transition-colors focus:border-emerald-400"
-                      />
-                    </label>
-
-                    {item.imagem_url.trim() ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.imagem_url.trim()}
-                        alt={item.titulo.trim() || tr('Pré-visualização do informativo', 'Vista previa del informativo', 'Newsletter item preview')}
-                        className="mt-3 max-h-48 w-full rounded-xl border border-slate-200 object-contain"
-                      />
-                    ) : null}
+                    <CampoImagemBoletim
+                      className="mt-3"
+                      rotulo={tr('Imagem do informativo (opcional)', 'Imagen del informativo (opcional)', 'Newsletter item image (optional)')}
+                      valor={item.imagem_url}
+                      textoAlternativo={item.titulo.trim() || tr('Pré-visualização do informativo', 'Vista previa del informativo', 'Newsletter item preview')}
+                      onChange={(url) => {
+                        const atualizados = informativoItens.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, imagem_url: url } : entry
+                        );
+                        setInformativoItens(garantirCampoInformativoExtra(atualizados));
+                      }}
+                    />
 
                     {(item.titulo.trim() && item.corpo.trim()) ? (
                       <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">

@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path to public, extensions;
 
-select plan(80);
+select plan(86);
 
 -- ---------------------------------------------------------------------------
 -- Elenco
@@ -306,6 +306,14 @@ select is(pg_temp.r('super_a',  'insert into storage.objects (bucket_id, name) v
 select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''liturgias_thumbnails'', ''qualquer.png'')'), 'erro 42501', 'nome fora do padrão culto-<nr>- é recusado');
 select is(pg_temp.r('membro_a', 'insert into storage.objects (bucket_id, name) values (''liturgias_thumbnails'', ''culto-900001-4.png'')'), 'erro 42501', 'membro comum não sobe imagem');
 select is(pg_temp.r('super_a',  'select count(*) from storage.objects where bucket_id = ''liturgias_thumbnails'''), '1', 'a listagem mostra só imagens da própria igreja');
+
+-- Imagens do boletim (notícias, avisos, informativos): pasta = igreja
+select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/x.jpg'')'), '1', 'líder de louvor sobe imagem do boletim da própria igreja');
+select is(pg_temp.r('pastor_a', 'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/y.jpg'')'), '1', 'pastor sobe imagem do boletim da própria igreja');
+select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000b/x.jpg'')'), 'erro 42501', 'líder de louvor não sobe imagem do boletim de outra igreja');
+select is(pg_temp.r('membro_a', 'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/z.jpg'')'), 'erro 42501', 'membro comum não sobe imagem do boletim');
+select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''solta.jpg'')'), 'erro 42501', 'imagem do boletim fora da pasta da igreja é recusada');
+select is(pg_temp.r('intruso',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/w.jpg'')'), 'erro 42501', 'usuário sem igreja não sobe imagem do boletim');
 
 -- ---------------------------------------------------------------------------
 -- Triggers preenchem igreja_id a partir da linha-mãe (rodam como postgres)
