@@ -1017,7 +1017,9 @@ export default function PublicBulletinClient({ igrejaSlug }: PublicBulletinClien
   const isAgendaSection = (secao: BoletimSecao) => secao.tipo === 'agenda';
   const isAvisosSection = (secao: BoletimSecao) => secao.tipo === 'avisos';
   const isInformativoSection = (secao: BoletimSecao) => secao.tipo === 'informativo';
-  const isNoticiasMesSection = (secao: BoletimSecao) => secao.tipo === 'noticias_mes';
+  // Próximos eventos (tela Eventos) usam o mesmo formato das notícias do mês.
+  const isNoticiasMesSection = (secao: BoletimSecao) =>
+    secao.tipo === 'noticias_mes' || secao.tipo === 'proximos_eventos';
   const isPedidosOracaoSection = (secao: BoletimSecao) =>
     secao.tipo === 'oracao' || /pedido[s]?\s*de\s*ora|prayer\s*request/i.test(secao.titulo);
   const isCadaDiaSection = (secao: BoletimSecao) =>

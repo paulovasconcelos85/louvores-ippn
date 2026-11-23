@@ -825,6 +825,134 @@ async function buildNoticiasMensaisSection(
   }
 }
 
+const PROXIMOS_EVENTOS_SECTION_TIPO = 'proximos_eventos';
+const PROXIMOS_EVENTOS_LIMITE = 10;
+const PROXIMOS_EVENTOS_TITULO: Record<Locale, string> = {
+  pt: 'Próximos Eventos',
+  es: 'Próximos Eventos',
+  en: 'Upcoming Events',
+};
+const PROXIMOS_EVENTOS_RESPONSAVEL: Record<Locale, string> = {
+  pt: 'Responsável',
+  es: 'Responsable',
+  en: 'Contact',
+};
+const INTL_LOCALE: Record<Locale, string> = { pt: 'pt-BR', es: 'es', en: 'en-US' };
+
+interface EventoRow {
+  id: string;
+  titulo: string;
+  data_evento: string;
+  hora: string | null;
+  local: string | null;
+  descricao: string | null;
+  responsavel: string | null;
+  imagem_url: string | null;
+}
+
+function isProximosEventosSection(secao: LegacyBoletimSecao) {
+  return secao.tipo === PROXIMOS_EVENTOS_SECTION_TIPO;
+}
+
+function getTodayKeyInTimeZone(timeZone: string) {
+  try {
+    const { year, month, day } = getTimeZoneWallParts(new Date(), timeZone);
+    if ([year, month, day].every(Number.isFinite)) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  } catch {
+    // fuso inválido: cai no UTC
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+// "Quinta-feira, 31 de dezembro · 19:00 · Templo"
+function formatarLinhaEvento(evento: EventoRow, locale: Locale) {
+  const [ano, mes, dia] = evento.data_evento.slice(0, 10).split('-').map(Number);
+  const data = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(ano, mes - 1, dia)));
+
+  return [
+    data.charAt(0).toUpperCase() + data.slice(1),
+    evento.hora?.slice(0, 5),
+    evento.local?.trim(),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+// Eventos ativos da igreja de hoje em diante (tela Eventos), montados sozinhos
+// no boletim. Cada item segue o formato das notícias: título, linha em branco,
+// corpo (data/hora/local, descrição e responsável).
+async function buildProximosEventosSection(
+  igrejaId: string,
+  timezoneBoletim: string | null | undefined,
+  locale: Locale,
+  secoesAtuais: LegacyBoletimSecao[]
+): Promise<LegacyBoletimSecao | null> {
+  try {
+    const hoje = getTodayKeyInTimeZone(timezoneBoletim?.trim() || ANIVERSARIANTES_DEFAULT_TIMEZONE);
+
+    const { data: eventosRaw, error } = await supabaseAdmin
+      .from('eventos')
+      .select('id, titulo, data_evento, hora, local, descricao, responsavel, imagem_url')
+      .eq('igreja_id', igrejaId)
+      .eq('ativo', true)
+      .gte('data_evento', hoje)
+      .order('data_evento', { ascending: true })
+      .order('hora', { ascending: true, nullsFirst: true })
+      .limit(PROXIMOS_EVENTOS_LIMITE);
+
+    if (error) throw error;
+
+    const eventos = (eventosRaw || []) as EventoRow[];
+    if (eventos.length === 0) return null;
+
+    const secaoId = `proximos-eventos-${hoje}`;
+    const secaoExistente = secoesAtuais.find(isProximosEventosSection);
+
+    return {
+      id: secaoId,
+      igreja_id: igrejaId,
+      culto_id: secaoExistente?.culto_id || null,
+      tipo: PROXIMOS_EVENTOS_SECTION_TIPO,
+      titulo: PROXIMOS_EVENTOS_TITULO[locale],
+      icone: null,
+      ordem: secaoExistente?.ordem ?? getNextSectionOrder(secoesAtuais),
+      visivel: true,
+      criado_em: null,
+      itens: eventos.map((evento, index) => {
+        const corpo = [
+          formatarLinhaEvento(evento, locale),
+          evento.descricao?.trim(),
+          evento.responsavel?.trim()
+            ? `${PROXIMOS_EVENTOS_RESPONSAVEL[locale]}: ${evento.responsavel.trim()}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+
+        return {
+          id: evento.id,
+          secao_id: secaoId,
+          conteudo: `${evento.titulo.trim()}\n\n${corpo}`,
+          destaque: false,
+          ordem: index,
+          criado_em: null,
+          imagem_url: evento.imagem_url?.trim() || null,
+        };
+      }),
+    };
+  } catch (error) {
+    console.warn('Falha ao montar próximos eventos:', error);
+    return null;
+  }
+}
+
 function isAniversariantesSection(secao: LegacyBoletimSecao) {
   const t = secao.titulo.trim().toLowerCase();
   return (
@@ -1558,7 +1686,7 @@ export async function GET(request: NextRequest) {
       // Rodada 4: seções extras em paralelo; a ordem é aplicada em sequência depois.
       etapa = 'secoes-extras';
       const diaBoletimParts = parseCultoDateKey(diaBoletimSelecionado);
-      const [cadaDiaSection, aniversariantesSection, noticiasMensaisSection] = await Promise.all([
+      const [cadaDiaSection, aniversariantesSection, noticiasMensaisSection, proximosEventosSection] = await Promise.all([
         buildCadaDiaSection(boletimSecoes),
         buildAniversariantesSection(
           igrejaId,
@@ -1569,6 +1697,7 @@ export async function GET(request: NextRequest) {
         diaBoletimParts
           ? buildNoticiasMensaisSection(igrejaId, diaBoletimParts.month, diaBoletimParts.year, boletimSecoes)
           : Promise.resolve(null),
+        buildProximosEventosSection(igrejaId, igrejaDetalhes.timezone_boletim, locale, boletimSecoes),
       ]);
 
       if (cadaDiaSection) {
@@ -1578,6 +1707,7 @@ export async function GET(request: NextRequest) {
       if (diaBoletimParts) {
         boletimSecoes = aplicarSecaoExtra(boletimSecoes, noticiasMensaisSection, isNoticiasMensaisSection);
       }
+      boletimSecoes = aplicarSecaoExtra(boletimSecoes, proximosEventosSection, isProximosEventosSection);
     }
 
     etapa = 'resposta';

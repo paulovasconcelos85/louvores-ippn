@@ -20,6 +20,7 @@ import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/provider';
 import { buildAuthenticatedHeaders } from '@/lib/auth-headers';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { FotoEvento } from '@/components/FotoEvento';
 
 type Evento = {
   id: string;
@@ -472,14 +473,7 @@ export default function EventosPage() {
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 {evento.imagemUrl ? (
-                  <div
-                    className="aspect-video bg-slate-900"
-                    style={{
-                      backgroundImage: `url("${evento.imagemUrl}")`,
-                      backgroundPosition: 'center',
-                      backgroundSize: 'cover',
-                    }}
-                  />
+                  <FotoEvento src={evento.imagemUrl} alt={evento.titulo} />
                 ) : null}
 
                 <div className="p-5">

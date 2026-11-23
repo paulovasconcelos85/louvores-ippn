@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLocale, useTranslations } from '@/i18n/provider';
 import { getStoredChurchId } from '@/lib/church-utils';
+import { FotoEvento } from '@/components/FotoEvento';
 
 interface Evento {
   id: string;
@@ -99,14 +100,7 @@ export default function MembroEventosPage() {
           eventos.map((evento) => (
             <article key={evento.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
               {evento.imagemUrl ? (
-                <div
-                  className="aspect-video bg-slate-900"
-                  style={{
-                    backgroundImage: `url("${evento.imagemUrl}")`,
-                    backgroundPosition: 'center',
-                    backgroundSize: 'cover',
-                  }}
-                />
+                <FotoEvento src={evento.imagemUrl} alt={evento.titulo} />
               ) : null}
               <div className="space-y-2 p-5">
                 <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
