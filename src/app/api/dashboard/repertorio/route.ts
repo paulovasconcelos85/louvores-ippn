@@ -551,6 +551,8 @@ export async function GET(request: Request) {
         nucleo,
         cantadasUmaVez: ranking.filter(([, vezes]) => vezes === 1).length,
         maisCantadas: ranking.slice(0, 10).map(([chave, vezes]) => ({ nome: musicas.get(chave)!.nome, vezes })),
+        // As músicas que, juntas, somam metade das execuções (o "núcleo" do repertório).
+        musicasNucleo: ranking.slice(0, nucleo).map(([chave, vezes]) => ({ nome: musicas.get(chave)!.nome, vezes })),
       },
       novas: novas.slice(0, 8),
       totalNovas: novas.length,

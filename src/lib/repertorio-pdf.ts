@@ -371,6 +371,32 @@ export function gerarRelatorioRepertorioPdf(analise: AnaliseRepertorio, opts: Ge
     }
   }
 
+  // ── Anexo: as músicas que somam metade do que foi cantado ──────────────
+  const musicasNucleo = analise.rodizio.musicasNucleo ?? [];
+  if (musicasNucleo.length > 0) {
+    doc.addPage();
+    y = MARGEM;
+    titulo(
+      tr(
+        `Anexo — as ${musicasNucleo.length} músicas que somam metade do que foi cantado`,
+        `Anexo — las ${musicasNucleo.length} canciones que suman la mitad de lo cantado`,
+        `Appendix — the ${musicasNucleo.length} songs that make up half of everything sung`
+      )
+    );
+    paragrafo(
+      tr(
+        `Das ${analise.resumo.execucoes} músicas cantadas no período, metade foi destas ${musicasNucleo.length}, da mais para a menos cantada.`,
+        `De las ${analise.resumo.execucoes} canciones cantadas en el período, la mitad fueron estas ${musicasNucleo.length}, de la más a la menos cantada.`,
+        `Of the ${analise.resumo.execucoes} songs sung in the period, half were these ${musicasNucleo.length}, from most to least sung.`
+      ),
+      COR_SUAVE,
+      0,
+      9.5
+    );
+    y += 1;
+    lista(musicasNucleo.map((musica) => ({ texto: musica.nome, detalhe: `${musica.vezes}x` })), true);
+  }
+
   // ── Rodapé em todas as páginas ─────────────────────────────────────────
   const totalPaginas = doc.getNumberOfPages();
   for (let pagina = 1; pagina <= totalPaginas; pagina += 1) {

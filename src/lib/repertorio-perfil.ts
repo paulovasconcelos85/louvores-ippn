@@ -38,7 +38,13 @@ export type AnaliseRepertorio = {
   trindade: { pai: number; filho: number; espirito: number };
   voz: { individual: number; comunitaria: number; equilibrada: number };
   direcao: { aDeus: number; sobreDeus: number; misto: number };
-  rodizio: { top10: number; nucleo: number; cantadasUmaVez: number; maisCantadas: MusicaVezes[] };
+  rodizio: {
+    top10: number;
+    nucleo: number;
+    cantadasUmaVez: number;
+    maisCantadas: MusicaVezes[];
+    musicasNucleo: MusicaVezes[];
+  };
   novas: Array<MusicaVezes & { primeiraData: string }>;
   totalNovas: number;
   esquecidas: Array<MusicaVezes & { ultimaData: string }>;
