@@ -36,6 +36,9 @@ export default function CultosPage() {
   const [boletimDiaEditando, setBoletimDiaEditando] = useState<{ dia: string; cultos: Culto[] } | null>(null);
   const [cultoExcluindoId, setCultoExcluindoId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mostrarAnteriores, setMostrarAnteriores] = useState(false);
+  const [podeHaverMaisAnteriores, setPodeHaverMaisAnteriores] = useState(false);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
   const totalLoading = loading || permLoading;
   const gruposCultos = useMemo(() => buildCultoDayGroups(cultos), [cultos]);
@@ -48,6 +51,11 @@ export default function CultosPage() {
     const proximos = gruposCultos.filter((grupo) => grupo.dia >= hoje);
     return proximos.length > 0 ? proximos : gruposCultos.slice(0, 1);
   }, [gruposCultos]);
+  // Os anteriores ficam numa lista compacta, só para corrigir algo depois.
+  const gruposAnteriores = useMemo(() => {
+    const maisAntigoVisivel = gruposVisiveis.at(-1)?.dia;
+    return maisAntigoVisivel ? gruposCultos.filter((grupo) => grupo.dia < maisAntigoVisivel) : [];
+  }, [gruposCultos, gruposVisiveis]);
 
   useEffect(() => {
     if (!permLoading && !permissoes.podeGerenciarCultos) {
@@ -130,6 +138,7 @@ export default function CultosPage() {
         locale
       );
       setCultos(cultosComNome);
+      setPodeHaverMaisAnteriores((cultosData || []).length >= LIMITE_CULTOS_RECENTES);
       const modelosFallback = extractModeloLiturgicoPadrao(
         igrejaRaw?.modelo_liturgico_padrao,
         locale
@@ -226,6 +235,40 @@ export default function CultosPage() {
       setLoading(false);
     }
   }, [locale]);
+
+  // Busca um lote de cultos mais antigos que o mais antigo já carregado.
+  const carregarMaisAnteriores = useCallback(async () => {
+    const igrejaId = getStoredChurchId();
+    const maisAntigo = gruposCultos.at(-1)?.dia;
+    if (!igrejaId || !maisAntigo) return;
+
+    setCarregandoAnteriores(true);
+    try {
+      const { data, error } = await supabase
+        .from('Louvores IPPN')
+        .select('*')
+        .eq('igreja_id', igrejaId)
+        .lt('Dia', maisAntigo)
+        .order('Dia', { ascending: false })
+        .limit(LIMITE_CULTOS_RECENTES);
+      if (error) throw error;
+
+      const anteriores = await anexarNomesLiturgia(
+        recortarDiaIncompleto((data || []) as Culto[], LIMITE_CULTOS_RECENTES),
+        locale
+      );
+      setCultos((atuais) => {
+        const idsAtuais = new Set(atuais.map((culto) => culto['Culto nr.']));
+        return [...atuais, ...anteriores.filter((culto) => !idsAtuais.has(culto['Culto nr.']))];
+      });
+      setPodeHaverMaisAnteriores((data || []).length >= LIMITE_CULTOS_RECENTES);
+    } catch (error) {
+      console.error('Falha ao carregar boletins anteriores:', error);
+      alert(tr('Não foi possível carregar os boletins anteriores.', 'No se pudieron cargar los boletines anteriores.', 'Could not load previous bulletins.'));
+    } finally {
+      setCarregandoAnteriores(false);
+    }
+  }, [gruposCultos, locale, tr]);
 
   const getPublicBulletinUrl = useCallback(() => {
     if (!igrejaPublicSlug) return null;
@@ -852,6 +895,93 @@ export default function CultosPage() {
               })()}
             </section>
           ))}
+
+          {!mostrarAnteriores && (gruposAnteriores.length > 0 || podeHaverMaisAnteriores) && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setMostrarAnteriores(true)}
+                className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm italic text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900"
+              >
+                {tr('Ver boletins anteriores', 'Ver boletines anteriores', 'See previous bulletins')}
+              </button>
+            </div>
+          )}
+
+          {mostrarAnteriores && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 border-t border-slate-200" />
+                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                  {tr('Boletins anteriores', 'Boletines anteriores', 'Previous bulletins')}
+                </p>
+                <div className="flex-1 border-t border-slate-200" />
+              </div>
+
+              {gruposAnteriores.map((grupo) => (
+                <div key={grupo.dia} className="rounded-2xl border border-slate-200 bg-white">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <p className="font-bold text-slate-800">{formatCultoDateLabel(grupo.dia, locale)}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBoletimDiaEditando((atual) =>
+                            atual?.dia === grupo.dia ? null : { dia: grupo.dia, cultos: grupo.cultos }
+                          )
+                        }
+                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                      >
+                        {boletimDiaEditando?.dia === grupo.dia ? tr('Fechar boletim', 'Cerrar boletín', 'Close bulletin') : tr('Boletim', 'Boletín', 'Bulletin')}
+                      </button>
+                      {permissoes.podeEditarLouvor &&
+                        grupo.cultos.map((culto, index) => (
+                          <button
+                            key={culto['Culto nr.']}
+                            type="button"
+                            onClick={() => setEditando(culto)}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            {tr('Editar', 'Editar', 'Edit')}{' '}
+                            {getCultoNomeLiturgia(culto) || (grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : tr('liturgia', 'liturgia', 'order of service'))}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  {boletimDiaEditando?.dia === grupo.dia ? (
+                    <div className="border-t border-slate-200 p-4">
+                      <EditorBoletimDoDiaModal
+                        aberto
+                        inline
+                        dia={grupo.dia}
+                        cultos={grupo.cultos}
+                        onFechar={() => setBoletimDiaEditando(null)}
+                        onSalvo={() => {
+                          setBoletimDiaEditando(null);
+                          carregarTudo();
+                          window.scrollTo({ top: 0 });
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+
+              {podeHaverMaisAnteriores && (
+                <div className="flex justify-center pt-1">
+                  <button
+                    type="button"
+                    onClick={carregarMaisAnteriores}
+                    disabled={carregandoAnteriores}
+                    className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm italic text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {carregandoAnteriores ? tr('Carregando…', 'Cargando…', 'Loading…') : tr('Carregar mais', 'Cargar más', 'Load more')}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
