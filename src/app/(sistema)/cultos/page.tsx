@@ -12,7 +12,7 @@ import { jsPDF } from 'jspdf';
 import { getStoredChurchId } from '@/lib/church-utils';
 import type { Cantico, LiturgiaChurchConfig, Culto, ItemAgrupado } from './_lib/tipos';
 import { mapHinarioNovoCanticoToCantico, normalizeModoRepertorio, filtrarCanticosPorConfiguracao } from './_lib/canticos';
-import { getCultoNomeLiturgia, extractTiposLiturgicos, mergeLocalizedModelValue, extractModeloLiturgicoPadrao, mergeModelosLiturgia, formatCultoDateLabel, getCultoDateKey, proximoDomingoSemBoletim, buildCultoDayGroups, getCultoBoletimReferencia, isUuid } from './_lib/liturgia';
+import { getCultoNomeLiturgia, extractTiposLiturgicos, mergeLocalizedModelValue, extractModeloLiturgicoPadrao, mergeModelosLiturgia, formatCultoDateLabel, proximoDomingoSemBoletim, buildCultoDayGroups, getCultoBoletimReferencia, isUuid } from './_lib/liturgia';
 import { buscarPastorPadrao, carregarLouvorItensComCanticos, LIMITE_CULTOS_RECENTES, recortarDiaIncompleto, anexarNomesLiturgia, consultarHinario, carregarUltimoUsoCanticos } from './_lib/dados';
 import { agruparItensLiturgia } from './_lib/boletim';
 import { EditorBoletimDoDiaModal } from './_components/EditorBoletimDoDiaModal';
@@ -36,23 +36,18 @@ export default function CultosPage() {
   const [boletimDiaEditando, setBoletimDiaEditando] = useState<{ dia: string; cultos: Culto[] } | null>(null);
   const [cultoExcluindoId, setCultoExcluindoId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [paginaAnteriores, setPaginaAnteriores] = useState(0);
-  const [podeHaverAnteriores, setPodeHaverAnteriores] = useState(false);
-  const [anterioresCarregados, setAnterioresCarregados] = useState(false);
-  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const isLideranca = permissoes.podeEditarLiturgiaCompleta;
   const totalLoading = loading || permLoading;
   const gruposCultos = useMemo(() => buildCultoDayGroups(cultos), [cultos]);
 
-  const GRUPOS_RECENTES = 3;
-  const GRUPOS_POR_PAGINA = 5;
-  const gruposRecentes = gruposCultos.slice(0, GRUPOS_RECENTES);
-  const gruposAnteriores = anterioresCarregados ? gruposCultos.slice(GRUPOS_RECENTES) : [];
-  const totalPaginasAnteriores = Math.ceil(gruposAnteriores.length / GRUPOS_POR_PAGINA);
-  const gruposAnterioresVisiveis = gruposAnteriores.slice(
-    paginaAnteriores * GRUPOS_POR_PAGINA,
-    (paginaAnteriores + 1) * GRUPOS_POR_PAGINA
-  );
+  // Boletim da semana passada não é mais aberto: mostra só os de hoje em diante,
+  // ou o último, enquanto o da próxima semana ainda não foi criado.
+  const gruposVisiveis = useMemo(() => {
+    const agora = new Date();
+    const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+    const proximos = gruposCultos.filter((grupo) => grupo.dia >= hoje);
+    return proximos.length > 0 ? proximos : gruposCultos.slice(0, 1);
+  }, [gruposCultos]);
 
   useEffect(() => {
     if (!permLoading && !permissoes.podeGerenciarCultos) {
@@ -135,9 +130,6 @@ export default function CultosPage() {
         locale
       );
       setCultos(cultosComNome);
-      setPodeHaverAnteriores((cultosData || []).length >= LIMITE_CULTOS_RECENTES || buildCultoDayGroups(cultosComNome).length > GRUPOS_RECENTES);
-      setAnterioresCarregados(false);
-      setPaginaAnteriores(0);
       const modelosFallback = extractModeloLiturgicoPadrao(
         igrejaRaw?.modelo_liturgico_padrao,
         locale
@@ -234,41 +226,6 @@ export default function CultosPage() {
       setLoading(false);
     }
   }, [locale]);
-
-  const carregarAnteriores = useCallback(async () => {
-    const igrejaId = getStoredChurchId();
-    if (!igrejaId) return;
-
-    setCarregandoAnteriores(true);
-    try {
-      const datasCarregadas = cultos.map((culto) => getCultoDateKey(culto.Dia)).sort();
-      let query = supabase
-        .from('Louvores IPPN')
-        .select('*')
-        .eq('igreja_id', igrejaId)
-        .order('Dia', { ascending: false });
-
-      if (datasCarregadas.length > 0) {
-        query = query.lt('Dia', datasCarregadas[0]);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const anteriores = await anexarNomesLiturgia((data || []) as Culto[], locale);
-      setCultos((atuais) => {
-        const idsAtuais = new Set(atuais.map((culto) => culto['Culto nr.']));
-        return [...atuais, ...anteriores.filter((culto) => !idsAtuais.has(culto['Culto nr.']))];
-      });
-      setAnterioresCarregados(true);
-      setPaginaAnteriores(0);
-    } catch (error) {
-      console.error('Falha ao carregar boletins anteriores:', error);
-      alert(tr('Não foi possível carregar os boletins anteriores.', 'No se pudieron cargar los boletines anteriores.', 'Could not load previous bulletins.'));
-    } finally {
-      setCarregandoAnteriores(false);
-    }
-  }, [cultos, locale, tr]);
 
   const getPublicBulletinUrl = useCallback(() => {
     if (!igrejaPublicSlug) return null;
@@ -751,7 +708,7 @@ export default function CultosPage() {
               {tr('Nenhuma liturgia encontrada para a igreja selecionada.', 'No se encontraron liturgias para la iglesia seleccionada.', 'No orders of service found for the selected church.')}
             </div>
           )}
-          {gruposRecentes.map((grupo) => (
+          {gruposVisiveis.map((grupo) => (
             <section
               key={grupo.dia}
               className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
@@ -895,211 +852,6 @@ export default function CultosPage() {
               })()}
             </section>
           ))}
-
-          {!anterioresCarregados && podeHaverAnteriores && (
-            <div className="flex justify-center pt-2">
-              <button
-                type="button"
-                onClick={carregarAnteriores}
-                disabled={carregandoAnteriores}
-                className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm italic text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900 disabled:cursor-wait disabled:opacity-60"
-              >
-                {carregandoAnteriores ? tr('Carregando boletins anteriores…', 'Cargando boletines anteriores…', 'Loading previous bulletins…') : tr('Ver boletins anteriores', 'Ver boletines anteriores', 'See previous bulletins')}
-              </button>
-            </div>
-          )}
-
-          {gruposAnteriores.length > 0 && (
-            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 border-t border-slate-200" />
-                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                  {tr('Boletins anteriores', 'Boletines anteriores', 'Previous bulletins')}
-                </p>
-                <div className="flex-1 border-t border-slate-200" />
-              </div>
-
-              {gruposAnterioresVisiveis.map((grupo) => (
-                <section
-                  key={grupo.dia}
-                  className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm opacity-90"
-                >
-                  {(() => {
-                    const boletimReferencia = getCultoBoletimReferencia(grupo.cultos);
-
-                    return (
-                      <>
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
-                        {grupo.isDomingo ? tr('Boletim do domingo', 'Boletín del domingo', 'Sunday bulletin') : tr('Grupo do dia', 'Grupo del día', 'Day group')}
-                      </p>
-                      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                        {formatCultoDateLabel(grupo.dia, locale)}
-                      </h2>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">
-                        {grupo.cultos.length === 1
-                          ? tr('1 liturgia cadastrada neste dia.', '1 liturgia registrada en este día.', '1 order of service on this day.')
-                          : tr(
-                          `${grupo.cultos.length} liturgias cadastradas neste dia.`,
-                          `${grupo.cultos.length} liturgias registradas en este día.`,
-                          `${grupo.cultos.length} orders of service on this day.`
-                        )}
-                      </p>
-                    </div>
-
-                    {isLideranca && (
-                      <button
-                        onClick={() => { setNovoDiaInicial(grupo.dia); setEditando('novo'); }}
-                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
-                      >
-                        {tr('+ Nova liturgia neste dia', '+ Nueva liturgia en este día', '+ New order of service on this day')}
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="mt-5 space-y-4">
-                    <div className="overflow-hidden rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.98),rgba(255,255,255,0.98))] shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setBoletimDiaEditando((atual) =>
-                            atual?.dia === grupo.dia ? null : { dia: grupo.dia, cultos: grupo.cultos }
-                          )
-                        }
-                        className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-emerald-50/80"
-                      >
-                        <div className="max-w-3xl">
-                          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">
-                            {tr('Boletim compartilhado do dia', 'Boletín compartido del día', 'Day\'s shared bulletin')}
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-600">
-                            {tr('Clique para abrir e editar a palavra pastoral, a imagem do tema, os avisos, a agenda, os pedidos de oração, os informativos e outros blocos deste domingo.', 'Haz clic para abrir y editar la palabra pastoral, la imagen del tema, los avisos, la agenda, los pedidos de oración, los informativos y otros bloques de este domingo.', 'Click to open and edit this Sunday\'s pastoral message, theme image, announcements, schedule, prayer requests, newsletter and other blocks.')}
-                          </p>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                              {boletimReferencia?.palavra_pastoral?.trim() ? tr('Palavra pastoral preenchida', 'Palabra pastoral completada', 'Pastoral message filled in') : tr('Palavra pastoral vazia', 'Palabra pastoral vacía', 'Pastoral message empty')}
-                            </span>
-                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                              {boletimReferencia?.imagem_url ? tr('Imagem definida', 'Imagen definida', 'Image set') : tr('Sem imagem do tema', 'Sin imagen del tema', 'No theme image')}
-                            </span>
-                            <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm">
-                              {boletimDiaEditando?.dia === grupo.dia ? tr('Editor aberto abaixo', 'Editor abierto abajo', 'Editor open below') : tr('Editor fechado', 'Editor cerrado', 'Editor closed')}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex flex-shrink-0 items-center gap-3">
-                          <span className="hidden rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white lg:inline-flex">
-                            {boletimDiaEditando?.dia === grupo.dia ? tr('Fechar boletim', 'Cerrar boletín', 'Close bulletin') : tr('Abrir boletim', 'Abrir boletín', 'Open bulletin')}
-                          </span>
-                          <span
-                            className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-emerald-700 shadow-sm transition-transform ${
-                              boletimDiaEditando?.dia === grupo.dia ? 'rotate-180' : ''
-                            }`}
-                          >
-                            ⌄
-                          </span>
-                        </div>
-                      </button>
-
-                      {boletimDiaEditando?.dia === grupo.dia ? (
-                        <div className="border-t border-emerald-200 bg-white/90 p-4">
-                          <EditorBoletimDoDiaModal
-                            aberto
-                            inline
-                            dia={grupo.dia}
-                            cultos={grupo.cultos}
-                            onFechar={() => setBoletimDiaEditando(null)}
-                            onSalvo={() => {
-                              setBoletimDiaEditando(null);
-                              carregarTudo();
-                              window.scrollTo({ top: 0 });
-                            }}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200 bg-slate-50/65 p-4">
-                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-                            {tr('Liturgias do dia', 'Liturgias del día', 'Day\'s orders of service')}
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-slate-500">
-                            {tr('Cada card abaixo representa uma liturgia especifica dentro deste mesmo domingo.', 'Cada tarjeta representa una liturgia específica dentro de este mismo domingo.', 'Each card below is one order of service within this Sunday.')}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {grupo.cultos.map((culto, index) => (
-                          <CultoCard
-                            key={culto['Culto nr.']}
-                            culto={culto}
-                            tituloExibicao={
-                              grupo.cultos.length > 1 ? `Liturgia ${index + 1}` : tr('Liturgia única', 'Liturgia única', 'Single order of service')
-                            }
-                            descricaoExibicao={
-                              grupo.cultos.length > 1
-                                ? tr('Uma das liturgias deste mesmo domingo.', 'Una de las liturgias de este mismo domingo.', 'One of the orders of service for this Sunday.')
-                                : tr('Liturgia deste domingo.', 'Liturgia de este domingo.', 'This Sunday\'s order of service.')
-                            }
-                            esconderResumoBoletim
-                            podeEditar={permissoes.podeEditarLouvor}
-                            podeExcluir={isLideranca}
-                            excluindo={cultoExcluindoId === culto['Culto nr.']}
-                            onEditar={(item: Culto) => setEditando(item)}
-                            onWhatsApp={shareWhatsApp}
-                            onPDF={sharePDF}
-                            onExcluir={deletarCulto}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                      </>
-                    );
-                  })()}
-                </section>
-              ))}
-
-              {totalPaginasAnteriores > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaginaAnteriores((p) => Math.max(0, p - 1))}
-                    disabled={paginaAnteriores === 0}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                  >
-                    {tr('← Anterior', '← Anterior', '← Previous')}
-                  </button>
-                  {Array.from({ length: totalPaginasAnteriores }, (_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setPaginaAnteriores(i)}
-                      className={`h-10 w-10 rounded-2xl border text-sm font-bold transition-colors ${
-                        paginaAnteriores === i
-                          ? 'border-emerald-600 bg-emerald-700 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setPaginaAnteriores((p) => Math.min(totalPaginasAnteriores - 1, p + 1))}
-                    disabled={paginaAnteriores === totalPaginasAnteriores - 1}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                  >
-                    {tr('Próximo →', 'Siguiente →', 'Next →')}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
