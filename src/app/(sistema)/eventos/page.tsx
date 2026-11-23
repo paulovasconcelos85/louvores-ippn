@@ -13,6 +13,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { CampoImagem } from '@/components/CampoImagem';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Locale } from '@/i18n/config';
@@ -74,8 +75,7 @@ const TEXTOS = {
     timeField: 'Horário',
     locationField: 'Local',
     responsibleField: 'Responsável',
-    imageField: 'Imagem (link)',
-    imagePlaceholder: 'Opcional',
+    imageField: 'Imagem (opcional)',
     descriptionField: 'Descrição',
     published: 'Publicado',
     saving: 'Salvando...',
@@ -103,8 +103,7 @@ const TEXTOS = {
     timeField: 'Horario',
     locationField: 'Lugar',
     responsibleField: 'Responsable',
-    imageField: 'Imagen (enlace)',
-    imagePlaceholder: 'Opcional',
+    imageField: 'Imagen (opcional)',
     descriptionField: 'Descripción',
     published: 'Publicado',
     saving: 'Guardando...',
@@ -132,8 +131,7 @@ const TEXTOS = {
     timeField: 'Time',
     locationField: 'Location',
     responsibleField: 'Responsible',
-    imageField: 'Image (link)',
-    imagePlaceholder: 'Optional',
+    imageField: 'Image (optional)',
     descriptionField: 'Description',
     published: 'Published',
     saving: 'Saving...',
@@ -406,15 +404,14 @@ export default function EventosPage() {
                 />
               </label>
 
-              <label className="block lg:col-span-2">
-                <span className="text-sm font-semibold text-slate-700">{textos.imageField}</span>
-                <input
-                  value={form.imagemUrl}
-                  onChange={(event) => setForm({ ...form, imagemUrl: event.target.value })}
-                  placeholder={textos.imagePlaceholder}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                />
-              </label>
+              <CampoImagem
+                bucket="eventos-imagens"
+                rotulo={textos.imageField}
+                valor={form.imagemUrl}
+                textoAlternativo={form.titulo}
+                onChange={(imagemUrl) => setForm((atual) => ({ ...atual, imagemUrl }))}
+                className="lg:col-span-2"
+              />
 
               <label className="block lg:col-span-2">
                 <span className="text-sm font-semibold text-slate-700">{textos.descriptionField}</span>

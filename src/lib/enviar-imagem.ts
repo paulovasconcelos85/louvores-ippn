@@ -1,10 +1,12 @@
 import { supabase } from '@/lib/supabase';
 
-// Imagens de notícias, avisos e informativos do boletim, enviadas do computador
-// ou do celular. Ficam em boletim-imagens/<igreja_id>/<uuid>.<ext>; o banco só
-// aceita na pasta de uma igreja que o usuário edita (migração 20261120220000).
+// Fotos enviadas do computador ou do celular para um bucket público, na pasta
+// da igreja: <bucket>/<igreja_id>/<uuid>.<ext>. O banco só aceita na pasta de
+// uma igreja que o usuário pode editar:
+//   boletim-imagens  notícias, avisos e informativos (migração 20261120220000)
+//   eventos-imagens  eventos da igreja (migração 20261123120000)
 
-const BUCKET = 'boletim-imagens';
+export type BucketImagens = 'boletim-imagens' | 'eventos-imagens';
 const LADO_MAXIMO_PX = 1600;
 const TAMANHO_SEM_REDUZIR = 1.5 * 1024 * 1024;
 const TAMANHO_MAXIMO = 5 * 1024 * 1024;
@@ -60,15 +62,19 @@ async function prepararImagem(arquivo: File): Promise<Blob> {
   });
 }
 
-export type ErroImagemBoletim = 'imagem-ilegivel' | 'imagem-grande' | 'sem-permissao' | 'falha-envio';
+export type ErroImagem = 'imagem-ilegivel' | 'imagem-grande' | 'sem-permissao' | 'falha-envio';
 
 export class ErroEnvioImagem extends Error {
-  constructor(public codigo: ErroImagemBoletim) {
+  constructor(public codigo: ErroImagem) {
     super(codigo);
   }
 }
 
-export async function enviarImagemBoletim(arquivo: File, igrejaId: string): Promise<string> {
+export async function enviarImagem(
+  arquivo: File,
+  igrejaId: string,
+  bucket: BucketImagens,
+): Promise<string> {
   let blob: Blob;
   try {
     blob = await prepararImagem(arquivo);
@@ -81,7 +87,7 @@ export async function enviarImagemBoletim(arquivo: File, igrejaId: string): Prom
   const extensao = EXTENSOES[blob.type] || 'jpg';
   const caminho = `${igrejaId}/${crypto.randomUUID()}.${extensao}`;
 
-  const { error } = await supabase.storage.from(BUCKET).upload(caminho, blob, {
+  const { error } = await supabase.storage.from(bucket).upload(caminho, blob, {
     contentType: blob.type || 'image/jpeg',
     cacheControl: '31536000',
     upsert: false,
@@ -95,5 +101,5 @@ export async function enviarImagemBoletim(arquivo: File, igrejaId: string): Prom
     throw new ErroEnvioImagem('falha-envio');
   }
 
-  return supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl;
+  return supabase.storage.from(bucket).getPublicUrl(caminho).data.publicUrl;
 }

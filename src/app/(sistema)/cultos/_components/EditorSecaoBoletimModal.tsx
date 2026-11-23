@@ -8,7 +8,7 @@ import type { BoletimItemRascunho, AgendaItemRascunho, AvisoItemRascunho, Inform
 import { createDraftId } from '../_lib/liturgia';
 import { getBoletimTipoConfig, createEmptyBoletimItem, createEmptyAgendaItem, createEmptyAvisoItem, createEmptyInformativoItem, updateLocalizedDraftValue, replicateLocalizedDraftValue, parseAgendaConteudo, serializeAgendaConteudo, parseAvisoConteudo, serializeAvisoConteudo, parseInformativoConteudo, serializeInformativoConteudo } from '../_lib/boletim';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
-import { CampoImagemBoletim } from './CampoImagemBoletim';
+import { CampoImagem } from '@/components/CampoImagem';
 
 export function EditorSecaoBoletimModal({
   aberto,
@@ -410,7 +410,7 @@ export function EditorSecaoBoletimModal({
                       />
                     </label>
 
-                    <CampoImagemBoletim
+                    <CampoImagem bucket="boletim-imagens"
                       className="mt-3"
                       rotulo={tr('Imagem do aviso (opcional)', 'Imagen del aviso (opcional)', 'Announcement image (optional)')}
                       valor={item.imagem_url}
@@ -501,7 +501,7 @@ export function EditorSecaoBoletimModal({
                       />
                     </label>
 
-                    <CampoImagemBoletim
+                    <CampoImagem bucket="boletim-imagens"
                       className="mt-3"
                       rotulo={tr('Imagem do informativo (opcional)', 'Imagen del informativo (opcional)', 'Newsletter item image (optional)')}
                       valor={item.imagem_url}

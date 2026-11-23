@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path to public, extensions;
 
-select plan(86);
+select plan(92);
 
 -- ---------------------------------------------------------------------------
 -- Elenco
@@ -83,10 +83,11 @@ where ua.id in (select acesso from u);
 insert into plataforma_admins (auth_user_id) values (pg_temp.id('admin_plat'));
 
 -- Catálogo de tags (na prática compartilhado entre igrejas).
+-- Nomes com prefixo: tags_funcoes.nome é único e o banco pode já ter as reais.
 insert into tags_funcoes (id, nome, categoria, igreja_id, ativo) values
-  (pg_temp.id('tag_lider'),  'Líder de Louvor', 'louvor_lideranca',   pg_temp.id('igreja_a'), true),
-  (pg_temp.id('tag_violao'), 'Violão',          'louvor_instrumento', pg_temp.id('igreja_a'), true),
-  (pg_temp.id('tag_pastor'), 'Pastor',          'lideranca_pastor',   pg_temp.id('igreja_a'), true);
+  (pg_temp.id('tag_lider'),  'Teste Líder de Louvor', 'louvor_lideranca',   pg_temp.id('igreja_a'), true),
+  (pg_temp.id('tag_violao'), 'Teste Violão',          'louvor_instrumento', pg_temp.id('igreja_a'), true),
+  (pg_temp.id('tag_pastor'), 'Teste Pastor',          'lideranca_pastor',   pg_temp.id('igreja_a'), true);
 
 insert into usuarios_tags (pessoa_id, usuario_id, tag_id, igreja_id)
 values (pg_temp.pessoa('lider_a'), (select acesso from u where quem = 'lider_a'), pg_temp.id('tag_lider'), pg_temp.id('igreja_a'));
@@ -314,6 +315,14 @@ select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) v
 select is(pg_temp.r('membro_a', 'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/z.jpg'')'), 'erro 42501', 'membro comum não sobe imagem do boletim');
 select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''solta.jpg'')'), 'erro 42501', 'imagem do boletim fora da pasta da igreja é recusada');
 select is(pg_temp.r('intruso',  'insert into storage.objects (bucket_id, name) values (''boletim-imagens'', ''00000000-0000-4000-d000-00000000000a/w.jpg'')'), 'erro 42501', 'usuário sem igreja não sobe imagem do boletim');
+
+-- Imagens dos eventos: quem gerencia eventos (pastor, presbítero, staff, admin, secretaria)
+select is(pg_temp.r('pastor_a', 'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''00000000-0000-4000-d000-00000000000a/e.jpg'')'), '1', 'pastor sobe imagem de evento da própria igreja');
+select is(pg_temp.r('pastor_a', 'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''00000000-0000-4000-d000-00000000000b/e.jpg'')'), 'erro 42501', 'pastor não sobe imagem de evento de outra igreja');
+select is(pg_temp.r('lider_a',  'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''00000000-0000-4000-d000-00000000000a/e.jpg'')'), 'erro 42501', 'líder de louvor não sobe imagem de evento');
+select is(pg_temp.r('membro_a', 'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''00000000-0000-4000-d000-00000000000a/e.jpg'')'), 'erro 42501', 'membro comum não sobe imagem de evento');
+select is(pg_temp.r('pastor_a', 'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''solta.jpg'')'), 'erro 42501', 'imagem de evento fora da pasta da igreja é recusada');
+select is(pg_temp.r('intruso',  'insert into storage.objects (bucket_id, name) values (''eventos-imagens'', ''00000000-0000-4000-d000-00000000000a/e.jpg'')'), 'erro 42501', 'usuário sem igreja não sobe imagem de evento');
 
 -- ---------------------------------------------------------------------------
 -- Triggers preenchem igreja_id a partir da linha-mãe (rodam como postgres)

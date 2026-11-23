@@ -7,7 +7,7 @@ import { porIdioma } from '@/i18n/por-idioma';
 import { getStoredChurchId } from '@/lib/church-utils';
 import type { NoticiaMensal } from '../_lib/tipos';
 import { AutoResizeTextarea } from './AutoResizeTextarea';
-import { CampoImagemBoletim } from './CampoImagemBoletim';
+import { CampoImagem } from '@/components/CampoImagem';
 
 export function EditorNoticiaMensalModal({
   aberto,
@@ -136,7 +136,7 @@ export function EditorNoticiaMensalModal({
             />
           </label>
 
-          <CampoImagemBoletim
+          <CampoImagem bucket="boletim-imagens"
             rotulo={tr('Imagem da notícia (opcional)', 'Imagen de la noticia (opcional)', 'News image (optional)')}
             valor={imagemUrl}
             textoAlternativo={titulo.trim() || tr('Pré-visualização da notícia', 'Vista previa de la noticia', 'News preview')}

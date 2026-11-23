@@ -4,19 +4,25 @@ import { useRef, useState } from "react";
 import { useLocale } from "@/i18n/provider";
 import { porIdioma } from "@/i18n/por-idioma";
 import { getStoredChurchId } from "@/lib/church-utils";
-import { enviarImagemBoletim, ErroEnvioImagem } from "../_lib/imagens-boletim";
+import {
+  enviarImagem,
+  ErroEnvioImagem,
+  type BucketImagens,
+} from "@/lib/enviar-imagem";
 
-// Imagem opcional de notícia, aviso ou informativo. A foto sobe assim que é
+// Imagem opcional (notícia, aviso ou informativo do boletim; evento). A foto sobe assim que é
 // escolhida (do computador, da galeria ou da câmera do celular) e o campo passa
 // a guardar a URL pública. Colar um link continua possível para quem já tem a
 // imagem hospedada em outro lugar.
-export function CampoImagemBoletim({
+export function CampoImagem({
+  bucket,
   rotulo,
   valor,
   textoAlternativo,
   onChange,
   className = "",
 }: {
+  bucket: BucketImagens;
   rotulo: string;
   valor: string;
   textoAlternativo: string;
@@ -49,9 +55,9 @@ export function CampoImagemBoletim({
         );
       case "sem-permissao":
         return tr(
-          "Você não tem permissão para enviar imagens do boletim desta igreja.",
-          "No tienes permiso para subir imágenes del boletín de esta iglesia.",
-          "You are not allowed to upload bulletin images for this church.",
+          "Você não tem permissão para enviar imagens nesta igreja.",
+          "No tienes permiso para subir imágenes en esta iglesia.",
+          "You are not allowed to upload images for this church.",
         );
       case "sem-igreja":
         return tr(
@@ -84,10 +90,10 @@ export function CampoImagemBoletim({
     setErro(null);
     setEnviando(true);
     try {
-      onChange(await enviarImagemBoletim(arquivo, igrejaId));
+      onChange(await enviarImagem(arquivo, igrejaId, bucket));
       setMostrarLink(false);
     } catch (error) {
-      console.error("Erro ao enviar imagem do boletim:", error);
+      console.error("Erro ao enviar imagem:", error);
       setErro(
         mensagemErro(
           error instanceof ErroEnvioImagem ? error.codigo : "falha-envio",
